@@ -6,6 +6,8 @@ import { AgentCoordinator } from '../agent/index.js';
 import { ConfigManager } from '../config/index.js';
 import { StateManager } from '../state/index.js';
 import { exec } from 'node:child_process';
+import { listProjects, listSessions, readSession, decodeProjectDir, SessionWatcher } from '../transcript/parser.js';
+import { readRuleset } from '../ruleset/reader.js';
 
 export class ServerController {
   private readonly app = express();
@@ -38,10 +40,48 @@ export class ServerController {
   private configureWebSockets(): void {
     this.wsServer.on('connection', (socket) => {
       this.activeSockets.add(socket);
+
+      socket.on('message', (data) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.type === 'watch-session' && msg.project && msg.session) {
+            this.startSessionWatch(socket, msg.project, msg.session);
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      });
+
       socket.on('close', () => {
         this.activeSockets.delete(socket);
       });
     });
+  }
+
+  private activeWatchers = new Map<WebSocket, SessionWatcher>();
+
+  private startSessionWatch(socket: WebSocket, projectDir: string, sessionId: string): void {
+    // Stop any existing watcher for this socket
+    const existing = this.activeWatchers.get(socket);
+    if (existing) {
+      existing.stop();
+      this.activeWatchers.delete(socket);
+    }
+
+    const sessions = listSessions(projectDir);
+    const session = sessions.find(s => s.sessionId === sessionId);
+    if (!session) return;
+
+    const watcher = new SessionWatcher(session.filePath);
+    watcher.on('event', (event) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ event: 'transcript-event', payload: event }));
+      }
+    });
+    watcher.start();
+    this.activeWatchers.set(socket, watcher);
+
+    socket.send(JSON.stringify({ event: 'watch-started', payload: { project: projectDir, session: sessionId } }));
   }
 
   private configureRoutes(): void {
@@ -85,7 +125,9 @@ export class ServerController {
     });
 
     this.app.post('/api/browse', (_, res) => {
-      const appleScript = `osascript -e 'POSIX path of (choose folder with prompt "Select Workspace Folder")'`;
+      // ponytail: route the picker through System Events so a background node
+      // process can present the GUI dialog; bare `choose folder` errors instantly.
+      const appleScript = `osascript -e 'tell application "System Events" to POSIX path of (choose folder with prompt "Select Workspace Folder")'`;
       exec(appleScript, (error, stdout) => {
         if (error) {
           res.status(500).json({ error: 'Folder selection cancelled' });
@@ -93,6 +135,59 @@ export class ServerController {
           res.json({ path: stdout.trim() });
         }
       });
+    });
+
+    // ===== Transcript API (reads from ~/.claude/projects/) =====
+
+    this.app.get('/api/projects', (_, res) => {
+      const projects = listProjects().map(name => ({
+        dirName: name,
+        displayPath: decodeProjectDir(name),
+      }));
+      res.json(projects);
+    });
+
+    this.app.get('/api/sessions', (req, res) => {
+      const projectDir = req.query.project as string;
+      if (!projectDir) {
+        res.status(400).json({ error: 'project parameter required' });
+        return;
+      }
+      const sessions = listSessions(projectDir);
+      res.json(sessions);
+    });
+
+    this.app.get('/api/transcript', (req, res) => {
+      const projectDir = req.query.project as string;
+      const sessionId = req.query.session as string;
+      if (!projectDir || !sessionId) {
+        res.status(400).json({ error: 'project and session parameters required' });
+        return;
+      }
+      const sessions = listSessions(projectDir);
+      const session = sessions.find(s => s.sessionId === sessionId);
+      if (!session) {
+        res.status(404).json({ error: 'Session not found' });
+        return;
+      }
+      const events = readSession(session.filePath);
+      res.json(events);
+    });
+
+    // ===== Ruleset API (reads from project repo) =====
+
+    this.app.get('/api/ruleset', (req, res) => {
+      const projectDir = req.query.project as string;
+      if (!projectDir) {
+        res.status(400).json({ error: 'project parameter required' });
+        return;
+      }
+      try {
+        const data = readRuleset(projectDir);
+        res.json(data);
+      } catch (e) {
+        res.status(500).json({ error: String(e) });
+      }
     });
   }
 

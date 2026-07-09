@@ -1,102 +1,176 @@
 import React, { useEffect, useRef } from 'react';
-import { Terminal, Cpu, Clock, Layers } from 'lucide-react';
-import { AgentInstance, AgentStep } from '../index.js';
+import { Terminal, Brain, Wrench, FileText, AlertTriangle, Radio, GitBranch } from 'lucide-react';
+import { TranscriptEvent } from '../index.js';
 
 interface SelectedInspectorProps {
-  agent?: AgentInstance;
-  stdout: string;
-  steps: AgentStep[];
+  event?: TranscriptEvent;
+  events: TranscriptEvent[];
 }
 
-export function SelectedInspector({ agent, stdout, steps }: SelectedInspectorProps) {
-  const terminalBottomRef = useRef<HTMLDivElement | null>(null);
+const KIND_LABELS: Record<string, string> = {
+  user_text: 'USER MESSAGE',
+  assistant_text: 'ASSISTANT TEXT',
+  assistant_thinking: 'ASSISTANT THINKING',
+  tool_use: 'TOOL CALL',
+  tool_result: 'TOOL RESULT',
+  hook_event: 'HOOK / GATE EVENT',
+  system: 'SYSTEM MESSAGE',
+  session_meta: 'SESSION METADATA',
+};
+
+const KIND_ICONS: Record<string, React.ReactNode> = {
+  user_text: <FileText size={14} color="var(--text-secondary)" />,
+  assistant_text: <FileText size={14} color="#7a9ec9" />,
+  assistant_thinking: <Brain size={14} color="#9a7ac9" />,
+  tool_use: <Wrench size={14} color="#c9b57a" />,
+  tool_result: <Wrench size={14} color="#7ac98f" />,
+  hook_event: <AlertTriangle size={14} color="#c97a7a" />,
+  system: <Radio size={14} color="var(--text-muted)" />,
+  session_meta: <Radio size={14} color="var(--text-muted)" />,
+};
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.substring(0, max) + '...';
+}
+
+export function SelectedInspector({ event }: SelectedInspectorProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (terminalBottomRef.current) {
-      terminalBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
     }
-  }, [stdout]);
+  }, [event?.uuid]);
 
-  if (!agent) {
+  if (!event) {
     return (
       <div style={{
-        display: 'flex', width: '380px', backgroundColor: 'var(--bg-secondary)',
+        display: 'flex', width: '480px', backgroundColor: 'var(--bg-secondary)',
         alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)',
         flexDirection: 'column', gap: '0.8rem', padding: '2rem', textAlign: 'center'
       }}>
         <Terminal size={24} strokeWidth={1.5} />
-        <span style={{ fontSize: '0.75rem' }}>SELECT AN AGENT NODE TO VIEW RUNTIME STREAMS AND TELEMETRY</span>
+        <span style={{ fontSize: '0.75rem' }}>SELECT AN EVENT FROM THE TIMELINE TO VIEW DETAILS</span>
       </div>
     );
   }
 
-  const thoughts = steps.filter((step) => step.type === 'thought');
+  const icon = KIND_ICONS[event.kind] || <FileText size={14} color="var(--text-muted)" />;
+  const label = KIND_LABELS[event.kind] || event.kind.toUpperCase();
+
+  // Build content based on event kind
+  let contentBody: React.ReactNode = null;
+
+  if (event.kind === 'tool_use') {
+    if (event.isAgentSpawn) {
+      contentBody = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.agentDescription}</span>
+          </div>
+          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Type</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.agentType || 'default'}</span>
+          </div>
+          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Prompt (Handover Contract)</span>
+            <pre style={{ fontSize: '0.7rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0, maxHeight: '400px', overflowY: 'auto' }}>
+              {event.agentPrompt}
+            </pre>
+          </div>
+        </div>
+      );
+    } else {
+      contentBody = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tool</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{event.tool}</span>
+          </div>
+          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Input Arguments</span>
+            <pre style={{ fontSize: '0.7rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0, maxHeight: '300px', overflowY: 'auto' }}>
+              {JSON.stringify(event.input, null, 2)}
+            </pre>
+          </div>
+        </div>
+      );
+    }
+  } else if (event.kind === 'tool_result') {
+    contentBody = (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tool Use ID</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{event.toolUseId}</span>
+        </div>
+        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <span style={{ fontSize: '0.6rem', color: event.isError ? '#c97a7a' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+            {event.isError ? 'Error Output' : 'Result'}
+          </span>
+          <pre style={{ fontSize: '0.7rem', color: event.isError ? '#c97a7a' : 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0, maxHeight: '400px', overflowY: 'auto' }}>
+            {truncate(event.content || '', 50000)}
+          </pre>
+        </div>
+      </div>
+    );
+  } else if (event.kind === 'hook_event') {
+    contentBody = (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hook Name</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{event.hookName}</span>
+        </div>
+        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hook Event</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.hookEvent}</span>
+        </div>
+        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Content</span>
+          <pre style={{ fontSize: '0.7rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0, maxHeight: '400px', overflowY: 'auto' }}>
+            {truncate(event.content || '', 50000)}
+          </pre>
+        </div>
+      </div>
+    );
+  } else {
+    // Text-based events (user_text, assistant_text, assistant_thinking, system)
+    contentBody = (
+      <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Content</span>
+        <pre style={{ fontSize: '0.75rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.4rem', margin: 0, maxHeight: '500px', overflowY: 'auto' }}>
+          {truncate(event.text || '', 50000)}
+        </pre>
+      </div>
+    );
+  }
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', width: '380px',
+    <div ref={scrollRef} style={{
+      display: 'flex', flexDirection: 'column', width: '480px',
       backgroundColor: 'var(--bg-secondary)', borderLeft: '1px solid var(--border-color)',
       overflowY: 'auto'
     }}>
+      {/* Header */}
       <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-          <Cpu size={14} color="var(--text-secondary)" />
-          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>{agent.role}</span>
+          {icon}
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
         </div>
-        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>ID: {agent.id}</span>
-      </div>
-
-      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-        <div className="glass-panel" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Status:</span>
-            <span style={{ color: agent.status === 'running' ? '#5d7c9a' : 'var(--text-primary)', fontWeight: 600 }}>{agent.status}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Estimated Cost:</span>
-            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{agent.tokensSpent} tokens</span>
-          </div>
-          {agent.parentAgentId && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Parent Agent:</span>
-              <span style={{ color: 'var(--text-muted)' }}>{agent.parentAgentId}</span>
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+          <span>{new Date(event.ts).toLocaleString()}</span>
+          {event.isSidechain && (
+            <span style={{ color: '#c9b57a', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+              <GitBranch size={10} /> sidechain
+            </span>
           )}
         </div>
+      </div>
 
-        {thoughts.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)' }}>AGENT INTERNAL REASONING</span>
-            <div className="glass-panel" style={{
-              padding: '0.8rem', maxHeight: '120px', overflowY: 'auto',
-              fontSize: '0.7rem', color: 'var(--text-primary)', lineHeight: '1.2rem'
-            }}>
-              {thoughts[thoughts.length - 1].content}
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-            <Terminal size={12} color="var(--text-secondary)" />
-            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)' }}>CONSOLE OUTPUT STREAM</span>
-          </div>
-          <div style={{
-            backgroundColor: '#0a0b0d', borderRadius: '4px', padding: '0.8rem',
-            fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#c5c6c8',
-            height: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column',
-            gap: '0.25rem', border: '1px solid var(--border-color)', lineHeight: '1rem'
-          }}>
-            {stdout ? (
-              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
-                {stdout}
-              </pre>
-            ) : (
-              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Awaiting terminal pipe streams...</span>
-            )}
-            <div ref={terminalBottomRef} />
-          </div>
-        </div>
+      {/* Content */}
+      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+        {contentBody}
       </div>
     </div>
   );

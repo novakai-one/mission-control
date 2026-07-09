@@ -1,0 +1,294 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { EventEmitter } from 'node:events';
+
+export type TranscriptEvent =
+  | { kind: 'user_text'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
+  | { kind: 'assistant_text'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
+  | { kind: 'assistant_thinking'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
+  | { kind: 'tool_use'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; tool: string; toolUseId: string; input: any; isAgentSpawn: boolean; agentDescription?: string; agentPrompt?: string; agentType?: string }
+  | { kind: 'tool_result'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; toolUseId: string; content: string; isError: boolean }
+  | { kind: 'hook_event'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; hookName: string; hookEvent: string; content: string; toolUseID: string }
+  | { kind: 'system'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean }
+  | { kind: 'session_meta'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string };
+
+const CLAUDE_DIR = path.join(process.env.HOME || '', '.claude', 'projects');
+
+export interface SessionMeta {
+  sessionId: string;
+  projectDir: string;   // display name (decoded from folder)
+  filePath: string;
+  modified: number;     // mtime ms
+  size: number;         // bytes
+}
+
+/**
+ * Recursively list all project folders under ~/.claude/projects/
+ */
+export function listProjects(): string[] {
+  if (!fs.existsSync(CLAUDE_DIR)) return [];
+  return fs.readdirSync(CLAUDE_DIR, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => d.name);
+}
+
+/**
+ * Decode a Claude project folder name back to a readable path.
+ * e.g. "-Users-christopherdasca-Programming-novakai" → "/Users/christopherdasca/Programming/novakai"
+ */
+export function decodeProjectDir(dirName: string): string {
+  if (dirName.startsWith('-')) {
+    return dirName.replace(/-/g, '/').replace(/^\//, '/');
+  }
+  return dirName;
+}
+
+/**
+ * List all sessions (JSONL files) for a given project folder.
+ */
+export function listSessions(projectDirName: string): SessionMeta[] {
+  const projectPath = path.join(CLAUDE_DIR, projectDirName);
+  if (!fs.existsSync(projectPath)) return [];
+  return fs.readdirSync(projectPath)
+    .filter(f => f.endsWith('.jsonl'))
+    .map(f => {
+      const filePath = path.join(projectPath, f);
+      const stat = fs.statSync(filePath);
+      return {
+        sessionId: f.replace('.jsonl', ''),
+        projectDir: decodeProjectDir(projectDirName),
+        filePath,
+        modified: stat.mtimeMs,
+        size: stat.size,
+      };
+    })
+    .sort((a, b) => b.modified - a.modified);
+}
+
+/**
+ * Read and parse an entire session JSONL file into events.
+ */
+export function readSession(filePath: string): TranscriptEvent[] {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const events: TranscriptEvent[] = [];
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line);
+      const parsedEvents = parseJsonlLine(parsed);
+      if (parsedEvents) events.push(...parsedEvents);
+    } catch {
+      // skip unparseable lines
+    }
+  }
+  return events;
+}
+
+/**
+ * Watch a specific session file for changes (appends).
+ * Emits 'event' for each new parsed event, 'error' on failure.
+ */
+export class SessionWatcher extends EventEmitter {
+  private lastSize = 0;
+  private interval: NodeJS.Timeout | null = null;
+
+  constructor(private filePath: string) {
+    super();
+    // Start from end of file
+    try {
+      this.lastSize = fs.statSync(filePath).size;
+    } catch {
+      this.lastSize = 0;
+    }
+  }
+
+  start(): void {
+    if (this.interval) return;
+    this.interval = setInterval(() => this.check(), 500);
+  }
+
+  stop(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+
+  private check(): void {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(this.filePath);
+    } catch {
+      return;
+    }
+
+    if (stat.size <= this.lastSize) {
+      // File might have been truncated/recreated
+      if (stat.size < this.lastSize) this.lastSize = 0;
+      return;
+    }
+
+    const stream = fs.createReadStream(this.filePath, {
+      start: this.lastSize,
+      end: stat.size,
+    });
+    let buffer = '';
+    stream.on('data', (chunk) => {
+      buffer += chunk.toString();
+    });
+    stream.on('end', () => {
+      this.lastSize = stat.size;
+      for (const line of buffer.split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          const events = parseJsonlLine(parsed);
+          if (events) for (const ev of events) this.emit('event', ev);
+        } catch {
+          // partial line, skip
+        }
+      }
+    });
+    stream.on('error', (err) => this.emit('error', err));
+  }
+}
+
+/**
+ * Convert a raw JSONL line object into a typed TranscriptEvent.
+ */
+function parseJsonlLine(obj: any): TranscriptEvent[] | null {
+  if (!obj || typeof obj !== 'object') return null;
+  const type = obj.type;
+  const uuid = obj.uuid || obj.sessionId || '';
+  const parentUuid = obj.parentUuid || null;
+  const sessionId = obj.sessionId || '';
+  const ts = obj.timestamp || new Date().toISOString();
+  const isSidechain = obj.isSidechain || false;
+
+  // Session metadata
+  if (type === 'mode') {
+    return [{ kind: 'session_meta', uuid, parentUuid, sessionId, ts, mode: obj.mode }];
+  }
+  if (type === 'permission-mode') {
+    return [{ kind: 'session_meta', uuid, parentUuid, sessionId, ts, permissionMode: obj.permissionMode }];
+  }
+  if (type === 'summary') {
+    return [{ kind: 'session_meta', uuid, parentUuid, sessionId, ts, summary: obj.summary }];
+  }
+
+  // Attachments (hooks, file references, etc.)
+  if (type === 'attachment') {
+    const att = obj.attachment || {};
+    return [{
+      kind: 'hook_event',
+      uuid,
+      parentUuid,
+      sessionId,
+      ts,
+      isSidechain,
+      hookName: att.hookName || '',
+      hookEvent: att.hookEvent || att.type || '',
+      content: att.content || '',
+      toolUseID: att.toolUseID || '',
+    }];
+  }
+
+  // System messages
+  if (type === 'system') {
+    const msg = obj.message;
+    const text = typeof msg === 'string' ? msg : (msg?.content || JSON.stringify(msg));
+    return [{ kind: 'system', uuid, parentUuid, sessionId, ts, text, isSidechain }];
+  }
+
+  // User / assistant messages
+  if (type === 'user' || type === 'assistant') {
+    const msg = obj.message || {};
+    const role = msg.role || type;
+    const content = msg.content;
+
+    // Tool result (user message with tool_result content)
+    if (Array.isArray(content)) {
+      const events: TranscriptEvent[] = [];
+      for (const block of content) {
+        if (!block || typeof block !== 'object') continue;
+
+        if (block.type === 'tool_result') {
+          const resultContent = Array.isArray(block.content)
+            ? block.content.map((c: any) => c.text || '').join('')
+            : (typeof block.content === 'string' ? block.content : JSON.stringify(block.content));
+          events.push({
+            kind: 'tool_result',
+            uuid,
+            parentUuid,
+            sessionId,
+            ts,
+            isSidechain,
+            toolUseId: block.tool_use_id || '',
+            content: resultContent,
+            isError: block.is_error || false,
+          });
+        }
+
+        if (block.type === 'tool_use') {
+          const isAgentSpawn = block.name === 'Agent' || block.name === 'Task';
+          const input = block.input || {};
+          events.push({
+            kind: 'tool_use',
+            uuid,
+            parentUuid,
+            sessionId,
+            ts,
+            isSidechain,
+            tool: block.name || 'unknown',
+            toolUseId: block.id || '',
+            input,
+            isAgentSpawn,
+            agentDescription: isAgentSpawn ? (input.description || '') : undefined,
+            agentPrompt: isAgentSpawn ? (input.prompt || '') : undefined,
+            agentType: isAgentSpawn ? (input.subagent_type || '') : undefined,
+          });
+        }
+
+        if (block.type === 'thinking') {
+          events.push({
+            kind: 'assistant_thinking',
+            uuid,
+            parentUuid,
+            sessionId,
+            ts,
+            isSidechain,
+            text: block.thinking || '',
+          });
+        }
+
+        if (block.type === 'text') {
+          events.push({
+            kind: role === 'assistant' ? 'assistant_text' : 'user_text',
+            uuid,
+            parentUuid,
+            sessionId,
+            ts,
+            isSidechain,
+            text: block.text || '',
+          });
+        }
+      }
+      return events.length > 0 ? events : null;
+    }
+
+    // Simple text content
+    if (typeof content === 'string') {
+      return [{
+        kind: role === 'assistant' ? 'assistant_text' : 'user_text',
+        uuid,
+        parentUuid,
+        sessionId,
+        ts,
+        isSidechain,
+        text: content,
+      }];
+    }
+  }
+
+  return null;
+}

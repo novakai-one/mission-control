@@ -3,61 +3,116 @@ import { AppHeader } from './dashboard/index.js';
 import { AgentBoard } from './board/index.js';
 import { SelectedInspector } from './details/index.js';
 import { PlaybackSlider } from './history/index.js';
+import { RulesetInspector, RulesetData } from './ruleset/index.js';
+import { TerminalPanel, BuildMessage } from './terminal/index.js';
+import { SettingsPanel } from './settings/index.js';
 
-export interface AgentStep {
-  id: string;
-  agentId: string;
-  timestamp: string;
-  type: 'thought' | 'action' | 'command' | 'stdout' | 'spawn';
-  content: string;
+export interface ProjectInfo {
+  dirName: string;
+  displayPath: string;
 }
 
-export interface AgentInstance {
-  id: string;
-  role: string;
-  parentAgentId?: string;
-  status: 'idle' | 'thinking' | 'running' | 'stopping' | 'stopped';
-  tokensSpent: number;
+export interface SessionMeta {
+  sessionId: string;
+  projectDir: string;
+  filePath: string;
+  modified: number;
+  size: number;
 }
 
-export interface BuildRecord {
-  id: string;
-  startTime: string;
-  endTime?: string;
-  status: 'running' | 'success' | 'failed' | 'stopped';
-  steps: AgentStep[];
-  gitCommitHash?: string;
-}
-
-export interface AppConfig {
-  workspacePath: string;
-  geminiApiKey?: string;
-  serverPort: number;
+export interface TranscriptEvent {
+  kind: string;
+  uuid: string;
+  parentUuid: string | null;
+  sessionId: string;
+  ts: string;
+  isSidechain?: boolean;
+  // text events
+  text?: string;
+  // tool_use events
+  tool?: string;
+  toolUseId?: string;
+  input?: any;
+  isAgentSpawn?: boolean;
+  agentDescription?: string;
+  agentPrompt?: string;
+  agentType?: string;
+  // tool_result events
+  content?: string;
+  isError?: boolean;
+  // hook events
+  hookName?: string;
+  hookEvent?: string;
+  // session_meta
+  mode?: string;
+  permissionMode?: string;
+  summary?: string;
 }
 
 export function DashboardShell() {
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [builds, setBuilds] = useState<BuildRecord[]>([]);
-  const [activeBuild, setActiveBuild] = useState<BuildRecord | null>(null);
-  const [activeAgents, setActiveAgents] = useState<AgentInstance[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [stdoutLogs, setStdoutLogs] = useState<Record<string, string>>({});
+  const [projects, setProjects] = useState<ProjectInfo[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [events, setEvents] = useState<TranscriptEvent[]>([]);
+  const [liveMode, setLiveMode] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
+  const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'transcript' | 'ruleset'>('transcript');
+  const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
+  const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   
   const webSocketRef = useRef<WebSocket | null>(null);
 
+  // Load projects on mount
   useEffect(() => {
-    fetch('/api/config')
-      .then((res) => res.json())
-      .then((data) => setConfig(data))
-      .catch(() => {});
-
-    fetch('/api/builds')
-      .then((res) => res.json())
-      .then((data) => setBuilds(data))
+    fetch('/api/projects')
+      .then(res => res.json())
+      .then((data: ProjectInfo[]) => {
+        setProjects(data);
+        // Auto-select novakai if present
+        const novakai = data.find(p => p.dirName.includes('novakai') && !p.dirName.includes('worktree'));
+        if (novakai) setSelectedProject(novakai.dirName);
+      })
       .catch(() => {});
   }, []);
 
+  // Load sessions when project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+    fetch(`/api/sessions?project=${selectedProject}`)
+      .then(res => res.json())
+      .then((data: SessionMeta[]) => {
+        setSessions(data);
+        // Auto-select most recent
+        if (data[0]) setSelectedSession(data[0].sessionId);
+      })
+      .catch(() => {});
+  }, [selectedProject]);
+
+  // Load ruleset data when project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+    fetch(`/api/ruleset?project=${selectedProject}`)
+      .then(res => res.json())
+      .then((data: RulesetData) => setRulesetData(data))
+      .catch(() => {});
+  }, [selectedProject]);
+
+  // Load transcript when session changes
+  useEffect(() => {
+    if (!selectedProject || !selectedSession) return;
+    fetch(`/api/transcript?project=${selectedProject}&session=${selectedSession}`)
+      .then(res => res.json())
+      .then((data: TranscriptEvent[]) => {
+        setEvents(data);
+        setPlaybackIndex(-1); // live mode
+      })
+      .catch(() => {});
+  }, [selectedProject, selectedSession]);
+
+  // WebSocket for live updates
   useEffect(() => {
     const wsUrl = `ws://${window.location.host}/ws`;
     const socket = new WebSocket(wsUrl);
@@ -65,108 +120,82 @@ export function DashboardShell() {
 
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      handleWebSocketMessage(message.event, message.payload);
+      if (message.event === 'transcript-event') {
+        setEvents(prev => [...prev, message.payload]);
+      } else if (message.event === 'watch-started') {
+        setLiveMode(true);
+      } else {
+        // Build/agent events
+        setBuildMessages(prev => [...prev, message]);
+      }
     };
 
     return () => socket.close();
   }, []);
 
-  const handleWebSocketMessage = (event: string, payload: any) => {
-    switch (event) {
-      case 'build-started':
-        setActiveBuild(payload.build);
-        setActiveAgents(payload.agents);
-        setStdoutLogs({});
-        setPlaybackIndex(-1);
-        break;
-      case 'agent-stdout':
-        setStdoutLogs((prev) => ({
-          ...prev,
-          [payload.agentId]: (prev[payload.agentId] || '') + payload.content
-        }));
-        break;
-      case 'agent-step':
-        setActiveAgents(payload.activeAgents);
-        setActiveBuild((prev) => prev ? { ...prev, steps: [...prev.steps, payload.step] } : null);
-        break;
-      case 'agent-spawned':
-        setActiveAgents(payload.agents);
-        setActiveBuild((prev) => prev ? { ...prev, steps: [...prev.steps, payload.step] } : null);
-        break;
-      case 'build-stopped':
-      case 'build-completed':
-        setActiveBuild(payload.build);
-        setActiveAgents(payload.agents);
-        fetch('/api/builds')
-          .then((res) => res.json())
-          .then((data) => setBuilds(data))
-          .catch(() => {});
-        break;
+  // Start watching when session is selected and in live mode
+  useEffect(() => {
+    if (!selectedProject || !selectedSession || !webSocketRef.current) return;
+    const socket = webSocketRef.current;
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'watch-session', project: selectedProject, session: selectedSession }));
     }
-  };
+  }, [selectedProject, selectedSession, webSocketRef.current?.readyState]);
 
-  const handleStartBuild = (prompt: string, llmType: 'claude' | 'gemini') => {
-    fetch('/api/builds/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, llmType, geminiApiKey: config?.geminiApiKey })
-    }).catch(() => {});
-  };
+  const currentEvents = playbackIndex >= 0
+    ? events.slice(0, playbackIndex + 1)
+    : events;
 
-  const handleStopBuild = () => {
-    if (!activeBuild) return;
-    fetch('/api/builds/stop', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ buildId: activeBuild.id })
-    }).catch(() => {});
-  };
-
-  const handleReviewBuild = (build: BuildRecord) => {
-    setActiveBuild(build);
-    setPlaybackIndex(build.steps.length - 1);
-    const parsedLogs: Record<string, string> = {};
-    build.steps.forEach((step) => {
-      if (step.type === 'stdout') {
-        parsedLogs[step.agentId] = (parsedLogs[step.agentId] || '') + step.content;
-      }
-    });
-    setStdoutLogs(parsedLogs);
-  };
-
-  const currentSteps = activeBuild 
-    ? (playbackIndex >= 0 ? activeBuild.steps.slice(0, playbackIndex + 1) : activeBuild.steps)
-    : [];
+  // Build agent tree from events
+  const agentSpawns = currentEvents.filter(e => e.kind === 'tool_use' && e.isAgentSpawn);
+  const selectedEvent = currentEvents.find(e => e.uuid === selectedEventUuid);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       <AppHeader 
-        config={config} 
-        onSetConfig={setConfig} 
-        activeBuild={activeBuild}
-        onStartBuild={handleStartBuild}
-        onStopBuild={handleStopBuild}
+        projects={projects}
+        selectedProject={selectedProject}
+        onSelectProject={setSelectedProject}
+        liveMode={liveMode}
+        eventCount={events.length}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <AgentBoard 
-          activeAgents={activeAgents} 
-          steps={currentSteps}
-          onSelectAgent={setSelectedAgentId}
-          selectedAgentId={selectedAgentId}
-        />
-        <SelectedInspector 
-          agent={activeAgents.find((a) => a.id === selectedAgentId)}
-          stdout={stdoutLogs[selectedAgentId || ''] || ''}
-          steps={currentSteps.filter((s) => s.agentId === selectedAgentId)}
-        />
+        {viewMode === 'transcript' ? (
+          <>
+            <AgentBoard 
+              events={currentEvents}
+              onSelectEvent={setSelectedEventUuid}
+              selectedEventUuid={selectedEventUuid}
+            />
+            <SelectedInspector 
+              event={selectedEvent}
+              events={currentEvents}
+            />
+            <TerminalPanel 
+              selectedProject={selectedProject}
+              onBuildMessage={(msg) => setBuildMessages(prev => [...prev, msg])}
+              buildMessages={buildMessages}
+              wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
+            />
+          </>
+        ) : (
+          <RulesetInspector data={rulesetData} />
+        )}
       </div>
-      <PlaybackSlider 
-        activeBuild={activeBuild} 
-        playbackIndex={playbackIndex}
-        onSetPlaybackIndex={setPlaybackIndex}
-        builds={builds}
-        onReviewBuild={handleReviewBuild}
-      />
+      {viewMode === 'transcript' && (
+        <PlaybackSlider 
+          sessions={sessions}
+          selectedSession={selectedSession}
+          onSelectSession={(id) => { setSelectedSession(id); setPlaybackIndex(-1); }}
+          events={events}
+          playbackIndex={playbackIndex}
+          onSetPlaybackIndex={setPlaybackIndex}
+        />
+      )}
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
