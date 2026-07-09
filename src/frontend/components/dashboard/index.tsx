@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Radio, Network, Shield, Settings } from 'lucide-react';
+import { Terminal, Radio, Network, Shield, Settings, Bug } from 'lucide-react';
 import { ProjectInfo } from '../index.js';
 
 interface AppHeaderProps {
@@ -8,8 +8,8 @@ interface AppHeaderProps {
   onSelectProject: (dir: string) => void;
   liveMode: boolean;
   eventCount: number;
-  viewMode: 'transcript' | 'ruleset';
-  onViewModeChange: (mode: 'transcript' | 'ruleset') => void;
+  viewMode: 'transcript' | 'ruleset' | 'debug';
+  onViewModeChange: (mode: 'transcript' | 'ruleset' | 'debug') => void;
   onOpenSettings: () => void;
 }
 
@@ -63,6 +63,19 @@ export function AppHeader({ projects, selectedProject, onSelectProject, liveMode
         >
           <Shield size={12} />
           <span>Ruleset</span>
+        </button>
+        <button
+          onClick={() => onViewModeChange('debug')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.35rem',
+            padding: '0.35rem 0.8rem', borderRadius: '4px',
+            backgroundColor: viewMode === 'debug' ? 'var(--bg-tertiary)' : 'transparent',
+            border: 'none', color: viewMode === 'debug' ? 'var(--text-primary)' : 'var(--text-muted)',
+            fontSize: '0.7rem', fontWeight: viewMode === 'debug' ? 600 : 400, cursor: 'pointer',
+          }}
+        >
+          <Bug size={12} />
+          <span>Debug</span>
         </button>
       </div>
 

@@ -82,7 +82,8 @@ export class AgentCoordinator {
         agentId: stepData.agentId || agentId,
         timestamp: stepData.timestamp || new Date().toISOString(),
         type: stepData.type || 'thought',
-        content: stepData.content || ''
+        content: stepData.content || '',
+        stream: stepData.stream
       };
 
       const wordCount = step.content.trim().split(/\s+/).length;
@@ -96,6 +97,21 @@ export class AgentCoordinator {
       this.triggerBroadcast('agent-step', { agent, step, activeAgents: this.getActiveAgents() });
     };
 
+    if (this.activeBuild) this.activeBuild.llm = llmType;
+
+    // Records the exact command/path/cwd/pid the executor spawned, so the Debug tab can show what actually ran.
+    const onSpawnHandler = (info: { command: string; args: string[]; cwd: string; pid?: number; cliExists: boolean }) => {
+      if (this.activeBuild) {
+        this.activeBuild.command = info.command;
+        this.activeBuild.args = info.args;
+        this.activeBuild.cwd = info.cwd;
+        this.activeBuild.pid = info.pid;
+        this.activeBuild.cliExists = info.cliExists;
+        this.stateManager.saveBuild(this.activeBuild);
+      }
+      this.triggerBroadcast('build-debug', { buildId: this.activeBuild?.id, llm: llmType, ...info });
+    };
+
     try {
       if (llmType === 'gemini' && geminiApiKey) {
         await this.executor.runGeminiApi(agentId, prompt, geminiApiKey, {
@@ -107,14 +123,20 @@ export class AgentCoordinator {
         await this.executor.runClaudeCode(agentId, prompt, {
           workspacePath: process.cwd(),
           onStdout: onStdoutHandler,
-          onStep: onStepHandler
+          onStep: onStepHandler,
+          onSpawn: onSpawnHandler
         });
       }
 
       agent.status = 'idle';
+      if (this.activeBuild) this.activeBuild.exitCode = 0;
       this.completeBuild('success');
-    } catch {
+    } catch (err: any) {
       agent.status = 'stopped';
+      if (this.activeBuild) {
+        this.activeBuild.errorMessage = err?.message ? String(err.message) : String(err);
+        if (typeof err?.exitCode !== 'undefined') this.activeBuild.exitCode = err.exitCode;
+      }
       this.completeBuild('failed');
     }
   }
@@ -176,9 +198,12 @@ export class AgentCoordinator {
 
   private completeBuild(finalStatus: 'success' | 'failed'): void {
     if (!this.activeBuild) return;
+    // A stopped build is terminal — don't let a trailing loop rejection relabel it success/failed.
+    if (this.activeBuild.status === 'stopped') return;
 
     this.activeBuild.status = finalStatus;
     this.activeBuild.endTime = new Date().toISOString();
+    this.activeBuild.durationMs = new Date(this.activeBuild.endTime).getTime() - new Date(this.activeBuild.startTime).getTime();
     this.stateManager.saveBuild(this.activeBuild);
 
     this.stateManager.createGitCommit(`Mission Control: Automated commit for build ${this.activeBuild.id} (${finalStatus})`)

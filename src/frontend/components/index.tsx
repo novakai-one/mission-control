@@ -6,6 +6,7 @@ import { PlaybackSlider } from './history/index.js';
 import { RulesetInspector, RulesetData } from './ruleset/index.js';
 import { TerminalPanel, BuildMessage } from './terminal/index.js';
 import { SettingsPanel } from './settings/index.js';
+import { DebugPanel } from './debug/index.js';
 
 export interface ProjectInfo {
   dirName: string;
@@ -58,7 +59,7 @@ export function DashboardShell() {
   const [liveMode, setLiveMode] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
   const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'transcript' | 'ruleset'>('transcript');
+  const [viewMode, setViewMode] = useState<'transcript' | 'ruleset' | 'debug'>('transcript');
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -181,8 +182,13 @@ export function DashboardShell() {
               wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
             />
           </>
-        ) : (
+        ) : viewMode === 'ruleset' ? (
           <RulesetInspector data={rulesetData} />
+        ) : (
+          <DebugPanel
+            buildMessages={buildMessages}
+            wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
+          />
         )}
       </div>
       {viewMode === 'transcript' && (

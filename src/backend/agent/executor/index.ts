@@ -1,4 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ConfigManager } from '../../config/index.js';
 
 export interface AgentStep {
   id: string;
@@ -7,6 +10,15 @@ export interface AgentStep {
   type: 'thought' | 'action' | 'command' | 'stdout' | 'spawn';
   content: string;
   tokenCount?: number;
+  stream?: 'stdout' | 'stderr';
+}
+
+export interface SpawnInfo {
+  command: string;
+  args: string[];
+  cwd: string;
+  pid?: number;
+  cliExists: boolean;
 }
 
 export interface ExecutionOptions {
@@ -14,6 +26,20 @@ export interface ExecutionOptions {
   systemPrompt?: string;
   onStdout: (data: string) => void;
   onStep: (step: Partial<AgentStep>) => void;
+  onSpawn?: (info: SpawnInfo) => void;
+}
+
+// Resolve a CLI command to an absolute path so the Debug tab can show what actually ran.
+// A bare name (no separator) is looked up on PATH manually — spawn does this internally but throws the result away.
+function resolveCli(cmd: string): { resolved: string; exists: boolean } {
+  if (cmd.includes(path.sep) || cmd.includes('/')) {
+    return { resolved: path.resolve(cmd), exists: fs.existsSync(cmd) };
+  }
+  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+    const candidate = path.join(dir, cmd);
+    if (fs.existsSync(candidate)) return { resolved: candidate, exists: true };
+  }
+  return { resolved: cmd, exists: false };
 }
 
 export class AgentExecutor {
@@ -21,18 +47,25 @@ export class AgentExecutor {
   private readonly activeAbortControllers = new Map<string, AbortController>();
 
   public async runClaudeCode(agentId: string, prompt: string, options: ExecutionOptions): Promise<void> {
-    const args = ['-p', prompt, '--bare', '--permission-mode', 'bypassPermissions'];
+    // No --bare: bare mode skips credential loading and reports "Not logged in" even when authenticated.
+    const args = ['-p', prompt, '--permission-mode', 'bypassPermissions'];
     if (options.systemPrompt) {
       args.push('--system-prompt', options.systemPrompt);
     }
 
-    const processInstance = spawn('claude', args, {
+    // Reads static machine config (not per-request like geminiApiKey), so load here rather than thread through.
+    const cliPath = ConfigManager.load().claudeCliPath || 'claude';
+    const { resolved, exists } = resolveCli(cliPath);
+    // No shell: absolute path bypasses PATH, and args stay discrete (no word-splitting / shell injection from the prompt).
+    const processInstance = spawn(resolved, args, {
       cwd: options.workspacePath,
       env: { ...process.env, FORCE_COLOR: '1' },
-      shell: true
+      // stdin ignored: prompt comes via -p, so no piped input — avoids Claude's 3s "no stdin" wait.
+      stdio: ['ignore', 'pipe', 'pipe']
     });
 
     this.activeSubprocesses.set(agentId, processInstance);
+    options.onSpawn?.({ command: resolved, args, cwd: options.workspacePath, pid: processInstance.pid, cliExists: exists });
 
     processInstance.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
@@ -42,21 +75,40 @@ export class AgentExecutor {
         agentId,
         timestamp: new Date().toISOString(),
         type: 'stdout',
-        content: text
+        content: text,
+        stream: 'stdout'
       });
     });
 
+    // stderr labeled as its own step so the Debug tab can show it separately (auth errors land here).
     processInstance.stderr.on('data', (chunk: Buffer) => {
-      options.onStdout(chunk.toString());
+      const text = chunk.toString();
+      options.onStdout(text);
+      options.onStep({
+        id: Math.random().toString(36).substring(7),
+        agentId,
+        timestamp: new Date().toISOString(),
+        type: 'stdout',
+        content: text,
+        stream: 'stderr'
+      });
     });
 
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
+      // Without this, a bad CLI path (ENOENT) makes the process throw uncaught / never settle. Reject instead.
+      processInstance.on('error', (err) => {
+        this.activeSubprocesses.delete(agentId);
+        reject(err);
+      });
       processInstance.on('close', (code) => {
         this.activeSubprocesses.delete(agentId);
-        if (code === 0 || code === null) {
+        if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`Claude process exited with code ${code}`));
+          // code === null means killed by signal (e.g. SIGINT from Stop) — no longer treated as success.
+          const err = new Error(`Claude process exited with code ${code}`) as Error & { exitCode: number | null };
+          err.exitCode = code;
+          reject(err);
         }
       });
     });

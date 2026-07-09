@@ -9,6 +9,7 @@ export interface AgentStep {
   type: 'thought' | 'action' | 'command' | 'stdout' | 'spawn';
   content: string;
   tokenCount?: number;
+  stream?: 'stdout' | 'stderr';
 }
 
 export interface BuildRecord {
@@ -18,6 +19,16 @@ export interface BuildRecord {
   status: 'running' | 'success' | 'failed' | 'stopped';
   steps: AgentStep[];
   gitCommitHash?: string;
+  // Debug facts (surfaced by the Debug tab). Populated as the build runs.
+  llm?: 'claude' | 'gemini';
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  pid?: number;
+  cliExists?: boolean;
+  exitCode?: number;
+  errorMessage?: string;
+  durationMs?: number;
 }
 
 export class StateManager {

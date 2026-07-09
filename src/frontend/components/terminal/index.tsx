@@ -50,6 +50,15 @@ export function TerminalPanel({ selectedProject, onBuildMessage, buildMessages, 
       .catch(() => setShowKeyInput(true));
   }, []);
 
+  // Re-enable the input when this build finishes. Nothing else listened for completion, so it stayed stuck.
+  useEffect(() => {
+    if (!buildId) return;
+    const last = buildMessages[buildMessages.length - 1];
+    if (last && (last.event === 'build-completed' || last.event === 'build-stopped') && last.payload?.build?.id === buildId) {
+      setIsRunning(false);
+    }
+  }, [buildMessages, buildId]);
+
   const handleStartBuild = async () => {
     if (!prompt.trim()) return;
 
