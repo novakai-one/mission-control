@@ -53,7 +53,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBo
 
   return (
     <div style={{
-      display: 'flex', flex: 1, backgroundColor: 'var(--bg-primary)',
+      display: 'flex', flex: 1, minWidth: '320px', backgroundColor: 'var(--bg-primary)',
       borderRight: '1px solid var(--border-color)', overflowY: 'auto', padding: '1.5rem',
       flexDirection: 'column', gap: '1rem'
     }}>

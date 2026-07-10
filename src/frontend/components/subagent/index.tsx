@@ -62,7 +62,7 @@ export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEv
   }, [matchedMeta?.agentId, projectDir, sessionId]);
 
   const containerStyle: React.CSSProperties = {
-    display: 'flex', flexDirection: 'column', width: '480px',
+    display: 'flex', flexDirection: 'column', width: '100%',
     backgroundColor: 'var(--bg-secondary)', borderLeft: '1px solid var(--border-color)',
     overflow: 'hidden',
   };

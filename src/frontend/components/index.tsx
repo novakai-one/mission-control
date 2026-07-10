@@ -60,6 +60,43 @@ export interface TranscriptEvent {
   summary?: string;
 }
 
+const COL_MIN = 280;
+const COL_MAX = 900;
+
+/** Invisible 6px strip between columns; highlights on hover, drag resizes the column to its right. */
+function ResizeHandle({ width, onWidthChange }: { width: number; onWidthChange(width: number): void }) {
+  const [dragging, setDragging] = useState(false);
+
+  function handleMouseDown(event: React.MouseEvent): void {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = width;
+    setDragging(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(moveEvent: MouseEvent): void {
+      onWidthChange(Math.min(COL_MAX, Math.max(COL_MIN, startWidth + startX - moveEvent.clientX)));
+    }
+    function onUp(): void {
+      setDragging(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  return (
+    <div
+      className={dragging ? 'col-resize-handle col-resize-dragging' : 'col-resize-handle'}
+      onMouseDown={handleMouseDown}
+    />
+  );
+}
+
 export function DashboardShell() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
@@ -75,6 +112,8 @@ export function DashboardShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [homeDir, setHomeDir] = useState<string | null>(null);
   const [activeRepo, setActiveRepo] = useState<string | null>(null);
+  const [detailsWidth, setDetailsWidth] = useState(480);
+  const [subagentWidth, setSubagentWidth] = useState(480);
 
   const webSocketRef = useRef<WebSocket | null>(null);
   // Mirror for the ws onmessage closure, which only mounts once.
@@ -229,18 +268,24 @@ export function DashboardShell() {
               onSelectEvent={(uuid) => { setSelectedEventUuid(uuid); setSelectedSubEvent(null); }}
               selectedEventUuid={selectedEventUuid}
             />
-            <SelectedInspector
-              event={selectedSubEvent ?? selectedEvent}
-              events={currentEvents}
-            />
-            <SubagentInspector
-              projectDir={selectedMeta?.dirName ?? null}
-              sessionId={selectedSession}
-              selectedEvent={selectedEvent}
-              mainEvents={currentEvents}
-              onSelectSubEvent={setSelectedSubEvent}
-              selectedSubEventUuid={selectedSubEvent?.uuid ?? null}
-            />
+            <ResizeHandle width={detailsWidth} onWidthChange={setDetailsWidth} />
+            <div style={{ width: detailsWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+              <SelectedInspector
+                event={selectedSubEvent ?? selectedEvent}
+                events={currentEvents}
+              />
+            </div>
+            <ResizeHandle width={subagentWidth} onWidthChange={setSubagentWidth} />
+            <div style={{ width: subagentWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+              <SubagentInspector
+                projectDir={selectedMeta?.dirName ?? null}
+                sessionId={selectedSession}
+                selectedEvent={selectedEvent}
+                mainEvents={currentEvents}
+                onSelectSubEvent={setSelectedSubEvent}
+                selectedSubEventUuid={selectedSubEvent?.uuid ?? null}
+              />
+            </div>
           </>
         ) : viewMode === 'livechat' ? (
           <TerminalPanel
