@@ -8,9 +8,39 @@ import { AgentCoordinator } from '../agent/index.js';
 import { ConfigManager } from '../config/index.js';
 import { StateManager } from '../state/index.js';
 import { exec } from 'node:child_process';
-import { listProjects, listSessions, readSession, decodeProjectDir, SessionWatcher, listSubagents, readSubagent, CLAUDE_DIR } from '../transcript/parser.js';
+import { listSessions, readSession, SessionWatcher, listSubagents, readSubagent, CLAUDE_DIR } from '../transcript/parser.js';
+import { matchSessions } from '../transcript/repoIndex.js';
 import { readRuleset } from '../ruleset/reader.js';
 import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } from '../fs/explorer.js';
+
+const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
+const SESSION_RE = /^[A-Za-z0-9-]+$/;
+const AGENT_RE = /^agent-[A-Za-z0-9]+$/;
+
+function isValidProjectDir(value: unknown): value is string {
+  return typeof value === 'string' && PROJECT_RE.test(value) && value !== '.' && value !== '..';
+}
+
+function isValidSessionId(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_RE.test(value);
+}
+
+function validateProjectSession(
+  request: express.Request,
+  response: express.Response
+): { projectDir: string; sessionId: string } | null {
+  const projectDir = request.query.project as string;
+  const sessionId = request.query.session as string;
+  if (!isValidProjectDir(projectDir)) {
+    response.status(400).json({ error: 'invalid project parameter' });
+    return null;
+  }
+  if (!isValidSessionId(sessionId)) {
+    response.status(400).json({ error: 'invalid session parameter' });
+    return null;
+  }
+  return { projectDir, sessionId };
+}
 
 export class ServerController {
   private readonly app = express();
@@ -64,6 +94,7 @@ export class ServerController {
   private activeWatchers = new Map<WebSocket, SessionWatcher>();
 
   private startSessionWatch(socket: WebSocket, projectDir: string, sessionId: string): void {
+    if (!isValidProjectDir(projectDir) || !isValidSessionId(sessionId)) return;
     // Stop any existing watcher for this socket
     const existing = this.activeWatchers.get(socket);
     if (existing) {
@@ -142,73 +173,65 @@ export class ServerController {
 
     // ===== Transcript API (reads from ~/.claude/projects/) =====
 
-    this.app.get('/api/projects', (_, res) => {
-      const projects = listProjects().map(name => ({
-        dirName: name,
-        displayPath: decodeProjectDir(name),
-      }));
-      res.json(projects);
+    this.app.get('/api/sessions', async (_request, response) => {
+      try {
+        const configuration = ConfigManager.load();
+        if (!configuration.activeRepo) {
+          response.json([]);
+          return;
+        }
+        response.json(await matchSessions(configuration.activeRepo));
+      } catch (error) {
+        response.status(500).json({ error: String(error) });
+      }
     });
 
-    this.app.get('/api/sessions', (req, res) => {
-      const projectDir = req.query.project as string;
-      if (!projectDir) {
-        res.status(400).json({ error: 'project parameter required' });
-        return;
+    const validateTranscriptParams = (
+      request: express.Request,
+      response: express.Response
+    ): { projectDir: string; sessionId: string } | null => {
+      const params = validateProjectSession(request, response);
+      if (!params) return null;
+      const resolved = path.resolve(CLAUDE_DIR, params.projectDir);
+      if (!resolved.startsWith(CLAUDE_DIR + path.sep)) {
+        response.status(400).json({ error: 'invalid path' });
+        return null;
       }
-      const sessions = listSessions(projectDir);
-      res.json(sessions);
-    });
+      return params;
+    };
 
-    this.app.get('/api/transcript', (req, res) => {
-      const projectDir = req.query.project as string;
-      const sessionId = req.query.session as string;
-      if (!projectDir || !sessionId) {
-        res.status(400).json({ error: 'project and session parameters required' });
-        return;
-      }
-      const sessions = listSessions(projectDir);
-      const session = sessions.find(s => s.sessionId === sessionId);
+    this.app.get('/api/transcript', (request, response) => {
+      const params = validateTranscriptParams(request, response);
+      if (!params) return;
+      const sessions = listSessions(params.projectDir);
+      const session = sessions.find(entry => entry.sessionId === params.sessionId);
       if (!session) {
-        res.status(404).json({ error: 'Session not found' });
+        response.status(404).json({ error: 'Session not found' });
         return;
       }
-      const events = readSession(session.filePath);
-      res.json(events);
+      response.json(readSession(session.filePath));
     });
 
     // ===== Subagent transcript API =====
 
-    const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
-    const SESSION_RE = /^[A-Za-z0-9-]+$/;
-    const AGENT_RE = /^agent-[A-Za-z0-9]+$/;
-
     const validateSubagentParams = (
-      req: express.Request,
-      res: express.Response,
+      request: express.Request,
+      response: express.Response,
       requireAgent: boolean
     ): { projectDir: string; sessionId: string; agentId: string } | null => {
-      const projectDir = req.query.project as string;
-      const sessionId = req.query.session as string;
-      const agentId = req.query.agent as string;
-      if (!projectDir || !PROJECT_RE.test(projectDir) || projectDir === '.' || projectDir === '..') {
-        res.status(400).json({ error: 'invalid project parameter' });
+      const params = validateProjectSession(request, response);
+      if (!params) return null;
+      const agentId = request.query.agent as string;
+      if (requireAgent && (typeof agentId !== 'string' || !AGENT_RE.test(agentId))) {
+        response.status(400).json({ error: 'invalid agent parameter' });
         return null;
       }
-      if (!sessionId || !SESSION_RE.test(sessionId)) {
-        res.status(400).json({ error: 'invalid session parameter' });
-        return null;
-      }
-      if (requireAgent && (!agentId || !AGENT_RE.test(agentId))) {
-        res.status(400).json({ error: 'invalid agent parameter' });
-        return null;
-      }
-      const targetPath = path.resolve(CLAUDE_DIR, projectDir, sessionId, 'subagents');
+      const targetPath = path.resolve(CLAUDE_DIR, params.projectDir, params.sessionId, 'subagents');
       if (!targetPath.startsWith(CLAUDE_DIR + path.sep)) {
-        res.status(400).json({ error: 'invalid path' });
+        response.status(400).json({ error: 'invalid path' });
         return null;
       }
-      return { projectDir, sessionId, agentId };
+      return { ...params, agentId };
     };
 
     this.app.get('/api/subagents', (req, res) => {
@@ -230,17 +253,16 @@ export class ServerController {
 
     // ===== Ruleset API (reads from project repo) =====
 
-    this.app.get('/api/ruleset', (req, res) => {
-      const projectDir = req.query.project as string;
-      if (!projectDir) {
-        res.status(400).json({ error: 'project parameter required' });
+    this.app.get('/api/ruleset', (_request, response) => {
+      const configuration = ConfigManager.load();
+      if (!configuration.activeRepo) {
+        response.json({ hooks: [], gates: [], claudeMd: null, claudeMdPath: null, projectPath: '', toolsPath: null });
         return;
       }
       try {
-        const data = readRuleset(projectDir);
-        res.json(data);
-      } catch (e) {
-        res.status(500).json({ error: String(e) });
+        response.json(readRuleset(configuration.activeRepo));
+      } catch (error) {
+        response.status(500).json({ error: String(error) });
       }
     });
 

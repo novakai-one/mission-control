@@ -27,14 +27,6 @@ export interface RulesetData {
 }
 
 /**
- * Decode an encoded project dir name back to a real filesystem path.
- * `.claude/projects/-Users-foo-bar` → `/Users/foo/bar`
- */
-function decodeProjectDir(dirName: string): string {
-  return '/' + dirName.replace(/-/g, '/');
-}
-
-/**
  * Extract the script path from a hook command string.
  * e.g. "node tools/novakai/gates/contract-gate.mjs" → "tools/novakai/gates/contract-gate.mjs"
  *      "npm run --silent novakai:onboard" → null
@@ -211,11 +203,9 @@ function findToolsPath(projectRoot: string): string | null {
 
 /**
  * Read the complete ruleset data for a project.
- * @param projectDirName The encoded directory name from .claude/projects/
+ * @param projectPath The absolute filesystem path to the project.
  */
-export function readRuleset(projectDirName: string): RulesetData {
-  const projectPath = decodeProjectDir(projectDirName);
-
+export function readRuleset(projectPath: string): RulesetData {
   // Default empty result
   const empty: RulesetData = {
     hooks: [],

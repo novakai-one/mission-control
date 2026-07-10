@@ -19,15 +19,10 @@ export function toDisplayPath(absPath: string | null, homeDir: string | null): s
   return absPath;
 }
 
-export interface ProjectInfo {
-  dirName: string;
-  displayPath: string;
-}
-
 export interface SessionMeta {
   sessionId: string;
-  projectDir: string;
-  filePath: string;
+  dirName: string;
+  matchReason: 'cwd' | 'files';
   modified: number;
   size: number;
 }
@@ -62,8 +57,6 @@ export interface TranscriptEvent {
 }
 
 export function DashboardShell() {
-  const [projects, setProjects] = useState<ProjectInfo[]>([]);
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
@@ -96,52 +89,52 @@ export function DashboardShell() {
       .catch(() => {});
   }, []);
 
-  // Load projects on mount
+  // Load sessions when the active repo changes
   useEffect(() => {
-    fetch('/api/projects')
-      .then(res => res.json())
-      .then((data: ProjectInfo[]) => {
-        setProjects(data);
-        // Auto-select novakai if present
-        const novakai = data.find(p => p.dirName.includes('novakai') && !p.dirName.includes('worktree'));
-        if (novakai) setSelectedProject(novakai.dirName);
-      })
-      .catch(() => {});
-  }, []);
-
-  // Load sessions when project changes
-  useEffect(() => {
-    if (!selectedProject) return;
-    fetch(`/api/sessions?project=${selectedProject}`)
+    let cancelled = false;
+    if (!activeRepo) {
+      setSessions([]);
+      setSelectedSession(null);
+      return;
+    }
+    fetch('/api/sessions')
       .then(res => res.json())
       .then((data: SessionMeta[]) => {
+        if (cancelled) return;
         setSessions(data);
-        // Auto-select most recent
-        if (data[0]) setSelectedSession(data[0].sessionId);
+        // Auto-select most recent; clear when the repo has no matches
+        setSelectedSession(data[0]?.sessionId ?? null);
       })
       .catch(() => {});
-  }, [selectedProject]);
+    return () => { cancelled = true; };
+  }, [activeRepo]);
 
-  // Load ruleset data when project changes
+  // Load ruleset data when the active repo changes
   useEffect(() => {
-    if (!selectedProject) return;
-    fetch(`/api/ruleset?project=${selectedProject}`)
+    let cancelled = false;
+    fetch('/api/ruleset')
       .then(res => res.json())
-      .then((data: RulesetData) => setRulesetData(data))
+      .then((data: RulesetData) => { if (!cancelled) setRulesetData(data); })
       .catch(() => {});
-  }, [selectedProject]);
+    return () => { cancelled = true; };
+  }, [activeRepo]);
 
-  // Load transcript when session changes
+  const selectedMeta = sessions.find((session) => session.sessionId === selectedSession) ?? null;
+
+  // Load transcript when the selected session changes
   useEffect(() => {
-    if (!selectedProject || !selectedSession) return;
-    fetch(`/api/transcript?project=${selectedProject}&session=${selectedSession}`)
+    let cancelled = false;
+    if (!selectedMeta) return;
+    fetch(`/api/transcript?project=${selectedMeta.dirName}&session=${selectedMeta.sessionId}`)
       .then(res => res.json())
       .then((data: TranscriptEvent[]) => {
+        if (cancelled) return;
         setEvents(data);
         setPlaybackIndex(-1); // live mode
       })
       .catch(() => {});
-  }, [selectedProject, selectedSession]);
+    return () => { cancelled = true; };
+  }, [selectedMeta]);
 
   // WebSocket for live updates
   useEffect(() => {
@@ -166,12 +159,12 @@ export function DashboardShell() {
 
   // Start watching when session is selected and in live mode
   useEffect(() => {
-    if (!selectedProject || !selectedSession || !webSocketRef.current) return;
+    if (!selectedMeta || !webSocketRef.current) return;
     const socket = webSocketRef.current;
     if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'watch-session', project: selectedProject, session: selectedSession }));
+      socket.send(JSON.stringify({ type: 'watch-session', project: selectedMeta.dirName, session: selectedMeta.sessionId }));
     }
-  }, [selectedProject, selectedSession, webSocketRef.current?.readyState]);
+  }, [selectedMeta, webSocketRef.current?.readyState]);
 
   const currentEvents = playbackIndex >= 0
     ? events.slice(0, playbackIndex + 1)
@@ -183,10 +176,7 @@ export function DashboardShell() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <AppHeader 
-        projects={projects}
-        selectedProject={selectedProject}
-        onSelectProject={(dir) => { setSelectedProject(dir); setSelectedEventUuid(null); setSelectedSubEvent(null); }}
+      <AppHeader
         liveMode={liveMode}
         eventCount={events.length}
         viewMode={viewMode}
@@ -214,7 +204,7 @@ export function DashboardShell() {
               events={currentEvents}
             />
             <SubagentInspector
-              projectDir={selectedProject}
+              projectDir={selectedMeta?.dirName ?? null}
               sessionId={selectedSession}
               selectedEvent={selectedEvent}
               mainEvents={currentEvents}
@@ -224,7 +214,7 @@ export function DashboardShell() {
           </>
         ) : viewMode === 'livechat' ? (
           <TerminalPanel
-            selectedProject={selectedProject}
+            activeRepo={activeRepo}
             onBuildMessage={(msg) => setBuildMessages(prev => [...prev, msg])}
             buildMessages={buildMessages}
             wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}

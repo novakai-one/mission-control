@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sliders, History, Clock, Radio } from 'lucide-react';
 import { SessionMeta } from '../index.js';
+import './history.css';
 
 interface PlaybackSliderProps {
   sessions: SessionMeta[];
@@ -32,7 +33,7 @@ export function PlaybackSlider({ sessions, selectedSession, onSelectSession, eve
           overflowY: 'auto', paddingRight: '0.5rem'
         }}>
           {sessions.length === 0 ? (
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Select a project first</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Select an active repo (Files tab)</span>
           ) : (
             sessions.slice(0, 50).map((s) => {
               const isSelected = selectedSession === s.sessionId;
@@ -50,8 +51,13 @@ export function PlaybackSlider({ sessions, selectedSession, onSelectSession, eve
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  <span style={{ fontSize: '0.6rem', color: 'var(--text-primary)', fontWeight: isSelected ? 600 : 400 }}>
-                    {s.sessionId.substring(0, 8)}
+                  <span className="session-row-label">
+                    <span style={{ fontSize: '0.6rem', color: 'var(--text-primary)', fontWeight: isSelected ? 600 : 400 }}>
+                      {s.sessionId.substring(0, 8)}
+                    </span>
+                    <span className={`session-badge${s.matchReason === 'files' ? ' session-badge-files' : ''}`}>
+                      {s.matchReason}
+                    </span>
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>{time}</span>
