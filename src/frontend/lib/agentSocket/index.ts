@@ -67,6 +67,14 @@ function emitAll<Args extends unknown[]>(listeners: Array<(...args: Args) => voi
   for (const listener of listeners) listener(...args);
 }
 
+function addListener<Listener>(listeners: Listener[], listener: Listener): () => void {
+  listeners.push(listener);
+  return () => {
+    const index = listeners.indexOf(listener);
+    if (index !== -1) listeners.splice(index, 1);
+  };
+}
+
 const BROADCAST_HANDLERS: Record<string, (message: ServerFrame) => void> = {
   'agents-changed': message => emitAll(agentsChangedListeners, message.agents as AgentInfo[]),
   'transcript-event': message => emitAll(transcriptEventListeners, message.sessionId as string, message.event),
@@ -109,6 +117,10 @@ function flushQueue(): void {
   for (const frame of pending) socket?.send(frame);
 }
 
+function isOpen(): boolean {
+  return !!socket && socket.readyState === READY_OPEN;
+}
+
 function resubscribeAll(): void {
   for (const agentId of agentHandlers.keys()) send({ type: 'agent-subscribe', agentId });
   for (const watch of watchedSessions.values()) send({ type: 'watch-session', ...watch });
@@ -148,9 +160,12 @@ export function connect(): void {
   if (!busy) openSocket();
 }
 
+// Sends only when the socket is already open. When not open, the frame is
+// deliberately NOT queued: resubscribeAll() re-sends it on the next open, and
+// queueing here too would double-send it (Fix: reconnect double replay).
 export function subscribeAgent(agentId: string, handlers: AgentHandlers): void {
   agentHandlers.set(agentId, handlers);
-  send({ type: 'agent-subscribe', agentId });
+  if (isOpen()) send({ type: 'agent-subscribe', agentId });
 }
 
 export function unsubscribeAgent(agentId: string): void {
@@ -165,25 +180,31 @@ export function sendResize(agentId: string, cols: number, rows: number): void {
   send({ type: 'agent-resize', agentId, cols, rows });
 }
 
+// Same not-queued rule as subscribeAgent: resubscribeAll() re-sends watch-session
+// for every watched session on open, so queueing it here too would double-send it.
 export function watchSession(projectDir: string, sessionId: string): void {
   watchedSessions.set(watchKey(projectDir, sessionId), { projectDir, sessionId });
-  send({ type: 'watch-session', projectDir, sessionId });
+  if (isOpen()) send({ type: 'watch-session', projectDir, sessionId });
 }
 
-export function onAgentsChanged(listener: (agents: AgentInfo[]) => void): void {
-  agentsChangedListeners.push(listener);
+export function onAgentsChanged(listener: (agents: AgentInfo[]) => void): () => void {
+  return addListener(agentsChangedListeners, listener);
 }
 
-export function onTranscriptEvent(listener: (sessionId: string, event: unknown) => void): void {
-  transcriptEventListeners.push(listener);
+export function onTranscriptEvent(listener: (sessionId: string, event: unknown) => void): () => void {
+  return addListener(transcriptEventListeners, listener);
 }
 
-export function onSubagentsChanged(listener: (sessionId: string, subagents: SubagentSummary[]) => void): void {
-  subagentsChangedListeners.push(listener);
+export function onSubagentsChanged(
+  listener: (sessionId: string, subagents: SubagentSummary[]) => void
+): () => void {
+  return addListener(subagentsChangedListeners, listener);
 }
 
-export function onSubagentEvent(listener: (sessionId: string, subagentId: string, event: unknown) => void): void {
-  subagentEventListeners.push(listener);
+export function onSubagentEvent(
+  listener: (sessionId: string, subagentId: string, event: unknown) => void
+): () => void {
+  return addListener(subagentEventListeners, listener);
 }
 
 // Test-only seam: shrinks the backoff window so reconnect tests don't sleep 500ms+.

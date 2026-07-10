@@ -56,8 +56,7 @@ export class AgentsHub {
 
   handleClose(socket: WebSocket): void {
     this.agentSubs.delete(socket);
-    const watcherMap = this.sessionWatchers.get(socket);
-    if (watcherMap) for (const pair of watcherMap.values()) this.stopPair(pair);
+    this.stopAllForSocket(socket);
     this.sessionWatchers.delete(socket);
   }
 
@@ -114,13 +113,22 @@ export class AgentsHub {
     const projectDir = message.projectDir ?? message.project;
     const sessionId = message.sessionId ?? message.session;
     // Dialect: new clients (agentSocket) send projectDir/sessionId and get the
-    // spec §5 type-keyed frames; the legacy tab sends project/session and keeps
-    // the original {event, payload} shape.
+    // spec §5 type-keyed frames (additive/deduped, multi-watch per socket); the
+    // legacy tab sends project/session and re-sends watch-session on every
+    // session switch, so it must stop+replace (single-watch-per-socket).
     const newDialect = message.projectDir !== undefined;
     if (!isValidProject(projectDir) || !isValidSession(sessionId)) return true;
-    if (this.watchersFor(socket).has(sessionId)) return true;
+    if (!newDialect) this.stopAllForSocket(socket);
+    else if (this.watchersFor(socket).has(sessionId)) return true;
     this.startWatchers(socket, projectDir, sessionId, newDialect);
     return true;
+  }
+
+  private stopAllForSocket(socket: WebSocket): void {
+    const watcherMap = this.sessionWatchers.get(socket);
+    if (!watcherMap) return;
+    for (const pair of watcherMap.values()) this.stopPair(pair);
+    watcherMap.clear();
   }
 
   private watchersFor(socket: WebSocket): Map<string, SessionWatchPair> {

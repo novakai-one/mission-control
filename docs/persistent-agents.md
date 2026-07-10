@@ -192,8 +192,8 @@ components/sidepanel/{index.tsx,index.css}   SidePanel({agents, activeAgentId, c
 components/agents/{index.tsx,terminal.tsx,index.css}
    AgentsView({agents, activeAgentId})       — owns raw/calm toggle state per agent;
    terminal.tsx: AgentTerminal({agent, visible}) — one xterm per agent, mounted once,
-   hidden via CSS (not unmount); fit addon; resize → sendResize for ALL agents (one
-   size policy: panel size applies to every pty, no per-agent sizes)
+   hidden via CSS (not unmount); fit addon; one size policy: the visible pane fits
+   to the panel and sendResizes its pty; hidden panes refit on reveal (rAF + fit)
 components/agents/calm/{index.tsx,index.css}
    CalmView({agent, visible}) — transcript feed (reuse lib/upsertEvents + board icon
    idioms) + live subagent list (adapt subagent/index.tsx rendering)

@@ -49,26 +49,33 @@ function framesOf(instance: FakeSocket, type: string): Record<string, unknown>[]
 setBackoffForTest(5, 20);
 
 // Queued send before any socket exists must survive and flush on open.
+// agent-subscribe / watch-session called pre-open must NOT also be queued —
+// they rely solely on resubscribeAll() at open time, otherwise open would
+// fire them twice (once flushed, once from resubscribeAll).
 sendInput('agent-x', 'queued-keystroke');
+const dataOne: string[] = [];
+subscribeAgent('agent-1', { onReplay: () => {}, onData: chunk => dataOne.push(chunk), onExit: () => {} });
+watchSession('proj-dir', 'sess-1');
 connect();
 const socketOne = FakeSocket.instances[0];
 socketOne.triggerOpen();
+
 const queuedInput = framesOf(socketOne, 'agent-input');
 assert.equal(queuedInput.length, 1);
 assert.equal(queuedInput[0].data, 'queued-keystroke');
 
-// subscribeAgent sends agent-subscribe.
-const dataOne: string[] = [];
+const subscribeAfterOpen = framesOf(socketOne, 'agent-subscribe');
+assert.deepEqual(subscribeAfterOpen.map(frame => frame.agentId), ['agent-1']); // exactly one, no double-send
+
+const watchAfterOpen = framesOf(socketOne, 'watch-session');
+assert.equal(watchAfterOpen.length, 1); // exactly one, no double-send
+assert.deepEqual(watchAfterOpen[0], { type: 'watch-session', projectDir: 'proj-dir', sessionId: 'sess-1' });
+
+// subscribeAgent called while the socket is already open sends immediately.
 const dataTwo: string[] = [];
-subscribeAgent('agent-1', { onReplay: () => {}, onData: chunk => dataOne.push(chunk), onExit: () => {} });
 subscribeAgent('agent-2', { onReplay: () => {}, onData: chunk => dataTwo.push(chunk), onExit: () => {} });
 const subscribeFrames = framesOf(socketOne, 'agent-subscribe');
 assert.deepEqual(subscribeFrames.map(frame => frame.agentId).sort(), ['agent-1', 'agent-2']);
-
-watchSession('proj-dir', 'sess-1');
-const watchFrames = framesOf(socketOne, 'watch-session');
-assert.equal(watchFrames.length, 1);
-assert.deepEqual(watchFrames[0], { type: 'watch-session', projectDir: 'proj-dir', sessionId: 'sess-1' });
 
 // agent-data must route only to the matching agent's handler.
 socketOne.triggerMessage({ type: 'agent-data', agentId: 'agent-1', data: 'hello-1' });

@@ -38,6 +38,7 @@ interface SubagentEntry {
   summary: SubagentSummary;
   lastEvent: CalmEvent | null;
   count: number;
+  seenKeys: Set<string>;
 }
 
 interface CalmAgent {
@@ -61,11 +62,16 @@ function mergeSubagentSummaries(
   const next: Record<string, SubagentEntry> = {};
   for (const summary of summaries) {
     const existing = previous[summary.subagentId];
-    next[summary.subagentId] = existing ? { ...existing, summary } : { summary, lastEvent: null, count: 0 };
+    next[summary.subagentId] = existing
+      ? { ...existing, summary }
+      : { summary, lastEvent: null, count: 0, seenKeys: new Set() };
   }
   return next;
 }
 
+// Reconnect re-watches from offset 0 (SessionWatcher), which can re-emit
+// subagent-events already counted before the drop — dedupe by eventKey so
+// count/lastEvent don't double-advance on reconnect.
 function recordSubagentEvent(
   previous: Record<string, SubagentEntry>,
   subagentId: string,
@@ -73,7 +79,10 @@ function recordSubagentEvent(
 ): Record<string, SubagentEntry> {
   const existing = previous[subagentId];
   if (!existing) return previous;
-  const entry: SubagentEntry = { summary: existing.summary, lastEvent: event, count: existing.count + 1 };
+  const eventKey = event.eventKey;
+  if (eventKey && existing.seenKeys.has(eventKey)) return previous;
+  const seenKeys = eventKey ? new Set(existing.seenKeys).add(eventKey) : existing.seenKeys;
+  const entry: SubagentEntry = { summary: existing.summary, lastEvent: event, count: existing.count + 1, seenKeys };
   return { ...previous, [subagentId]: entry };
 }
 
@@ -129,25 +138,31 @@ export function CalmView({ agent, visible }: CalmViewProps): React.JSX.Element {
   const stickToBottomRef = useRef(true);
 
   // Mount once per agent (this component stays mounted for the agent's lifetime,
-  // hidden via CSS — see AgentsView). agentSocket has no unsubscribe for these
-  // listeners; reconnect re-watching is handled inside the lib, not here.
+  // hidden via CSS — see AgentsView). Reconnect re-watching is handled inside the
+  // lib; unsubscribe on unmount so a remount doesn't accumulate duplicate listeners.
   useEffect(() => {
     agentSocket.watchSession(agent.projectDir, agent.sessionId);
 
-    agentSocket.onTranscriptEvent((sessionId, event) => {
+    const unsubTranscript = agentSocket.onTranscriptEvent((sessionId, event) => {
       if (sessionId !== agent.sessionId) return;
       setEvents(previous => upsertEvent(previous, event as CalmEvent));
     });
 
-    agentSocket.onSubagentsChanged((sessionId, summaries) => {
+    const unsubSubagentsChanged = agentSocket.onSubagentsChanged((sessionId, summaries) => {
       if (sessionId !== agent.sessionId) return;
       setSubagents(previous => mergeSubagentSummaries(previous, summaries));
     });
 
-    agentSocket.onSubagentEvent((sessionId, subagentId, event) => {
+    const unsubSubagentEvent = agentSocket.onSubagentEvent((sessionId, subagentId, event) => {
       if (sessionId !== agent.sessionId) return;
       setSubagents(previous => recordSubagentEvent(previous, subagentId, event as CalmEvent));
     });
+
+    return () => {
+      unsubTranscript();
+      unsubSubagentsChanged();
+      unsubSubagentEvent();
+    };
   }, [agent.projectDir, agent.sessionId]);
 
   // Auto-scroll to newest only when visible and the viewer was already near the bottom.

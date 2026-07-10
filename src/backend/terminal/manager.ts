@@ -84,7 +84,10 @@ export class TerminalManager {
     });
     proc.onExit(({ exitCode }) => {
       const record = this.agents.get(agentId);
-      if (record) record.info.status = 'exited';
+      // Killed+removed via DELETE (spec §3): no record left, suppress the exit
+      // callback so a stale agents-changed/agent-exit doesn't resurrect it.
+      if (!record) return;
+      record.info.status = 'exited';
       this.exitCallback?.(agentId, exitCode);
     });
   }

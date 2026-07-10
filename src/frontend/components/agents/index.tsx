@@ -29,7 +29,7 @@ export function useAgentsState(): AgentsState {
       .then(data => setAgents(data.agents ?? []))
       .catch(() => {});
     agentSocket.connect();
-    agentSocket.onAgentsChanged(setAgents);
+    return agentSocket.onAgentsChanged(setAgents);
   }, []);
 
   const toggleCollapsed = useCallback(() => {
