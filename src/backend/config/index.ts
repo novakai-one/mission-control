@@ -6,6 +6,7 @@ export interface AppConfig {
   geminiApiKey?: string;
   claudeCliPath?: string;
   serverPort: number;
+  activeRepo?: string;
 }
 
 export class ConfigManager {

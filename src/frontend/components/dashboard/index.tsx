@@ -1,6 +1,6 @@
 import React from 'react';
-import { Terminal, Radio, Network, Shield, Settings, Bug } from 'lucide-react';
-import { ProjectInfo } from '../index.js';
+import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star } from 'lucide-react';
+import { ProjectInfo, toDisplayPath } from '../index.js';
 
 interface AppHeaderProps {
   projects: ProjectInfo[];
@@ -8,12 +8,14 @@ interface AppHeaderProps {
   onSelectProject: (dir: string) => void;
   liveMode: boolean;
   eventCount: number;
-  viewMode: 'transcript' | 'ruleset' | 'debug';
-  onViewModeChange: (mode: 'transcript' | 'ruleset' | 'debug') => void;
+  viewMode: 'files' | 'transcript' | 'ruleset' | 'debug';
+  onViewModeChange: (mode: 'files' | 'transcript' | 'ruleset' | 'debug') => void;
   onOpenSettings: () => void;
+  activeRepo: string | null;
+  homeDir: string | null;
 }
 
-export function AppHeader({ projects, selectedProject, onSelectProject, liveMode, eventCount, viewMode, onViewModeChange, onOpenSettings }: AppHeaderProps) {
+export function AppHeader({ projects, selectedProject, onSelectProject, liveMode, eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir }: AppHeaderProps) {
   return (
     <header className="glass-panel" style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -31,6 +33,17 @@ export function AppHeader({ projects, selectedProject, onSelectProject, liveMode
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>live</span>
           </div>
         )}
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: '0.3rem', marginLeft: '0.5rem',
+          fontSize: '0.7rem', color: activeRepo ? 'var(--text-secondary)' : 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}>
+          {activeRepo ? (
+            <>active repo: <Star size={11} color="#c9b57a" style={{ display: 'inline' }} /> {toDisplayPath(activeRepo, homeDir)}</>
+          ) : (
+            'active repo: — none —'
+          )}
+        </span>
       </div>
 
       {/* View mode toggle */}
@@ -38,6 +51,19 @@ export function AppHeader({ projects, selectedProject, onSelectProject, liveMode
         display: 'flex', backgroundColor: 'var(--bg-primary)', borderRadius: '6px',
         border: '1px solid var(--border-color)', padding: '2px',
       }}>
+        <button
+          onClick={() => onViewModeChange('files')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.35rem',
+            padding: '0.35rem 0.8rem', borderRadius: '4px',
+            backgroundColor: viewMode === 'files' ? 'var(--bg-tertiary)' : 'transparent',
+            border: 'none', color: viewMode === 'files' ? 'var(--text-primary)' : 'var(--text-muted)',
+            fontSize: '0.7rem', fontWeight: viewMode === 'files' ? 600 : 400, cursor: 'pointer',
+          }}
+        >
+          <FolderTree size={12} />
+          <span>Files</span>
+        </button>
         <button
           onClick={() => onViewModeChange('transcript')}
           style={{

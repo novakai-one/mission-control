@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'node:fs';
 import { createServer, Server as HttpServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { AgentCoordinator } from '../agent/index.js';
@@ -8,6 +9,7 @@ import { StateManager } from '../state/index.js';
 import { exec } from 'node:child_process';
 import { listProjects, listSessions, readSession, decodeProjectDir, SessionWatcher } from '../transcript/parser.js';
 import { readRuleset } from '../ruleset/reader.js';
+import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } from '../fs/explorer.js';
 
 export class ServerController {
   private readonly app = express();
@@ -188,6 +190,59 @@ export class ServerController {
       } catch (e) {
         res.status(500).json({ error: String(e) });
       }
+    });
+
+    // ===== Filesystem Explorer API =====
+
+    const sendFsError = (res: express.Response, e: unknown): void => {
+      if (e instanceof PathDeniedError || (e as NodeJS.ErrnoException)?.code === 'EACCES') {
+        res.status(403).json({ error: e instanceof Error ? e.message : String(e) });
+      } else if (e instanceof NotFoundError || (e as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        res.status(404).json({ error: e instanceof Error ? e.message : String(e) });
+      } else {
+        res.status(500).json({ error: String(e) });
+      }
+    };
+
+    this.app.get('/api/fs', (req, res) => {
+      const targetPath = req.query.path as string;
+      const showHidden = req.query.showHidden === 'true';
+      try {
+        res.json(listDir(targetPath, showHidden));
+      } catch (e) {
+        sendFsError(res, e);
+      }
+    });
+
+    this.app.get('/api/fs/resolve-root', (req, res) => {
+      const targetPath = req.query.path as string;
+      try {
+        res.json(resolveGitRoot(targetPath));
+      } catch (e) {
+        sendFsError(res, e);
+      }
+    });
+
+    this.app.post('/api/active-repo', (req, res) => {
+      const rawPath = req.body?.path as string;
+      const resolved = clampToHome(rawPath);
+      if (resolved === null) {
+        res.status(403).json({ error: 'Path denied' });
+        return;
+      }
+      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+        res.status(404).json({ error: 'Not a directory' });
+        return;
+      }
+      const configuration = ConfigManager.load();
+      configuration.activeRepo = resolved;
+      ConfigManager.save(configuration);
+      res.json({ activeRepo: resolved });
+    });
+
+    this.app.get('/api/active-repo', (_, res) => {
+      const configuration = ConfigManager.load();
+      res.json({ activeRepo: configuration.activeRepo ?? null });
     });
   }
 

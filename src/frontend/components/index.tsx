@@ -7,6 +7,16 @@ import { RulesetInspector, RulesetData } from './ruleset/index.js';
 import { TerminalPanel, BuildMessage } from './terminal/index.js';
 import { SettingsPanel } from './settings/index.js';
 import { DebugPanel } from './debug/index.js';
+import { FilesPanel } from './files/index.js';
+
+/** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
+export function toDisplayPath(absPath: string | null, homeDir: string | null): string {
+  if (!absPath) return '';
+  if (homeDir && (absPath === homeDir || absPath.startsWith(homeDir + '/'))) {
+    return '~' + absPath.slice(homeDir.length);
+  }
+  return absPath;
+}
 
 export interface ProjectInfo {
   dirName: string;
@@ -59,12 +69,30 @@ export function DashboardShell() {
   const [liveMode, setLiveMode] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
   const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'transcript' | 'ruleset' | 'debug'>('transcript');
+  const [viewMode, setViewMode] = useState<'files' | 'transcript' | 'ruleset' | 'debug'>('files');
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  
+  const [homeDir, setHomeDir] = useState<string | null>(null);
+  const [activeRepo, setActiveRepo] = useState<string | null>(null);
+
   const webSocketRef = useRef<WebSocket | null>(null);
+
+  // Resolve $HOME once, for '~'-relative display across the shell.
+  useEffect(() => {
+    fetch('/api/fs?path=~&showHidden=false')
+      .then(res => res.json())
+      .then(data => setHomeDir(data.path))
+      .catch(() => {});
+  }, []);
+
+  // Load the persisted active repo on mount.
+  useEffect(() => {
+    fetch('/api/active-repo')
+      .then(res => res.json())
+      .then(data => setActiveRepo(data.activeRepo ?? null))
+      .catch(() => {});
+  }, []);
 
   // Load projects on mount
   useEffect(() => {
@@ -162,9 +190,17 @@ export function DashboardShell() {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onOpenSettings={() => setSettingsOpen(true)}
+        activeRepo={activeRepo}
+        homeDir={homeDir}
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {viewMode === 'transcript' ? (
+        {viewMode === 'files' ? (
+          <FilesPanel
+            homeDir={homeDir}
+            activeRepo={activeRepo}
+            onActiveRepoChange={setActiveRepo}
+          />
+        ) : viewMode === 'transcript' ? (
           <>
             <AgentBoard 
               events={currentEvents}
