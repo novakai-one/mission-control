@@ -1,13 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import fs from 'node:fs';
+import path from 'node:path';
 import { createServer, Server as HttpServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { AgentCoordinator } from '../agent/index.js';
 import { ConfigManager } from '../config/index.js';
 import { StateManager } from '../state/index.js';
 import { exec } from 'node:child_process';
-import { listProjects, listSessions, readSession, decodeProjectDir, SessionWatcher } from '../transcript/parser.js';
+import { listProjects, listSessions, readSession, decodeProjectDir, SessionWatcher, listSubagents, readSubagent, CLAUDE_DIR } from '../transcript/parser.js';
 import { readRuleset } from '../ruleset/reader.js';
 import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } from '../fs/explorer.js';
 
@@ -173,6 +174,57 @@ export class ServerController {
         return;
       }
       const events = readSession(session.filePath);
+      res.json(events);
+    });
+
+    // ===== Subagent transcript API =====
+
+    const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
+    const SESSION_RE = /^[A-Za-z0-9-]+$/;
+    const AGENT_RE = /^agent-[A-Za-z0-9]+$/;
+
+    const validateSubagentParams = (
+      req: express.Request,
+      res: express.Response,
+      requireAgent: boolean
+    ): { projectDir: string; sessionId: string; agentId: string } | null => {
+      const projectDir = req.query.project as string;
+      const sessionId = req.query.session as string;
+      const agentId = req.query.agent as string;
+      if (!projectDir || !PROJECT_RE.test(projectDir) || projectDir === '.' || projectDir === '..') {
+        res.status(400).json({ error: 'invalid project parameter' });
+        return null;
+      }
+      if (!sessionId || !SESSION_RE.test(sessionId)) {
+        res.status(400).json({ error: 'invalid session parameter' });
+        return null;
+      }
+      if (requireAgent && (!agentId || !AGENT_RE.test(agentId))) {
+        res.status(400).json({ error: 'invalid agent parameter' });
+        return null;
+      }
+      const targetPath = path.resolve(CLAUDE_DIR, projectDir, sessionId, 'subagents');
+      if (!targetPath.startsWith(CLAUDE_DIR + path.sep)) {
+        res.status(400).json({ error: 'invalid path' });
+        return null;
+      }
+      return { projectDir, sessionId, agentId };
+    };
+
+    this.app.get('/api/subagents', (req, res) => {
+      const params = validateSubagentParams(req, res, false);
+      if (!params) return;
+      res.json(listSubagents(params.projectDir, params.sessionId));
+    });
+
+    this.app.get('/api/subagent-transcript', (req, res) => {
+      const params = validateSubagentParams(req, res, true);
+      if (!params) return;
+      const events = readSubagent(params.projectDir, params.sessionId, params.agentId);
+      if (events === null) {
+        res.status(404).json({ error: 'Subagent transcript not found' });
+        return;
+      }
       res.json(events);
     });
 

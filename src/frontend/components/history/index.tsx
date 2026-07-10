@@ -50,7 +50,7 @@ export function PlaybackSlider({ sessions, selectedSession, onSelectSession, eve
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  <span style={{ fontSize: '0.6rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: isSelected ? 600 : 400 }}>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-primary)', fontWeight: isSelected ? 600 : 400 }}>
                     {s.sessionId.substring(0, 8)}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>

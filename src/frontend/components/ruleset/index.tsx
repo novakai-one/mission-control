@@ -91,7 +91,7 @@ export function RulesetInspector({ data }: RulesetInspectorProps) {
                 <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>CLAUDE.md</span>
               </div>
               {hasClaudeMd ? (
-                <div className="glass-panel" style={{ padding: '0.5rem 0.8rem', fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                <div className="glass-panel" style={{ padding: '0.5rem 0.8rem', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
                   {data.claudeMdPath?.replace(data.projectPath + '/', '')}
                 </div>
               ) : (
@@ -177,11 +177,11 @@ function HookList({ hooks }: { hooks: HookConfig[] }) {
               display: 'flex', flexDirection: 'column', gap: '0.2rem',
             }}>
               {hook.matcher && (
-                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                   matcher: {hook.matcher}
                 </span>
               )}
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
                 {hook.command}
               </span>
             </div>
@@ -220,7 +220,7 @@ function HookDetail({ hooks }: { hooks: HookConfig[] }) {
             </span>
             {hook.matcher && (
               <span style={{
-                fontSize: '0.6rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)',
+                fontSize: '0.6rem', color: 'var(--text-secondary)',
                 backgroundColor: 'var(--bg-tertiary)', padding: '0.1rem 0.5rem', borderRadius: '4px',
               }}>
                 {hook.matcher}
@@ -229,12 +229,12 @@ function HookDetail({ hooks }: { hooks: HookConfig[] }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Terminal size={11} color="var(--text-muted)" />
-            <code style={{ fontSize: '0.7rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+            <code style={{ fontSize: '0.7rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
               {hook.command}
             </code>
           </div>
           {hook.scriptPath && (
-            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
               → {hook.scriptPath.split('/').slice(-3).join('/')}
             </div>
           )}
@@ -268,7 +268,7 @@ function GateList({ gates, selectedGate, onSelect }: {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Shield size={11} color={selectedGate === gate.fileName ? 'var(--accent-active)' : 'var(--text-muted)'} />
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-primary)', fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-primary)', fontWeight: 500 }}>
               {gate.fileName}
             </span>
           </div>
@@ -323,7 +323,7 @@ function GateDetail({ gates, selectedGate }: {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
           <FileCode size={14} color="var(--text-secondary)" />
-          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
             {gate.fileName}
           </span>
         </div>

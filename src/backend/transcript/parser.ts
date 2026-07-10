@@ -12,7 +12,7 @@ export type TranscriptEvent =
   | { kind: 'system'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean }
   | { kind: 'session_meta'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string };
 
-const CLAUDE_DIR = path.join(process.env.HOME || '', '.claude', 'projects');
+export const CLAUDE_DIR = path.join(process.env.HOME || '', '.claude', 'projects');
 
 export interface SessionMeta {
   sessionId: string;
@@ -20,6 +20,16 @@ export interface SessionMeta {
   filePath: string;
   modified: number;     // mtime ms
   size: number;         // bytes
+}
+
+export interface SubagentMeta {
+  agentId: string;        // "agent-a05912ddc6868417f" (filename minus .jsonl)
+  agentType: string;
+  description: string;
+  toolUseId: string;
+  spawnDepth: number;
+  modified: number;       // mtime ms
+  size: number;            // bytes
 }
 
 /**
@@ -82,6 +92,49 @@ export function readSession(filePath: string): TranscriptEvent[] {
     }
   }
   return events;
+}
+
+/**
+ * List subagent transcripts spawned within a session.
+ * Reads <CLAUDE_DIR>/<projectDirName>/<sessionId>/subagents/agent-*.jsonl,
+ * pairing each with its sibling agent-*.meta.json (missing/corrupt meta
+ * falls back to empty-string/0 fields but the agent is still listed).
+ */
+export function listSubagents(projectDirName: string, sessionId: string): SubagentMeta[] {
+  const subagentsDir = path.join(CLAUDE_DIR, projectDirName, sessionId, 'subagents');
+  if (!fs.existsSync(subagentsDir)) return [];
+  return fs.readdirSync(subagentsDir)
+    .filter(f => f.endsWith('.jsonl') && f.startsWith('agent-'))
+    .map(f => {
+      const agentId = f.replace('.jsonl', '');
+      const jsonlPath = path.join(subagentsDir, f);
+      const stat = fs.statSync(jsonlPath);
+      let agentType = '';
+      let description = '';
+      let toolUseId = '';
+      let spawnDepth = 0;
+      try {
+        const meta = JSON.parse(fs.readFileSync(path.join(subagentsDir, `${agentId}.meta.json`), 'utf8'));
+        agentType = meta.agentType || '';
+        description = meta.description || '';
+        toolUseId = meta.toolUseId || '';
+        spawnDepth = meta.spawnDepth || 0;
+      } catch {
+        // missing/corrupt meta.json -> fallbacks above
+      }
+      return { agentId, agentType, description, toolUseId, spawnDepth, modified: stat.mtimeMs, size: stat.size };
+    })
+    .sort((a, b) => a.modified - b.modified);
+}
+
+/**
+ * Read and parse a single subagent's JSONL transcript.
+ * Returns null if the file does not exist.
+ */
+export function readSubagent(projectDirName: string, sessionId: string, agentId: string): TranscriptEvent[] | null {
+  const jsonlPath = path.join(CLAUDE_DIR, projectDirName, sessionId, 'subagents', `${agentId}.jsonl`);
+  if (!fs.existsSync(jsonlPath)) return null;
+  return readSession(jsonlPath);
 }
 
 /**
