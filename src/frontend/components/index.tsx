@@ -11,6 +11,7 @@ import { FilesPanel } from './files/index.js';
 import { SubagentInspector } from './subagent/index.js';
 import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
+import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
@@ -116,6 +117,7 @@ export function DashboardShell() {
   const [activeRepo, setActiveRepo] = useState<string | null>(null);
   const [detailsWidth, setDetailsWidth] = useState(480);
   const [subagentWidth, setSubagentWidth] = useState(480);
+  const viewPanel = useViewPanelState();
 
   const webSocketRef = useRef<WebSocket | null>(null);
   // Mirror for the ws onmessage closure, which only mounts once.
@@ -242,6 +244,8 @@ export function DashboardShell() {
         onOpenSettings={() => setSettingsOpen(true)}
         activeRepo={activeRepo}
         homeDir={homeDir}
+        viewPanelOpen={viewPanel.open}
+        onToggleViewPanel={viewPanel.toggleOpen}
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SidePanel
@@ -274,6 +278,8 @@ export function DashboardShell() {
               events={currentEvents}
               onSelectEvent={(uuid) => { setSelectedEventUuid(uuid); setSelectedSubEvent(null); }}
               selectedEventUuid={selectedEventUuid}
+              variant={viewPanel.variant}
+              hiddenEvents={viewPanel.hiddenEvents}
             />
             <ResizeHandle width={detailsWidth} onWidthChange={setDetailsWidth} />
             <div style={{ width: detailsWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
@@ -311,6 +317,8 @@ export function DashboardShell() {
             wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
           />
         ) : null}
+        {/* Panel enumerates from the FULL event array; the board filters its own slice. */}
+        <ViewPanel viewMode={viewMode} events={events} {...viewPanel} />
       </div>
       {viewMode === 'transcript' && (
         <PlaybackSlider 

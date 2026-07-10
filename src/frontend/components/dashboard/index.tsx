@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, MessageSquare } from 'lucide-react';
+import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, MessageSquare, PanelRight } from 'lucide-react';
 import { toDisplayPath } from '../index.js';
 import './index.css';
 
@@ -11,9 +11,11 @@ interface AppHeaderProps {
   onOpenSettings: () => void;
   activeRepo: string | null;
   homeDir: string | null;
+  viewPanelOpen: boolean;
+  onToggleViewPanel: () => void;
 }
 
-export function AppHeader({ liveMode, eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir }: AppHeaderProps) {
+export function AppHeader({ liveMode, eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir, viewPanelOpen, onToggleViewPanel }: AppHeaderProps) {
   return (
     <header className="glass-panel" style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -135,6 +137,13 @@ export function AppHeader({ liveMode, eventCount, viewMode, onViewModeChange, on
           title="Settings"
         >
           <Settings size={14} />
+        </button>
+        <button
+          onClick={onToggleViewPanel}
+          className={viewPanelOpen ? 'viewpanel-toggle viewpanel-toggle-active' : 'viewpanel-toggle'}
+          title="View panel"
+        >
+          <PanelRight size={14} />
         </button>
       </div>
     </header>

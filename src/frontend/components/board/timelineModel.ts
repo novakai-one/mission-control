@@ -1,6 +1,27 @@
 // Pure timeline-shaping helpers for the board's variant renderers. No React.
 import type { TranscriptEvent } from '../index.js';
 
+export type TimelineVariant = 'current' | 'signal' | 'grouped' | 'ledger';
+
+const VARIANT_STORAGE_KEY = 'mc-timeline-variant';
+
+export const VARIANT_OPTIONS: { id: TimelineVariant; label: string; title: string }[] = [
+  { id: 'current', label: 'CUR', title: 'Current timeline' },
+  { id: 'signal', label: 'A', title: 'Signal: flat, tool results merged into their call rows' },
+  { id: 'grouped', label: 'B', title: 'Grouped: collapsible user/assistant turns' },
+  { id: 'ledger', label: 'C', title: 'Ledger: dense, noise compressed to strips' },
+];
+
+export function loadStoredVariant(): TimelineVariant {
+  const stored = localStorage.getItem(VARIANT_STORAGE_KEY);
+  const match = VARIANT_OPTIONS.find((option) => option.id === stored);
+  return match ? match.id : 'current';
+}
+
+export function storeVariant(variant: TimelineVariant): void {
+  localStorage.setItem(VARIANT_STORAGE_KEY, variant);
+}
+
 const TOOL_PRIMARY_KEYS: Record<string, string[]> = {
   Bash: ['command'],
   Read: ['file_path'],

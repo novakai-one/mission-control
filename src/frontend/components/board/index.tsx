@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { Network, Brain, Wrench, GitBranch, FileText, AlertTriangle, Radio } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
-import type { ToolPairs, Turn } from './timelineModel.js';
-import { buildToolPairs, compressNoiseRuns, getToolLabel, groupIntoTurns, isContextNoise, noiseSummary } from './timelineModel.js';
+import type { TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
+import { buildToolPairs, compressNoiseRuns, getToolLabel, groupIntoTurns, noiseSummary, visibilityPredicate } from './timelineModel.js';
 import './index.css';
 
-interface AgentBoardProps {
+interface TimelineProps {
   events: TranscriptEvent[];
   onSelectEvent: (uuid: string | null) => void;
   selectedEventUuid: string | null;
+}
+
+interface AgentBoardProps extends TimelineProps {
+  variant: TimelineVariant;
+  hiddenEvents: Set<string>;
 }
 
 export const EVENT_ICONS: Record<string, React.ReactNode> = {
@@ -48,23 +53,6 @@ export function getEventLabel(ev: TranscriptEvent): string {
     case 'session_meta': return ev.mode || ev.permissionMode || ev.summary || '';
     default: return '';
   }
-}
-
-type TimelineVariant = 'current' | 'signal' | 'grouped' | 'ledger';
-
-const VARIANT_STORAGE_KEY = 'mc-timeline-variant';
-
-const VARIANT_OPTIONS: { id: TimelineVariant; label: string; title: string }[] = [
-  { id: 'current', label: 'CUR', title: 'Current timeline' },
-  { id: 'signal', label: 'A', title: 'Signal: flat, context noise and paired results hidden' },
-  { id: 'grouped', label: 'B', title: 'Grouped: collapsible user/assistant turns' },
-  { id: 'ledger', label: 'C', title: 'Ledger: dense, noise compressed to strips' },
-];
-
-function loadStoredVariant(): TimelineVariant {
-  const stored = localStorage.getItem(VARIANT_STORAGE_KEY);
-  const match = VARIANT_OPTIONS.find((option) => option.id === stored);
-  return match ? match.id : 'current';
 }
 
 function formatTime(stamp: string): string {
@@ -148,7 +136,7 @@ function MergedList({ events, pairs, onSelectEvent, selectedEventUuid }: MergedL
   );
 }
 
-function CurrentTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+function CurrentTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
   return (
     <>
       {events.map((event, index) => (
@@ -164,9 +152,10 @@ function CurrentTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoar
   );
 }
 
-function SignalTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+// Pure layout: visibility is the view panel's job; variants never hide events themselves.
+function SignalTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
   const pairs = buildToolPairs(events);
-  const visible = withoutPairedResults(events, pairs).filter((event) => !isContextNoise(event));
+  const visible = withoutPairedResults(events, pairs);
   return (
     <>
       {visible.map((event, index) => (
@@ -182,7 +171,7 @@ function SignalTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoard
   );
 }
 
-function LedgerTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+function LedgerTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
   const pairs = buildToolPairs(events);
   return (
     <MergedList
@@ -245,7 +234,7 @@ function TurnBlock({ turn, pairs, collapsed, onToggle, onSelect, selectedUuid }:
   );
 }
 
-function GroupedTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+function GroupedTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const pairs = buildToolPairs(events);
   const turns = groupIntoTurns(withoutPairedResults(events, pairs));
@@ -279,22 +268,18 @@ function GroupedTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoar
   );
 }
 
-function TimelineBody({ variant, events, onSelectEvent, selectedEventUuid }: AgentBoardProps & { variant: TimelineVariant }) {
+function TimelineBody({ variant, events, onSelectEvent, selectedEventUuid }: TimelineProps & { variant: TimelineVariant }) {
   if (variant === 'signal') return <SignalTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
   if (variant === 'grouped') return <GroupedTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
   if (variant === 'ledger') return <LedgerTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
   return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
 }
 
-export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, hiddenEvents }: AgentBoardProps) {
   const subagentSpawns = events.filter(e => e.kind === 'tool_use' && e.isAgentSpawn);
   const sidechainEvents = events.filter(e => e.isSidechain);
-  const [variant, setVariant] = useState<TimelineVariant>(loadStoredVariant);
-
-  function selectVariant(next: TimelineVariant): void {
-    setVariant(next);
-    localStorage.setItem(VARIANT_STORAGE_KEY, next);
-  }
+  // Visibility filters apply to the timeline only; stats and the spawn tree stay unfiltered.
+  const visibleEvents = events.filter(visibilityPredicate(hiddenEvents));
 
   return (
     <div style={{
@@ -351,19 +336,6 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBo
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
           <Network size={12} color="var(--text-secondary)" />
           <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Event Timeline</span>
-          <div className="tl-switcher">
-            {VARIANT_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                title={option.title}
-                className={variant === option.id ? 'tl-switch-btn tl-switch-active' : 'tl-switch-btn'}
-                onClick={() => selectVariant(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
         </div>
         {events.length === 0 ? (
           <div style={{
@@ -374,7 +346,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBo
             <span style={{ fontSize: '0.75rem' }}>Select a session to view transcript</span>
           </div>
         ) : (
-          <TimelineBody variant={variant} events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />
+          <TimelineBody variant={variant} events={visibleEvents} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />
         )}
       </div>
     </div>
