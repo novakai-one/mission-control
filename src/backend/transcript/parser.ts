@@ -206,7 +206,13 @@ export class SessionWatcher extends EventEmitter {
       this.lastSize = start + complete.length;
       this.emitParsedLines(complete.toString('utf8'));
     });
-    stream.on('error', (err) => this.emit('error', err));
+    stream.on('error', (err) => {
+      // An 'error' emit with no listener is fatal to the whole backend, and
+      // most watch call sites only attach 'event' — don't let a transient
+      // read failure (file swapped/deleted mid-poll) crash the process.
+      if (this.listenerCount('error') > 0) this.emit('error', err);
+      else console.error('[SessionWatcher] read error:', err);
+    });
   }
 
   private emitParsedLines(buffer: string): void {

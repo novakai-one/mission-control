@@ -314,7 +314,20 @@ export class ServerController {
   }
 
   public start(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // ws re-emits http-server errors on the WebSocketServer; without a
+      // listener there, listen() failures crash as an unhandled 'error'
+      // event "on WebSocketServer instance" instead of reaching reject.
+      this.wsServer.on('error', () => {});
+      this.server.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EADDRINUSE') {
+          console.error(
+            `[Mission Control Backend] Port ${this.port} is already in use — a stale dev backend is probably still running.\n` +
+            `Free it with: lsof -ti:${this.port} | xargs kill`
+          );
+        }
+        reject(error);
+      });
       this.server.listen(this.port, '127.0.0.1', () => {
         resolve();
       });
