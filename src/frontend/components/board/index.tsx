@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Network, Brain, Wrench, GitBranch, FileText, AlertTriangle, Radio } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
+import type { ToolPairs, Turn } from './timelineModel.js';
+import { buildToolPairs, compressNoiseRuns, getToolLabel, groupIntoTurns, isContextNoise, noiseSummary } from './timelineModel.js';
+import './index.css';
 
 interface AgentBoardProps {
   events: TranscriptEvent[];
@@ -38,7 +41,7 @@ export function getEventLabel(ev: TranscriptEvent): string {
     case 'tool_use':
       if (ev.isAgentSpawn) return `Spawn: ${ev.agentDescription || ev.agentType || 'subagent'}`;
       return `${ev.tool}(${Object.keys(ev.input || {}).slice(0, 3).join(', ')})`;
-    case 'tool_result': 
+    case 'tool_result':
       return ev.isError ? 'ERROR' : (ev.content?.substring(0, 80) || '');
     case 'hook_event': return `${ev.hookName || ev.hookEvent}`;
     case 'system': return ev.text?.substring(0, 80) || '';
@@ -47,9 +50,251 @@ export function getEventLabel(ev: TranscriptEvent): string {
   }
 }
 
+type TimelineVariant = 'current' | 'signal' | 'grouped' | 'ledger';
+
+const VARIANT_STORAGE_KEY = 'mc-timeline-variant';
+
+const VARIANT_OPTIONS: { id: TimelineVariant; label: string; title: string }[] = [
+  { id: 'current', label: 'CUR', title: 'Current timeline' },
+  { id: 'signal', label: 'A', title: 'Signal: flat, context noise and paired results hidden' },
+  { id: 'grouped', label: 'B', title: 'Grouped: collapsible user/assistant turns' },
+  { id: 'ledger', label: 'C', title: 'Ledger: dense, noise compressed to strips' },
+];
+
+function loadStoredVariant(): TimelineVariant {
+  const stored = localStorage.getItem(VARIANT_STORAGE_KEY);
+  const match = VARIANT_OPTIONS.find((option) => option.id === stored);
+  return match ? match.id : 'current';
+}
+
+function formatTime(stamp: string): string {
+  return new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+interface EventRowProps {
+  event: TranscriptEvent;
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+  resultChip?: TranscriptEvent;
+}
+
+function EventRow({ event, label, selected, onSelect, resultChip }: EventRowProps) {
+  return (
+    <div className={selected ? 'tl-row tl-row-selected' : 'tl-row'} onClick={onSelect}>
+      <span className="tl-time">{formatTime(event.ts)}</span>
+      <span className="tl-icon">{EVENT_ICONS[event.kind] || <FileText size={11} color="var(--text-muted)" />}</span>
+      <span className={`tl-label tl-kind-${event.kind}`}>{label}</span>
+      {resultChip && (
+        <span className={resultChip.isError ? 'tl-chip tl-chip-err' : 'tl-chip tl-chip-ok'}>
+          {resultChip.isError ? '✗' : '✓'} {(resultChip.content || '').replace(/\s+/g, ' ').slice(0, 30)}
+        </span>
+      )}
+      {event.isSidechain && <span className="tl-sc">SC</span>}
+    </div>
+  );
+}
+
+interface MergedRowProps {
+  event: TranscriptEvent;
+  pairs: ToolPairs;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+/** A-style row: tool_use rows get the value label plus the paired result as a chip. */
+function MergedRow({ event, pairs, selected, onSelect }: MergedRowProps) {
+  const isTool = event.kind === 'tool_use';
+  return (
+    <EventRow
+      event={event}
+      label={isTool ? getToolLabel(event) : getEventLabel(event)}
+      resultChip={isTool && event.toolUseId ? pairs.results.get(event.toolUseId) : undefined}
+      selected={selected}
+      onSelect={onSelect}
+    />
+  );
+}
+
+// Drop tool_result events whose tool_use is visible in the same slice; the
+// result renders as a chip on the tool row instead. Unpaired results stay.
+function withoutPairedResults(events: TranscriptEvent[], pairs: ToolPairs): TranscriptEvent[] {
+  return events.filter((event) => !(event.kind === 'tool_result' && pairs.toolUseIds.has(event.toolUseId || '')));
+}
+
+interface MergedListProps {
+  events: TranscriptEvent[];
+  pairs: ToolPairs;
+  onSelectEvent: (uuid: string | null) => void;
+  selectedEventUuid: string | null;
+}
+
+/** Merged rows with consecutive noise compressed into dim non-clickable strips. */
+function MergedList({ events, pairs, onSelectEvent, selectedEventUuid }: MergedListProps) {
+  return (
+    <>
+      {compressNoiseRuns(events).map((item, index) => ('noiseRun' in item ? (
+        <div key={`noise-${index}`} className="tl-noise-strip">····&ensp;{noiseSummary(item.noiseRun)}</div>
+      ) : (
+        <MergedRow
+          key={item.eventKey || item.uuid || index}
+          event={item}
+          pairs={pairs}
+          selected={selectedEventUuid === item.uuid}
+          onSelect={() => onSelectEvent(item.uuid)}
+        />
+      )))}
+    </>
+  );
+}
+
+function CurrentTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+  return (
+    <>
+      {events.map((event, index) => (
+        <EventRow
+          key={event.eventKey || event.uuid || index}
+          event={event}
+          label={getEventLabel(event)}
+          selected={selectedEventUuid === event.uuid}
+          onSelect={() => onSelectEvent(event.uuid)}
+        />
+      ))}
+    </>
+  );
+}
+
+function SignalTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+  const pairs = buildToolPairs(events);
+  const visible = withoutPairedResults(events, pairs).filter((event) => !isContextNoise(event));
+  return (
+    <>
+      {visible.map((event, index) => (
+        <MergedRow
+          key={event.eventKey || event.uuid || index}
+          event={event}
+          pairs={pairs}
+          selected={selectedEventUuid === event.uuid}
+          onSelect={() => onSelectEvent(event.uuid)}
+        />
+      ))}
+    </>
+  );
+}
+
+function LedgerTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+  const pairs = buildToolPairs(events);
+  return (
+    <MergedList
+      events={withoutPairedResults(events, pairs)}
+      pairs={pairs}
+      onSelectEvent={onSelectEvent}
+      selectedEventUuid={selectedEventUuid}
+    />
+  );
+}
+
+interface TurnHeaderProps {
+  turn: Turn;
+  collapsed: boolean;
+  onToggle: () => void;
+  onSelect: (uuid: string | null) => void;
+  selectedUuid: string | null;
+}
+
+function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedUuid }: TurnHeaderProps) {
+  const header = turn.header;
+  return (
+    <div className="tl-turn-header">
+      <span className="tl-caret" onClick={onToggle}>{collapsed ? '▸' : '▾'}</span>
+      {header ? (
+        <>
+          <span className="tl-time">{formatTime(header.ts)}</span>
+          <span className={header.kind === 'user_text' ? 'tl-turn-tag tl-turn-tag-you' : 'tl-turn-tag tl-turn-tag-claude'}>
+            {header.kind === 'user_text' ? 'YOU' : 'CLAUDE'}
+          </span>
+          <span
+            className={selectedUuid === header.uuid ? 'tl-turn-text tl-turn-text-selected' : 'tl-turn-text'}
+            onClick={() => onSelect(header.uuid)}
+          >
+            {(header.text || '').substring(0, 80)}
+          </span>
+        </>
+      ) : (
+        <span className="tl-turn-start">session start</span>
+      )}
+      {collapsed && <span className="tl-turn-count">({turn.children.length})</span>}
+    </div>
+  );
+}
+
+interface TurnBlockProps extends TurnHeaderProps {
+  pairs: ToolPairs;
+}
+
+function TurnBlock({ turn, pairs, collapsed, onToggle, onSelect, selectedUuid }: TurnBlockProps) {
+  return (
+    <div className="tl-turn">
+      <TurnHeader turn={turn} collapsed={collapsed} onToggle={onToggle} onSelect={onSelect} selectedUuid={selectedUuid} />
+      {!collapsed && (
+        <div className="tl-turn-children">
+          <MergedList events={turn.children} pairs={pairs} onSelectEvent={onSelect} selectedEventUuid={selectedUuid} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GroupedTimeline({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const pairs = buildToolPairs(events);
+  const turns = groupIntoTurns(withoutPairedResults(events, pairs));
+
+  function toggleTurn(turnId: string): void {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(turnId)) next.delete(turnId);
+      else next.add(turnId);
+      return next;
+    });
+  }
+
+  return (
+    <>
+      {turns.map((turn, index) => {
+        const turnId = turn.header?.eventKey || turn.header?.uuid || `pre-${index}`;
+        return (
+          <TurnBlock
+            key={turnId}
+            turn={turn}
+            pairs={pairs}
+            collapsed={collapsed.has(turnId)}
+            onToggle={() => toggleTurn(turnId)}
+            onSelect={onSelectEvent}
+            selectedUuid={selectedEventUuid}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function TimelineBody({ variant, events, onSelectEvent, selectedEventUuid }: AgentBoardProps & { variant: TimelineVariant }) {
+  if (variant === 'signal') return <SignalTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+  if (variant === 'grouped') return <GroupedTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+  if (variant === 'ledger') return <LedgerTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+  return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+}
+
 export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBoardProps) {
   const subagentSpawns = events.filter(e => e.kind === 'tool_use' && e.isAgentSpawn);
   const sidechainEvents = events.filter(e => e.isSidechain);
+  const [variant, setVariant] = useState<TimelineVariant>(loadStoredVariant);
+
+  function selectVariant(next: TimelineVariant): void {
+    setVariant(next);
+    localStorage.setItem(VARIANT_STORAGE_KEY, next);
+  }
 
   return (
     <div style={{
@@ -106,6 +351,19 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBo
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
           <Network size={12} color="var(--text-secondary)" />
           <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Event Timeline</span>
+          <div className="tl-switcher">
+            {VARIANT_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                title={option.title}
+                className={variant === option.id ? 'tl-switch-btn tl-switch-active' : 'tl-switch-btn'}
+                onClick={() => selectVariant(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
         {events.length === 0 ? (
           <div style={{
@@ -116,30 +374,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBo
             <span style={{ fontSize: '0.75rem' }}>Select a session to view transcript</span>
           </div>
         ) : (
-          events.map((ev, i) => (
-            <div
-              key={ev.eventKey || ev.uuid || i}
-              onClick={() => onSelectEvent(ev.uuid)}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: '0.5rem', padding: '0.3rem 0.5rem',
-                borderRadius: '4px', cursor: 'pointer',
-                backgroundColor: selectedEventUuid === ev.uuid ? 'var(--bg-tertiary)' : 'transparent',
-                border: selectedEventUuid === ev.uuid ? '1px solid var(--border-active)' : '1px solid transparent',
-                transition: 'all 0.1s ease',
-              }}
-            >
-              <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', minWidth: '52px', marginTop: '1px' }}>
-                {new Date(ev.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-              <span style={{ marginTop: '1px' }}>{EVENT_ICONS[ev.kind] || <FileText size={11} color="var(--text-muted)" />}</span>
-              <span style={{ fontSize: '0.68rem', color: EVENT_COLORS[ev.kind] || 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {getEventLabel(ev)}
-              </span>
-              {ev.isSidechain && (
-                <span style={{ fontSize: '0.55rem', color: '#c9b57a', backgroundColor: 'rgba(201,181,122,0.1)', padding: '0 0.3rem', borderRadius: '2px' }}>SC</span>
-              )}
-            </div>
-          ))
+          <TimelineBody variant={variant} events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />
         )}
       </div>
     </div>
