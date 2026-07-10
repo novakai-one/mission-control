@@ -9,6 +9,7 @@ import { SettingsPanel } from './settings/index.js';
 import { DebugPanel } from './debug/index.js';
 import { FilesPanel } from './files/index.js';
 import { SubagentInspector } from './subagent/index.js';
+import { upsertEvent } from '../lib/upsertEvents.js';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
 export function toDisplayPath(absPath: string | null, homeDir: string | null): string {
@@ -29,6 +30,7 @@ export interface SessionMeta {
 
 export interface TranscriptEvent {
   kind: string;
+  eventKey?: string;
   uuid: string;
   parentUuid: string | null;
   sessionId: string;
@@ -150,9 +152,15 @@ export function DashboardShell() {
       if (message.event === 'transcript-event') {
         // Drop events from a stale watcher during session switches.
         const matches = message.payload?.sessionId === selectedSessionRef.current;
-        setEvents(prev => (matches ? [...prev, message.payload] : prev));
+        setEvents(prev => (matches ? upsertEvent(prev, message.payload) : prev));
       } else if (message.event === 'watch-started') {
         setLiveMode(true);
+      } else if (message.event === 'build-session' && message.payload?.sessionId && message.payload?.projectDir) {
+        const { sessionId, projectDir } = message.payload;
+        setSessions(prev => prev.some(session => session.sessionId === sessionId)
+          ? prev
+          : [{ sessionId, dirName: projectDir, matchReason: 'cwd', modified: Date.now(), size: 0 }, ...prev]);
+        setSelectedSession(sessionId);
       } else {
         // Build/agent events
         setBuildMessages(prev => [...prev, message]);
@@ -223,6 +231,8 @@ export function DashboardShell() {
             onBuildMessage={(msg) => setBuildMessages(prev => [...prev, msg])}
             buildMessages={buildMessages}
             wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
+            resumeSessionId={selectedSession}
+            canResume={liveMode && !!selectedSession}
           />
         ) : viewMode === 'ruleset' ? (
           <RulesetInspector data={rulesetData} />

@@ -1,6 +1,7 @@
 import { AgentExecutor, AgentStep } from './executor/index.js';
 import { StateManager, BuildRecord } from '../state/index.js';
 import { SubagentManager } from './subagent/index.js';
+import { encodeCwd } from '../transcript/parser.js';
 
 export interface AgentInstance {
   id: string;
@@ -36,7 +37,11 @@ export class AgentCoordinator {
     return Array.from(this.activeAgents.values());
   }
 
-  public async startBuild(prompt: string, llmType: 'claude' | 'gemini', geminiApiKey?: string): Promise<string> {
+  public async startBuild(prompt: string, llmType: 'claude' | 'gemini', geminiApiKey?: string, resumeSessionId?: string): Promise<string> {
+    if (this.activeBuild && this.activeBuild.status === 'running') {
+      throw new Error('BUILD_BUSY');
+    }
+
     const buildId = `build_${Math.random().toString(36).substring(7)}`;
     const rootAgentId = `agent_coordinator`;
 
@@ -63,12 +68,12 @@ export class AgentCoordinator {
 
     this.triggerBroadcast('build-started', { build: activeBuildRecord, agents: this.getActiveAgents() });
 
-    this.runAgentLoop(rootAgentId, prompt, llmType, geminiApiKey).catch(() => {});
+    this.runAgentLoop(rootAgentId, prompt, llmType, geminiApiKey, resumeSessionId).catch(() => {});
 
     return buildId;
   }
 
-  private async runAgentLoop(agentId: string, prompt: string, llmType: 'claude' | 'gemini', geminiApiKey?: string): Promise<void> {
+  private async runAgentLoop(agentId: string, prompt: string, llmType: 'claude' | 'gemini', geminiApiKey?: string, resumeSessionId?: string): Promise<void> {
     const agent = this.activeAgents.get(agentId);
     if (!agent) return;
 
@@ -100,16 +105,18 @@ export class AgentCoordinator {
     if (this.activeBuild) this.activeBuild.llm = llmType;
 
     // Records the exact command/path/cwd/pid the executor spawned, so the Debug tab can show what actually ran.
-    const onSpawnHandler = (info: { command: string; args: string[]; cwd: string; pid?: number; cliExists: boolean }) => {
+    const onSpawnHandler = (info: { command: string; args: string[]; cwd: string; pid?: number; cliExists: boolean; sessionId?: string }) => {
       if (this.activeBuild) {
         this.activeBuild.command = info.command;
         this.activeBuild.args = info.args;
         this.activeBuild.cwd = info.cwd;
         this.activeBuild.pid = info.pid;
         this.activeBuild.cliExists = info.cliExists;
+        if (info.sessionId) this.activeBuild.sessionId = info.sessionId;
         this.stateManager.saveBuild(this.activeBuild);
       }
       this.triggerBroadcast('build-debug', { buildId: this.activeBuild?.id, llm: llmType, ...info });
+      this.triggerBroadcast('build-session', { buildId: this.activeBuild?.id, sessionId: info.sessionId, projectDir: encodeCwd(info.cwd) });
     };
 
     try {
@@ -124,7 +131,8 @@ export class AgentCoordinator {
           workspacePath: process.cwd(),
           onStdout: onStdoutHandler,
           onStep: onStepHandler,
-          onSpawn: onSpawnHandler
+          onSpawn: onSpawnHandler,
+          resumeSessionId
         });
       }
 

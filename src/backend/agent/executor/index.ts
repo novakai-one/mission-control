@@ -1,7 +1,20 @@
 import { spawn, ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ConfigManager } from '../../config/index.js';
+
+export function buildClaudeArgs(prompt: string, opts: { systemPrompt?: string; resumeSessionId?: string }, sessionId: string): string[] {
+  const args = ['-p', prompt];
+  if (opts.resumeSessionId) {
+    args.push('--resume', sessionId);
+  } else {
+    args.push('--session-id', sessionId);
+  }
+  args.push('--permission-mode', 'bypassPermissions');
+  if (opts.systemPrompt) args.push('--system-prompt', opts.systemPrompt);
+  return args;
+}
 
 export interface AgentStep {
   id: string;
@@ -19,11 +32,13 @@ export interface SpawnInfo {
   cwd: string;
   pid?: number;
   cliExists: boolean;
+  sessionId: string;
 }
 
 export interface ExecutionOptions {
   workspacePath: string;
   systemPrompt?: string;
+  resumeSessionId?: string;
   onStdout: (data: string) => void;
   onStep: (step: Partial<AgentStep>) => void;
   onSpawn?: (info: SpawnInfo) => void;
@@ -48,10 +63,8 @@ export class AgentExecutor {
 
   public async runClaudeCode(agentId: string, prompt: string, options: ExecutionOptions): Promise<void> {
     // No --bare: bare mode skips credential loading and reports "Not logged in" even when authenticated.
-    const args = ['-p', prompt, '--permission-mode', 'bypassPermissions'];
-    if (options.systemPrompt) {
-      args.push('--system-prompt', options.systemPrompt);
-    }
+    const sessionId = options.resumeSessionId ?? randomUUID();
+    const args = buildClaudeArgs(prompt, options, sessionId);
 
     // Reads static machine config (not per-request like geminiApiKey), so load here rather than thread through.
     const cliPath = ConfigManager.load().claudeCliPath || 'claude';
@@ -65,7 +78,7 @@ export class AgentExecutor {
     });
 
     this.activeSubprocesses.set(agentId, processInstance);
-    options.onSpawn?.({ command: resolved, args, cwd: options.workspacePath, pid: processInstance.pid, cliExists: exists });
+    options.onSpawn?.({ command: resolved, args, cwd: options.workspacePath, pid: processInstance.pid, cliExists: exists, sessionId });
 
     processInstance.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString();

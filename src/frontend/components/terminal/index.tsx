@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, Send, Square, ChevronRight } from 'lucide-react';
+import './index.css';
 
 export interface BuildStep {
   id: string;
@@ -19,15 +20,18 @@ interface TerminalPanelProps {
   onBuildMessage: (msg: BuildMessage) => void;
   buildMessages: BuildMessage[];
   wsReady: boolean;
+  resumeSessionId?: string | null;
+  canResume?: boolean;
 }
 
-export function TerminalPanel({ activeRepo, onBuildMessage, buildMessages, wsReady }: TerminalPanelProps) {
+export function TerminalPanel({ activeRepo, onBuildMessage, buildMessages, wsReady, resumeSessionId, canResume }: TerminalPanelProps) {
   const [prompt, setPrompt] = useState('');
   const [llmType, setLlmType] = useState<'claude' | 'gemini'>('claude');
   const [buildId, setBuildId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
+  const [continueSession, setContinueSession] = useState(false);
   const outputRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-scroll to bottom on new output
@@ -62,6 +66,8 @@ export function TerminalPanel({ activeRepo, onBuildMessage, buildMessages, wsRea
   const handleStartBuild = async () => {
     if (!prompt.trim()) return;
 
+    // Optimistic: claude -p cold-start takes seconds; show "running" immediately.
+    setIsRunning(true);
     try {
       const res = await fetch('/api/builds/start', {
         method: 'POST',
@@ -70,14 +76,15 @@ export function TerminalPanel({ activeRepo, onBuildMessage, buildMessages, wsRea
           prompt: prompt.trim(),
           llmType,
           geminiApiKey: llmType === 'gemini' ? apiKey : undefined,
+          resumeSessionId: (continueSession && canResume && resumeSessionId) ? resumeSessionId : undefined,
         }),
       });
       const data = await res.json();
       setBuildId(data.buildId);
-      setIsRunning(true);
       setPrompt('');
-    } catch (e) {
-      console.error('Failed to start build:', e);
+    } catch (error) {
+      setIsRunning(false);
+      console.error('Failed to start build:', error);
     }
   };
 
@@ -91,8 +98,8 @@ export function TerminalPanel({ activeRepo, onBuildMessage, buildMessages, wsRea
       });
       setIsRunning(false);
       setBuildId(null);
-    } catch (e) {
-      console.error('Failed to stop build:', e);
+    } catch (error) {
+      console.error('Failed to stop build:', error);
     }
   };
 
@@ -138,6 +145,12 @@ export function TerminalPanel({ activeRepo, onBuildMessage, buildMessages, wsRea
             </div>
           )}
         </div>
+        {canResume && (
+          <label className="continue-session">
+            <input type="checkbox" checked={continueSession} onChange={e => setContinueSession(e.target.checked)} />
+            Continue session
+          </label>
+        )}
         <select
           value={llmType}
           onChange={(e) => {

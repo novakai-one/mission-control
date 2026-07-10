@@ -118,7 +118,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBo
         ) : (
           events.map((ev, i) => (
             <div
-              key={ev.uuid || i}
+              key={ev.eventKey || ev.uuid || i}
               onClick={() => onSelectEvent(ev.uuid)}
               style={{
                 display: 'flex', alignItems: 'flex-start', gap: '0.5rem', padding: '0.3rem 0.5rem',
