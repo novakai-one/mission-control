@@ -107,6 +107,8 @@ export class TerminalManager {
     const record = this.agents.get(agentId);
     if (!record) return false;
     record.ptyProcess.kill();
+    // DELETE = kill + remove (spec §3); natural exits keep their record/buffer.
+    this.agents.delete(agentId);
     return true;
   }
 
