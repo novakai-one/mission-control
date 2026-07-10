@@ -2,12 +2,16 @@
 import assert from 'node:assert/strict';
 import type { TranscriptEvent } from '../../index.js';
 import {
+  SIDECHAIN_KEY,
   buildToolPairs,
+  classifyEvent,
   compressNoiseRuns,
   getToolLabel,
   groupIntoTurns,
   isContextNoise,
+  masterState,
   noiseSummary,
+  visibilityPredicate,
 } from '../timelineModel.js';
 
 let counter = 0;
@@ -94,6 +98,71 @@ function testCompressNoiseRuns() {
   assert.deepEqual(chunks[2], { noiseRun: [noiseA] });
 }
 
+function classKey(event: TranscriptEvent): string {
+  const parsed = classifyEvent(event);
+  return `${parsed.section}|${parsed.category}/${parsed.child}`;
+}
+
+function testClassifyConversation() {
+  assert.equal(classKey(makeEvent('user_text', { text: 'do the thing' })), 'CONVERSATION|user-prompts/user-prompts');
+  assert.equal(classKey(makeEvent('user_text', { text: '[Image #1]' })), 'CONVERSATION|user-prompts/user-prompts', 'images are genuine prompts');
+  assert.equal(classKey(makeEvent('assistant_text', { text: 'done' })), 'CONVERSATION|assistant-replies/assistant-replies');
+  assert.equal(classKey(makeEvent('assistant_thinking', { text: 'hmm' })), 'CONVERSATION|thinking/thinking');
+}
+
+function testClassifyTools() {
+  assert.equal(classKey(makeEvent('tool_use', { tool: 'Bash', toolUseId: 't1', input: {} })), 'TOOLS|tool-calls/Bash', 'tool child is the tool name');
+  assert.equal(classKey(makeEvent('tool_use', { tool: 'Agent', toolUseId: 't2', input: {}, isAgentSpawn: true })), 'TOOLS|spawns/spawns');
+  assert.equal(classKey(makeEvent('tool_result', { toolUseId: 't1', content: 'ok', isError: false })), 'TOOLS|tool-results/results-ok');
+  assert.equal(classKey(makeEvent('tool_result', { toolUseId: 't1', content: 'boom', isError: true })), 'TOOLS|tool-results/results-error');
+}
+
+function testClassifyInjections() {
+  assert.equal(classKey(makeEvent('hook_event', { hookName: 'SessionStart:startup', hookEvent: 'hook_success' })), 'CONTEXT INJECTIONS|hooks/SessionStart:startup', 'hook child is the hookName');
+  assert.equal(classKey(makeEvent('hook_event', { hookName: '', hookEvent: 'todo_reminder' })), 'CONTEXT INJECTIONS|reminders/todo_reminder');
+  assert.equal(classKey(makeEvent('user_text', { text: '<system-reminder>x</system-reminder>' })), 'CONTEXT INJECTIONS|reminders/system-reminder');
+  assert.equal(classKey(makeEvent('hook_event', { hookName: '', hookEvent: 'skill_listing' })), 'CONTEXT INJECTIONS|capability-deltas/skill_listing');
+  assert.equal(classKey(makeEvent('user_text', { text: '<command-name>/foo</command-name>' })), 'CONTEXT INJECTIONS|commands/slash-commands');
+  assert.equal(classKey(makeEvent('user_text', { text: '<local-command-stdout></local-command-stdout>' })), 'CONTEXT INJECTIONS|commands/slash-commands');
+  assert.equal(classKey(makeEvent('hook_event', { hookName: '', hookEvent: 'queued_command' })), 'CONTEXT INJECTIONS|commands/queued_command');
+  assert.equal(classKey(makeEvent('hook_event', { hookName: '', hookEvent: 'plan_mode' })), 'CONTEXT INJECTIONS|mode-transitions/plan_mode');
+  assert.equal(classKey(makeEvent('hook_event', { hookName: '', hookEvent: 'edited_text_file' })), 'CONTEXT INJECTIONS|files-ide/edited_text_file');
+  assert.equal(classKey(makeEvent('user_text', { text: '<ide_opened_file>f</ide_opened_file>' })), 'CONTEXT INJECTIONS|files-ide/ide_opened_file');
+}
+
+function testClassifyInterruptsAndCatchAll() {
+  assert.equal(classKey(makeEvent('user_text', { text: '[Request interrupted by user]' })), 'CONTEXT INJECTIONS|interrupts-notifications/request-interrupted');
+  assert.equal(classKey(makeEvent('user_text', { text: '<task-notification>done</task-notification>' })), 'CONTEXT INJECTIONS|interrupts-notifications/task-notification');
+  assert.equal(classKey(makeEvent('hook_event', { hookName: '', hookEvent: 'date_change' })), 'CONTEXT INJECTIONS|other-injections/date_change', 'unmapped attachment types are catch-all');
+  assert.equal(classKey(makeEvent('user_text', { text: '<mystery-tag>x</mystery-tag>' })), 'CONTEXT INJECTIONS|other-injections/mystery-tag', 'unknown tags are catch-all');
+}
+
+function testClassifySessionMeta() {
+  assert.equal(classKey(makeEvent('session_meta', { mode: 'normal' })), 'SESSION META|mode-permissions/mode');
+  assert.equal(classKey(makeEvent('session_meta', { permissionMode: 'default' })), 'SESSION META|mode-permissions/permissions');
+  assert.equal(classKey(makeEvent('session_meta', { summary: 'a summary' })), 'SESSION META|summaries/summaries');
+  assert.equal(classKey(makeEvent('system', { text: 'took 3s', subtype: 'turn_duration' })), 'SESSION META|system-messages/turn_duration');
+  assert.equal(classKey(makeEvent('system', { text: 'note' })), 'SESSION META|system-messages/other', 'missing subtype buckets as other');
+}
+
+function testMasterState() {
+  const children = ['tool-calls/Bash', 'tool-calls/Read'];
+  assert.equal(masterState(children, new Set()), 'on');
+  assert.equal(masterState(children, new Set(['tool-calls/Bash'])), 'mixed');
+  assert.equal(masterState(children, new Set(children)), 'off');
+  assert.equal(masterState(children, new Set(['unrelated/key'])), 'on', 'hidden keys outside the category are ignored');
+}
+
+function testVisibilityPredicate() {
+  const bash = makeEvent('tool_use', { tool: 'Bash', toolUseId: 't1', input: {} });
+  const read = makeEvent('tool_use', { tool: 'Read', toolUseId: 't2', input: {} });
+  const sidechainReply = makeEvent('assistant_text', { text: 'sc', isSidechain: true });
+  const allEvents = [bash, read, sidechainReply];
+  assert.deepEqual(allEvents.filter(visibilityPredicate(new Set())), allEvents, 'empty hidden set keeps everything');
+  assert.deepEqual(allEvents.filter(visibilityPredicate(new Set(['tool-calls/Bash']))), [read, sidechainReply]);
+  assert.deepEqual(allEvents.filter(visibilityPredicate(new Set([SIDECHAIN_KEY]))), [bash, read], 'sidechain toggle hides across categories');
+}
+
 function main() {
   testGetToolLabel();
   testIsContextNoise();
@@ -101,6 +170,13 @@ function main() {
   testGroupIntoTurns();
   testNoiseSummary();
   testCompressNoiseRuns();
+  testClassifyConversation();
+  testClassifyTools();
+  testClassifyInjections();
+  testClassifyInterruptsAndCatchAll();
+  testClassifySessionMeta();
+  testMasterState();
+  testVisibilityPredicate();
   console.log('PASS');
 }
 

@@ -60,6 +60,134 @@ export function isContextNoise(event: TranscriptEvent): boolean {
   return false;
 }
 
+export interface EventClass {
+  section: string;
+  category: string;
+  child: string;
+}
+
+/** Category → panel section, in the panel's display order. */
+export const CATEGORY_SECTIONS: Record<string, string> = {
+  'user-prompts': 'CONVERSATION',
+  'assistant-replies': 'CONVERSATION',
+  thinking: 'CONVERSATION',
+  'tool-calls': 'TOOLS',
+  'tool-results': 'TOOLS',
+  spawns: 'TOOLS',
+  hooks: 'CONTEXT INJECTIONS',
+  reminders: 'CONTEXT INJECTIONS',
+  'capability-deltas': 'CONTEXT INJECTIONS',
+  commands: 'CONTEXT INJECTIONS',
+  'mode-transitions': 'CONTEXT INJECTIONS',
+  'files-ide': 'CONTEXT INJECTIONS',
+  'interrupts-notifications': 'CONTEXT INJECTIONS',
+  'other-injections': 'CONTEXT INJECTIONS',
+  'mode-permissions': 'SESSION META',
+  'system-messages': 'SESSION META',
+  summaries: 'SESSION META',
+  sidechain: 'SESSION META',
+};
+
+/** hookName-less attachment type → category; unmapped types land in other-injections. */
+const ATTACHMENT_CATEGORIES: Record<string, string> = {
+  task_reminder: 'reminders',
+  todo_reminder: 'reminders',
+  deferred_tools_delta: 'capability-deltas',
+  agent_listing_delta: 'capability-deltas',
+  skill_listing: 'capability-deltas',
+  mcp_instructions_delta: 'capability-deltas',
+  queued_command: 'commands',
+  command_permissions: 'commands',
+  plan_mode: 'mode-transitions',
+  plan_mode_exit: 'mode-transitions',
+  auto_mode: 'mode-transitions',
+  ultra_effort_enter: 'mode-transitions',
+  ultra_effort_exit: 'mode-transitions',
+  edited_text_file: 'files-ide',
+  nested_memory: 'files-ide',
+  directory: 'files-ide',
+  file: 'files-ide',
+  selected_lines_in_ide: 'files-ide',
+};
+
+/** Known leading <tag> forms in synthetic user_text. */
+const USER_TAG_ROUTES: Record<string, EventClass> = {
+  'system-reminder': makeClass('reminders', 'system-reminder'),
+  'task-notification': makeClass('interrupts-notifications', 'task-notification'),
+  ide_opened_file: makeClass('files-ide', 'ide_opened_file'),
+};
+
+function makeClass(category: string, child: string): EventClass {
+  return { section: CATEGORY_SECTIONS[category] || 'SESSION META', category, child };
+}
+
+function singleChild(category: string): EventClass {
+  return makeClass(category, category);
+}
+
+// Leading '<tag>' routes by tag; '[Request interrupted' is an interrupt;
+// everything else ('[Image…' included) is a genuine prompt.
+function classifyUserText(text: string): EventClass {
+  if (text.startsWith('[Request interrupted')) return makeClass('interrupts-notifications', 'request-interrupted');
+  const tagMatch = /^<([\w-]+)/.exec(text);
+  if (!tagMatch) return singleChild('user-prompts');
+  const tagName = tagMatch[1];
+  if (USER_TAG_ROUTES[tagName]) return USER_TAG_ROUTES[tagName];
+  if (tagName.startsWith('command-') || tagName.startsWith('local-command-')) {
+    return makeClass('commands', 'slash-commands');
+  }
+  return makeClass('other-injections', tagName);
+}
+
+function classifyHookEvent(event: TranscriptEvent): EventClass {
+  if (event.hookName) return makeClass('hooks', event.hookName);
+  const attachType = event.hookEvent || 'unknown';
+  const category = ATTACHMENT_CATEGORIES[attachType];
+  return makeClass(category || 'other-injections', attachType);
+}
+
+function classifySessionMeta(event: TranscriptEvent): EventClass {
+  if (event.mode) return makeClass('mode-permissions', 'mode');
+  if (event.permissionMode) return makeClass('mode-permissions', 'permissions');
+  return singleChild('summaries');
+}
+
+/** Map an event to its panel section/category/child (filter key = "category/child"). */
+export function classifyEvent(event: TranscriptEvent): EventClass {
+  switch (event.kind) {
+    case 'user_text': return classifyUserText(event.text || '');
+    case 'assistant_text': return singleChild('assistant-replies');
+    case 'assistant_thinking': return singleChild('thinking');
+    case 'tool_use':
+      return event.isAgentSpawn ? singleChild('spawns') : makeClass('tool-calls', event.tool || 'unknown');
+    case 'tool_result':
+      return makeClass('tool-results', event.isError ? 'results-error' : 'results-ok');
+    case 'hook_event': return classifyHookEvent(event);
+    case 'system': return makeClass('system-messages', event.subtype || 'other');
+    case 'session_meta': return classifySessionMeta(event);
+    default: return makeClass('other-injections', event.kind);
+  }
+}
+
+/** Cross-cutting filter key: hides any event flagged isSidechain, on top of its category. */
+export const SIDECHAIN_KEY = 'sidechain/sidechain';
+
+/** Master-toggle state over the present children's filter keys. */
+export function masterState(children: string[], hidden: Set<string>): 'on' | 'off' | 'mixed' {
+  const hiddenCount = children.filter((childKey) => hidden.has(childKey)).length;
+  if (hiddenCount === 0) return 'on';
+  return hiddenCount === children.length ? 'off' : 'mixed';
+}
+
+/** Filter fn over hidden "category/child" keys; unknown keys default visible. */
+export function visibilityPredicate(hidden: Set<string>): (event: TranscriptEvent) => boolean {
+  return (event) => {
+    if (event.isSidechain && hidden.has(SIDECHAIN_KEY)) return false;
+    const eventClass = classifyEvent(event);
+    return !hidden.has(`${eventClass.category}/${eventClass.child}`);
+  };
+}
+
 export interface Turn {
   header: TranscriptEvent | null;
   children: TranscriptEvent[];
