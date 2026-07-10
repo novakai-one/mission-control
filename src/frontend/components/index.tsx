@@ -253,14 +253,19 @@ export function DashboardShell() {
           onKill={agentsState.killAgent}
           onArchive={agentsState.archiveAgent}
         />
+        {/* Always mounted so agent terminals survive tab switches; hides itself via CSS. */}
+        <AgentsView
+          agents={agentsState.agents}
+          activeAgentId={agentsState.activeAgentId}
+          onCreate={agentsState.createAgent}
+          visible={viewMode === 'agents'}
+        />
         {viewMode === 'files' ? (
           <FilesPanel
             homeDir={homeDir}
             activeRepo={activeRepo}
             onActiveRepoChange={setActiveRepo}
           />
-        ) : viewMode === 'agents' ? (
-          <AgentsView agents={agentsState.agents} activeAgentId={agentsState.activeAgentId} onCreate={agentsState.createAgent} />
         ) : viewMode === 'transcript' ? (
           <>
             <AgentBoard
@@ -298,12 +303,12 @@ export function DashboardShell() {
           />
         ) : viewMode === 'ruleset' ? (
           <RulesetInspector data={rulesetData} />
-        ) : (
+        ) : viewMode === 'debug' ? (
           <DebugPanel
             buildMessages={buildMessages}
             wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
           />
-        )}
+        ) : null}
       </div>
       {viewMode === 'transcript' && (
         <PlaybackSlider 
