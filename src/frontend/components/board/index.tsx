@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Network, Brain, Wrench, GitBranch, FileText, AlertTriangle, Radio } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
 import type { TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
@@ -65,16 +65,22 @@ interface EventRowProps {
   selected: boolean;
   onSelect: () => void;
   resultChip?: TranscriptEvent;
+  onSelectChip?: () => void;
+  chipSelected?: boolean;
 }
 
-function EventRow({ event, label, selected, onSelect, resultChip }: EventRowProps) {
+function EventRow({ event, label, selected, onSelect, resultChip, onSelectChip, chipSelected }: EventRowProps) {
+  const chipTone = resultChip?.isError ? 'tl-chip tl-chip-err' : 'tl-chip tl-chip-ok';
   return (
     <div className={selected ? 'tl-row tl-row-selected' : 'tl-row'} onClick={onSelect}>
       <span className="tl-time">{formatTime(event.ts)}</span>
       <span className="tl-icon">{EVENT_ICONS[event.kind] || <FileText size={11} color="var(--text-muted)" />}</span>
       <span className={`tl-label tl-kind-${event.kind}`}>{label}</span>
       {resultChip && (
-        <span className={resultChip.isError ? 'tl-chip tl-chip-err' : 'tl-chip tl-chip-ok'}>
+        <span
+          className={chipSelected ? `${chipTone} tl-chip-selected` : chipTone}
+          onClick={(domEvent) => { domEvent.stopPropagation(); onSelectChip?.(); }}
+        >
           {resultChip.isError ? '✗' : '✓'} {(resultChip.content || '').replace(/\s+/g, ' ').slice(0, 30)}
         </span>
       )}
@@ -86,20 +92,23 @@ function EventRow({ event, label, selected, onSelect, resultChip }: EventRowProp
 interface MergedRowProps {
   event: TranscriptEvent;
   pairs: ToolPairs;
-  selected: boolean;
-  onSelect: () => void;
+  onSelectEvent: (uuid: string | null) => void;
+  selectedEventUuid: string | null;
 }
 
-/** A-style row: tool_use rows get the value label plus the paired result as a chip. */
-function MergedRow({ event, pairs, selected, onSelect }: MergedRowProps) {
+/** A-style row: tool_use rows get the value label plus the paired result as a clickable chip. */
+function MergedRow({ event, pairs, onSelectEvent, selectedEventUuid }: MergedRowProps) {
   const isTool = event.kind === 'tool_use';
+  const chip = isTool && event.toolUseId ? pairs.results.get(event.toolUseId) : undefined;
   return (
     <EventRow
       event={event}
       label={isTool ? getToolLabel(event) : getEventLabel(event)}
-      resultChip={isTool && event.toolUseId ? pairs.results.get(event.toolUseId) : undefined}
-      selected={selected}
-      onSelect={onSelect}
+      resultChip={chip}
+      selected={selectedEventUuid === event.uuid}
+      onSelect={() => onSelectEvent(event.uuid)}
+      onSelectChip={chip ? () => onSelectEvent(chip.uuid) : undefined}
+      chipSelected={chip ? selectedEventUuid === chip.uuid : false}
     />
   );
 }
@@ -113,23 +122,25 @@ function withoutPairedResults(events: TranscriptEvent[], pairs: ToolPairs): Tran
 interface MergedListProps {
   events: TranscriptEvent[];
   pairs: ToolPairs;
+  compressNoise: boolean;
   onSelectEvent: (uuid: string | null) => void;
   selectedEventUuid: string | null;
 }
 
-/** Merged rows with consecutive noise compressed into dim non-clickable strips. */
-function MergedList({ events, pairs, onSelectEvent, selectedEventUuid }: MergedListProps) {
+/** Merged rows; optionally compresses consecutive noise into dim non-clickable strips. */
+function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedEventUuid }: MergedListProps) {
+  const items = useMemo(() => (compressNoise ? compressNoiseRuns(events) : events), [events, compressNoise]);
   return (
     <>
-      {compressNoiseRuns(events).map((item, index) => ('noiseRun' in item ? (
+      {items.map((item, index) => ('noiseRun' in item ? (
         <div key={`noise-${index}`} className="tl-noise-strip">····&ensp;{noiseSummary(item.noiseRun)}</div>
       ) : (
         <MergedRow
           key={item.eventKey || item.uuid || index}
           event={item}
           pairs={pairs}
-          selected={selectedEventUuid === item.uuid}
-          onSelect={() => onSelectEvent(item.uuid)}
+          onSelectEvent={onSelectEvent}
+          selectedEventUuid={selectedEventUuid}
         />
       )))}
     </>
@@ -149,37 +160,6 @@ function CurrentTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineP
         />
       ))}
     </>
-  );
-}
-
-// Pure layout: visibility is the view panel's job; variants never hide events themselves.
-function SignalTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
-  const pairs = buildToolPairs(events);
-  const visible = withoutPairedResults(events, pairs);
-  return (
-    <>
-      {visible.map((event, index) => (
-        <MergedRow
-          key={event.eventKey || event.uuid || index}
-          event={event}
-          pairs={pairs}
-          selected={selectedEventUuid === event.uuid}
-          onSelect={() => onSelectEvent(event.uuid)}
-        />
-      ))}
-    </>
-  );
-}
-
-function LedgerTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
-  const pairs = buildToolPairs(events);
-  return (
-    <MergedList
-      events={withoutPairedResults(events, pairs)}
-      pairs={pairs}
-      onSelectEvent={onSelectEvent}
-      selectedEventUuid={selectedEventUuid}
-    />
   );
 }
 
@@ -227,17 +207,16 @@ function TurnBlock({ turn, pairs, collapsed, onToggle, onSelect, selectedUuid }:
       <TurnHeader turn={turn} collapsed={collapsed} onToggle={onToggle} onSelect={onSelect} selectedUuid={selectedUuid} />
       {!collapsed && (
         <div className="tl-turn-children">
-          <MergedList events={turn.children} pairs={pairs} onSelectEvent={onSelect} selectedEventUuid={selectedUuid} />
+          <MergedList events={turn.children} pairs={pairs} compressNoise onSelectEvent={onSelect} selectedEventUuid={selectedUuid} />
         </div>
       )}
     </div>
   );
 }
 
-function GroupedTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
+function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: TimelineProps & { pairs: ToolPairs }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const pairs = buildToolPairs(events);
-  const turns = groupIntoTurns(withoutPairedResults(events, pairs));
+  const turns = useMemo(() => groupIntoTurns(events), [events]);
 
   function toggleTurn(turnId: string): void {
     setCollapsed((prev) => {
@@ -268,10 +247,23 @@ function GroupedTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineP
   );
 }
 
-function TimelineBody({ variant, events, onSelectEvent, selectedEventUuid }: TimelineProps & { variant: TimelineVariant }) {
-  if (variant === 'signal') return <SignalTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
-  if (variant === 'grouped') return <GroupedTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
-  if (variant === 'ledger') return <LedgerTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+// Pure layout: visibility is the view panel's job; variants never hide events themselves.
+function TimelineBody({ variant, events, pairs, onSelectEvent, selectedEventUuid }: TimelineProps & { variant: TimelineVariant; pairs: ToolPairs }) {
+  const merged = useMemo(() => withoutPairedResults(events, pairs), [events, pairs]);
+  if (variant === 'grouped') {
+    return <GroupedTimeline events={merged} pairs={pairs} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+  }
+  if (variant === 'signal' || variant === 'ledger') {
+    return (
+      <MergedList
+        events={merged}
+        pairs={pairs}
+        compressNoise={variant === 'ledger'}
+        onSelectEvent={onSelectEvent}
+        selectedEventUuid={selectedEventUuid}
+      />
+    );
+  }
   return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
 }
 
@@ -279,7 +271,15 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, 
   const subagentSpawns = events.filter(e => e.kind === 'tool_use' && e.isAgentSpawn);
   const sidechainEvents = events.filter(e => e.isSidechain);
   // Visibility filters apply to the timeline only; stats and the spawn tree stay unfiltered.
-  const visibleEvents = events.filter(visibilityPredicate(hiddenEvents));
+  // Pairing indexes toolUseIds from ALL tool_use events (hidden or not) so hiding a tool
+  // category drops its results too, while hidden results are excluded so their chips go away.
+  const { visibleEvents, pairs } = useMemo(() => {
+    const predicate = visibilityPredicate(hiddenEvents);
+    return {
+      visibleEvents: events.filter(predicate),
+      pairs: buildToolPairs(events.filter((event) => event.kind !== 'tool_result' || predicate(event))),
+    };
+  }, [events, hiddenEvents]);
 
   return (
     <div style={{
@@ -312,7 +312,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, 
           </div>
           {subagentSpawns.map((spawn) => (
             <div
-              key={spawn.uuid}
+              key={spawn.toolUseId || spawn.uuid}
               onClick={() => onSelectEvent(spawn.uuid)}
               className="glass-panel"
               style={{
@@ -345,8 +345,10 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, 
             <Network size={28} strokeWidth={1.5} />
             <span style={{ fontSize: '0.75rem' }}>Select a session to view transcript</span>
           </div>
+        ) : visibleEvents.length === 0 ? (
+          <div className="tl-empty">All events hidden by view filters</div>
         ) : (
-          <TimelineBody variant={variant} events={visibleEvents} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />
+          <TimelineBody variant={variant} events={visibleEvents} pairs={pairs} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />
         )}
       </div>
     </div>

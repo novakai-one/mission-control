@@ -4,12 +4,14 @@ import type { TranscriptEvent } from '../../index.js';
 import {
   SIDECHAIN_KEY,
   buildToolPairs,
+  childToggleUpdate,
   classifyEvent,
   compressNoiseRuns,
   getToolLabel,
   groupIntoTurns,
   isContextNoise,
   masterState,
+  masterToggleUpdate,
   noiseSummary,
   visibilityPredicate,
 } from '../timelineModel.js';
@@ -76,6 +78,19 @@ function testGroupIntoTurns() {
   assert.equal(groupIntoTurns([prompt, interrupted]).length, 1, 'interrupt marker is not a header');
 }
 
+// Only assistant turns carry trailing thinking forward; user turns must not steal it.
+function testTurnThinkingCarry() {
+  const prompt = makeEvent('user_text', { text: 'do the thing' });
+  const thinking = makeEvent('assistant_thinking', { text: 'hmm' });
+  const reply = makeEvent('assistant_text', { text: 'done' });
+  const divPrompt = makeEvent('user_text', { text: '<div> fix it' });
+  assert.equal(groupIntoTurns([prompt, divPrompt]).length, 2, 'unknown-tag user text is a genuine prompt and opens a turn');
+  const userTurns = groupIntoTurns([reply, thinking, prompt]);
+  assert.equal(userTurns.length, 2);
+  assert.deepEqual(userTurns[0].children, [thinking], 'thinking stays with the assistant turn');
+  assert.deepEqual(userTurns[1].children, [], 'user-opened turn carries nothing');
+}
+
 function testNoiseSummary() {
   const items = [
     makeEvent('hook_event', { hookName: '', hookEvent: 'skill_listing' }),
@@ -134,7 +149,8 @@ function testClassifyInterruptsAndCatchAll() {
   assert.equal(classKey(makeEvent('user_text', { text: '[Request interrupted by user]' })), 'CONTEXT INJECTIONS|interrupts-notifications/request-interrupted');
   assert.equal(classKey(makeEvent('user_text', { text: '<task-notification>done</task-notification>' })), 'CONTEXT INJECTIONS|interrupts-notifications/task-notification');
   assert.equal(classKey(makeEvent('hook_event', { hookName: '', hookEvent: 'date_change' })), 'CONTEXT INJECTIONS|other-injections/date_change', 'unmapped attachment types are catch-all');
-  assert.equal(classKey(makeEvent('user_text', { text: '<mystery-tag>x</mystery-tag>' })), 'CONTEXT INJECTIONS|other-injections/mystery-tag', 'unknown tags are catch-all');
+  assert.equal(classKey(makeEvent('user_text', { text: '<mystery-tag>x</mystery-tag>' })), 'CONVERSATION|user-prompts/user-prompts', 'unknown user tags are genuine prompts');
+  assert.equal(classKey(makeEvent('user_text', { text: '<div> keeps overflowing' })), 'CONVERSATION|user-prompts/user-prompts', 'HTML in a prompt stays a prompt');
 }
 
 function testClassifySessionMeta() {
@@ -147,10 +163,40 @@ function testClassifySessionMeta() {
 
 function testMasterState() {
   const children = ['tool-calls/Bash', 'tool-calls/Read'];
-  assert.equal(masterState(children, new Set()), 'on');
-  assert.equal(masterState(children, new Set(['tool-calls/Bash'])), 'mixed');
-  assert.equal(masterState(children, new Set(children)), 'off');
-  assert.equal(masterState(children, new Set(['unrelated/key'])), 'on', 'hidden keys outside the category are ignored');
+  assert.equal(masterState('tool-calls', children, new Set()), 'on');
+  assert.equal(masterState('tool-calls', children, new Set(['tool-calls/Bash'])), 'mixed');
+  assert.equal(masterState('tool-calls', children, new Set(children)), 'off');
+  assert.equal(masterState('tool-calls', children, new Set(['unrelated/key'])), 'on', 'hidden keys outside the category are ignored');
+  assert.equal(masterState('tool-calls', children, new Set(['tool-calls/*'])), 'off', 'wildcard alone reads as off');
+}
+
+// Applying an update the way the panel does: shows (deletes) first, then hides (adds).
+function applyUpdate(hidden: Set<string>, update: { hide: string[]; show: string[] }): Set<string> {
+  const next = new Set(hidden);
+  for (const filterKey of update.show) next.delete(filterKey);
+  for (const filterKey of update.hide) next.add(filterKey);
+  return next;
+}
+
+function testWildcardToggles() {
+  const children = ['tool-calls/Bash', 'tool-calls/Read', 'tool-calls/Grep'];
+  assert.deepEqual(masterToggleUpdate('tool-calls', children, 'on'), { hide: ['tool-calls/*'], show: children });
+  assert.deepEqual(masterToggleUpdate('tool-calls', children, 'off'), { hide: [], show: ['tool-calls/*', ...children] });
+  assert.deepEqual(masterToggleUpdate('tool-calls', children, 'mixed'), { hide: [], show: ['tool-calls/*', ...children] });
+  assert.deepEqual(childToggleUpdate('tool-calls', 'tool-calls/Bash', children, new Set()), { hide: ['tool-calls/Bash'], show: [] });
+  assert.deepEqual(childToggleUpdate('tool-calls', 'tool-calls/Bash', children, new Set(['tool-calls/Bash'])), { hide: [], show: ['tool-calls/Bash'] });
+  // Child click under an active wildcard: exactly the OTHER children end up hidden.
+  const hidden = applyUpdate(
+    new Set(['tool-calls/*']),
+    childToggleUpdate('tool-calls', 'tool-calls/Bash', children, new Set(['tool-calls/*'])),
+  );
+  assert.deepEqual([...hidden].sort(), ['tool-calls/Grep', 'tool-calls/Read']);
+  const predicate = visibilityPredicate(hidden);
+  assert.equal(predicate(makeEvent('tool_use', { tool: 'Bash', toolUseId: 'w1', input: {} })), true, 'clicked child is visible');
+  assert.equal(predicate(makeEvent('tool_use', { tool: 'Grep', toolUseId: 'w2', input: {} })), false, 'other children stay hidden');
+  // Master back on removes everything for the category.
+  const cleared = applyUpdate(hidden, masterToggleUpdate('tool-calls', children, 'off'));
+  assert.equal(cleared.size, 0, 'master on removes wildcard and all child keys');
 }
 
 function testVisibilityPredicate() {
@@ -161,6 +207,12 @@ function testVisibilityPredicate() {
   assert.deepEqual(allEvents.filter(visibilityPredicate(new Set())), allEvents, 'empty hidden set keeps everything');
   assert.deepEqual(allEvents.filter(visibilityPredicate(new Set(['tool-calls/Bash']))), [read, sidechainReply]);
   assert.deepEqual(allEvents.filter(visibilityPredicate(new Set([SIDECHAIN_KEY]))), [bash, read], 'sidechain toggle hides across categories');
+  const futureTool = makeEvent('tool_use', { tool: 'BrandNewTool', toolUseId: 't9', input: {} });
+  assert.deepEqual(
+    [...allEvents, futureTool].filter(visibilityPredicate(new Set(['tool-calls/*']))),
+    [sidechainReply],
+    'category wildcard hides children that did not exist when it was set',
+  );
 }
 
 function main() {
@@ -168,6 +220,7 @@ function main() {
   testIsContextNoise();
   testBuildToolPairs();
   testGroupIntoTurns();
+  testTurnThinkingCarry();
   testNoiseSummary();
   testCompressNoiseRuns();
   testClassifyConversation();
@@ -176,6 +229,7 @@ function main() {
   testClassifyInterruptsAndCatchAll();
   testClassifySessionMeta();
   testMasterState();
+  testWildcardToggles();
   testVisibilityPredicate();
   console.log('PASS');
 }

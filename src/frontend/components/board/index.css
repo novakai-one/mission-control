@@ -78,6 +78,20 @@
   background-color: rgba(201, 122, 122, 0.12);
 }
 
+.tl-chip-selected {
+  box-shadow: 0 0 0 1px var(--border-active);
+}
+
+/* Centered muted hint when view filters hide every event. */
+.tl-empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* Compressed context-noise strip (variants B/C). */
 .tl-noise-strip {
   font-size: 0.6rem;

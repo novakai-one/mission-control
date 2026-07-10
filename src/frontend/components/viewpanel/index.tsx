@@ -1,7 +1,16 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { TranscriptEvent } from '../index.js';
-import type { TimelineVariant } from '../board/timelineModel.js';
-import { CATEGORY_SECTIONS, VARIANT_OPTIONS, classifyEvent, loadStoredVariant, masterState, storeVariant } from '../board/timelineModel.js';
+import type { FilterKeyUpdate, TimelineVariant } from '../board/timelineModel.js';
+import {
+  CATEGORY_SECTIONS,
+  VARIANT_OPTIONS,
+  childToggleUpdate,
+  classifyEvent,
+  loadStoredVariant,
+  masterState,
+  masterToggleUpdate,
+  storeVariant,
+} from '../board/timelineModel.js';
 import './index.css';
 
 const HIDDEN_EVENTS_KEY = 'mc-hidden-events';
@@ -31,12 +40,10 @@ export function useViewPanelState() {
   const [open, setOpen] = useState(() => localStorage.getItem(PANEL_OPEN_KEY) === 'true');
   const [variant, setVariant] = useState<TimelineVariant>(loadStoredVariant);
 
-  function onToggle(filterKeys: string[], hide: boolean): void {
+  function onToggle(update: FilterKeyUpdate): void {
     const next = new Set(hiddenEvents);
-    for (const filterKey of filterKeys) {
-      if (hide) next.add(filterKey);
-      else next.delete(filterKey);
-    }
+    for (const filterKey of update.show) next.delete(filterKey);
+    for (const filterKey of update.hide) next.add(filterKey);
     localStorage.setItem(HIDDEN_EVENTS_KEY, JSON.stringify([...next]));
     setHiddenEvents(next);
   }
@@ -72,7 +79,7 @@ interface ViewPanelProps {
   viewMode: string;
   events: TranscriptEvent[];
   hiddenEvents: Set<string>;
-  onToggle: (filterKeys: string[], hide: boolean) => void;
+  onToggle: (update: FilterKeyUpdate) => void;
   variant: TimelineVariant;
   onVariantChange: (variant: TimelineVariant) => void;
 }
@@ -120,12 +127,12 @@ function stateGlyph(state: 'on' | 'off' | 'mixed'): string {
 interface ChildRowProps {
   entry: ChildEntry;
   hidden: boolean;
-  onToggle: (filterKeys: string[], hide: boolean) => void;
+  onClick: () => void;
 }
 
-function ChildRow({ entry, hidden, onToggle }: ChildRowProps) {
+function ChildRow({ entry, hidden, onClick }: ChildRowProps) {
   return (
-    <div className="vp-row vp-row-child" onClick={() => onToggle([entry.filterKey], !hidden)}>
+    <div className="vp-row vp-row-child" onClick={onClick}>
       <span className="vp-check">{hidden ? '' : '✓'}</span>
       <span className="vp-label">{entry.child}</span>
       <span className="vp-count">{entry.count}</span>
@@ -136,15 +143,16 @@ function ChildRow({ entry, hidden, onToggle }: ChildRowProps) {
 interface CategoryRowProps {
   entry: CategoryEntry;
   hiddenEvents: Set<string>;
-  onToggle: (filterKeys: string[], hide: boolean) => void;
+  onToggle: (update: FilterKeyUpdate) => void;
   expanded: boolean;
   onExpand: () => void;
 }
 
-// Master toggle: on → hide all present children; off/mixed → show all present children.
+// Master toggle: on → hide the category via its wildcard key; off/mixed → show all children.
 function CategoryRow({ entry, hiddenEvents, onToggle, expanded, onExpand }: CategoryRowProps) {
   const filterKeys = entry.children.map((child) => child.filterKey);
-  const state = masterState(filterKeys, hiddenEvents);
+  const state = masterState(entry.category, filterKeys, hiddenEvents);
+  const wildcardHidden = hiddenEvents.has(`${entry.category}/*`);
   const expandable = entry.children.length > 1;
   return (
     <>
@@ -152,7 +160,7 @@ function CategoryRow({ entry, hiddenEvents, onToggle, expanded, onExpand }: Cate
         <span className={expandable ? 'vp-caret' : 'vp-caret vp-caret-blank'} onClick={expandable ? onExpand : undefined}>
           {expandable ? (expanded ? '▾' : '▸') : ''}
         </span>
-        <span className="vp-toggle" onClick={() => onToggle(filterKeys, state === 'on')}>
+        <span className="vp-toggle" onClick={() => onToggle(masterToggleUpdate(entry.category, filterKeys, state))}>
           <span className="vp-check">{stateGlyph(state)}</span>
           <span className="vp-label">{entry.category}</span>
           <span className="vp-count">{entry.total}</span>
@@ -162,8 +170,8 @@ function CategoryRow({ entry, hiddenEvents, onToggle, expanded, onExpand }: Cate
         <ChildRow
           key={childEntry.filterKey}
           entry={childEntry}
-          hidden={hiddenEvents.has(childEntry.filterKey)}
-          onToggle={onToggle}
+          hidden={wildcardHidden || hiddenEvents.has(childEntry.filterKey)}
+          onClick={() => onToggle(childToggleUpdate(entry.category, childEntry.filterKey, filterKeys, hiddenEvents))}
         />
       ))}
     </>
@@ -174,7 +182,7 @@ type TranscriptControlsProps = Omit<ViewPanelProps, 'open' | 'viewMode'>;
 
 function TranscriptControls({ events, hiddenEvents, onToggle, variant, onVariantChange }: TranscriptControlsProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const categories = enumerateCategories(events);
+  const categories = useMemo(() => enumerateCategories(events), [events]);
   const sections = [...new Set(categories.map((entry) => entry.section))];
 
   function toggleExpand(category: string): void {

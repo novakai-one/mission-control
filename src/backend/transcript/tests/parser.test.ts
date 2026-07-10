@@ -112,6 +112,8 @@ function testSystemSubtype() {
   assert.equal((events[0] as any).subtype, 'turn_duration');
   const bare = parseJsonlLine({ ...rawLine, subtype: undefined }, 'k1', '') ?? [];
   assert.equal((bare[0] as any).subtype, undefined);
+  const nonString = parseJsonlLine({ ...rawLine, subtype: 42 }, 'k2', '') ?? [];
+  assert.equal((nonString[0] as any).subtype, undefined, 'non-string subtype is dropped');
 }
 
 async function main() {

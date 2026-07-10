@@ -146,18 +146,18 @@ function singleChild(category: string): EventClass {
   return makeClass(category, category);
 }
 
-// Leading '<tag>' routes by tag; '[Request interrupted' is an interrupt;
-// everything else ('[Image…' included) is a genuine prompt.
+// Only KNOWN synthetic tags route to injections; '[Request interrupted' is an
+// interrupt; any other leading '<' or '[' text ("<div> keeps overflowing",
+// '[Image…') is a genuine prompt.
 function classifyUserText(text: string): EventClass {
   if (text.startsWith('[Request interrupted')) return makeClass('interrupts-notifications', 'request-interrupted');
-  const tagMatch = /^<([\w-]+)/.exec(text);
-  if (!tagMatch) return singleChild('user-prompts');
-  const tagName = tagMatch[1];
+  const tagName = /^<([\w-]+)/.exec(text)?.[1];
+  if (!tagName) return singleChild('user-prompts');
   if (USER_TAG_ROUTES[tagName]) return USER_TAG_ROUTES[tagName];
   if (tagName.startsWith('command-') || tagName.startsWith('local-command-')) {
     return makeClass('commands', 'slash-commands');
   }
-  return makeClass('other-injections', tagName);
+  return singleChild('user-prompts');
 }
 
 function classifyHookEvent(event: TranscriptEvent): EventClass {
@@ -194,18 +194,41 @@ export function classifyEvent(event: TranscriptEvent): EventClass {
 export const SIDECHAIN_KEY = 'sidechain/sidechain';
 
 /** Master-toggle state over the present children's filter keys. */
-export function masterState(children: string[], hidden: Set<string>): 'on' | 'off' | 'mixed' {
+export function masterState(category: string, children: string[], hidden: Set<string>): 'on' | 'off' | 'mixed' {
+  if (hidden.has(`${category}/*`)) return 'off';
   const hiddenCount = children.filter((childKey) => hidden.has(childKey)).length;
   if (hiddenCount === 0) return 'on';
   return hiddenCount === children.length ? 'off' : 'mixed';
 }
 
-/** Filter fn over hidden "category/child" keys; unknown keys default visible. */
+/** Keys to add to (hide) and remove from (show) the hidden set, applied together. */
+export interface FilterKeyUpdate {
+  hide: string[];
+  show: string[];
+}
+
+/** Master click: on → hide the whole category via wildcard (covers future children); off/mixed → show all. */
+export function masterToggleUpdate(category: string, children: string[], state: 'on' | 'off' | 'mixed'): FilterKeyUpdate {
+  const wildcard = `${category}/*`;
+  if (state === 'on') return { hide: [wildcard], show: children };
+  return { hide: [], show: [wildcard, ...children] };
+}
+
+/** Child click; under an active wildcard, only the clicked child becomes visible. */
+export function childToggleUpdate(category: string, childKey: string, children: string[], hidden: Set<string>): FilterKeyUpdate {
+  const wildcard = `${category}/*`;
+  if (hidden.has(wildcard)) {
+    return { hide: children.filter((presentKey) => presentKey !== childKey), show: [wildcard] };
+  }
+  return hidden.has(childKey) ? { hide: [], show: [childKey] } : { hide: [childKey], show: [] };
+}
+
+/** Filter fn over hidden "category/child" keys ("category/*" hides all); unknown keys default visible. */
 export function visibilityPredicate(hidden: Set<string>): (event: TranscriptEvent) => boolean {
   return (event) => {
-    if (event.isSidechain && hidden.has(SIDECHAIN_KEY)) return false;
+    if (event.isSidechain && (hidden.has(SIDECHAIN_KEY) || hidden.has('sidechain/*'))) return false;
     const eventClass = classifyEvent(event);
-    return !hidden.has(`${eventClass.category}/${eventClass.child}`);
+    return !hidden.has(`${eventClass.category}/*`) && !hidden.has(`${eventClass.category}/${eventClass.child}`);
   };
 }
 
@@ -214,13 +237,12 @@ export interface Turn {
   children: TranscriptEvent[];
 }
 
-// Synthetic user_text carriers (<command-name>, <system-reminder>, interrupts)
-// never open a turn; genuine user_text and assistant_text do.
+// A user_text opens a turn iff classification calls it a genuine prompt, so
+// synthetic carriers (<command-name>, <system-reminder>, interrupts) never do.
 function opensTurn(event: TranscriptEvent): boolean {
   if (event.kind === 'assistant_text') return true;
   if (event.kind !== 'user_text') return false;
-  const text = event.text || '';
-  return !text.startsWith('<') && !text.startsWith('[Request interrupted');
+  return classifyUserText(event.text || '').category === 'user-prompts';
 }
 
 // Thinking precedes text within an assistant message, so a trailing run of
@@ -242,7 +264,8 @@ export function groupIntoTurns(events: TranscriptEvent[]): Turn[] {
       current.children.push(event);
       continue;
     }
-    const carried = takeTrailingThinking(current.children);
+    // Thinking precedes text within an assistant message only; user turns must not steal it.
+    const carried = event.kind === 'assistant_text' ? takeTrailingThinking(current.children) : [];
     if (current.header !== null || current.children.length > 0) turns.push(current);
     current = { header: event, children: carried };
   }

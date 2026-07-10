@@ -286,7 +286,7 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
   if (type === 'system') {
     const msg = obj.message;
     const text = typeof msg === 'string' ? msg : (msg?.content || JSON.stringify(msg));
-    return [{ kind: 'system', uuid, parentUuid, sessionId, ts, text, isSidechain, subtype: obj.subtype }];
+    return [{ kind: 'system', uuid, parentUuid, sessionId, ts, text, isSidechain, subtype: typeof obj.subtype === 'string' ? obj.subtype : undefined }];
   }
 
   // User / assistant messages
