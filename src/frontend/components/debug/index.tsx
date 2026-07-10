@@ -59,7 +59,7 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
     : buildMessages;
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
         <Bug size={16} color="#c9b57a" />
         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>BUILD DEBUG</span>
@@ -116,7 +116,7 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
           value={filter}
           onChange={e => setFilter(e.target.value)}
           placeholder="filter events…"
-          style={{ width: '100%', marginBottom: '0.5rem', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.68rem', fontFamily: 'var(--font-mono)', outline: 'none' }}
+          style={{ width: '100%', marginBottom: '0.5rem', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.68rem', outline: 'none' }}
         />
         <div style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.5rem', maxHeight: '40vh', overflowY: 'auto' }}>
           {visible.length === 0 ? (

@@ -245,7 +245,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
           backgroundColor: 'var(--bg-secondary)', padding: '0.6rem 0.7rem',
           display: 'flex', flexDirection: 'column', gap: '0.35rem',
         }}>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             selected: {selected ? toDisplayPath(selected.path, homeDir) : '—'}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
@@ -289,7 +289,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
         display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         gap: '0.5rem', backgroundColor: 'var(--bg-primary)',
       }}>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>
           {selected ? toDisplayPath(selected.path, homeDir) : 'select a file or folder'}
         </span>
         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>primary view TBD</span>
@@ -366,7 +366,6 @@ const inputStyle: React.CSSProperties = {
   width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
   border: '1px solid var(--border-color)', borderRadius: '6px',
   padding: '0.4rem 0.6rem', fontSize: '0.68rem', outline: 'none',
-  fontFamily: 'var(--font-mono)',
 };
 
 const btnStyle: React.CSSProperties = {

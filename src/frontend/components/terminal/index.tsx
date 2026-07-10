@@ -116,7 +116,7 @@ export function TerminalPanel({ selectedProject, onBuildMessage, buildMessages, 
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', width: '420px',
+      display: 'flex', flexDirection: 'column', flex: 1,
       backgroundColor: 'var(--bg-secondary)', borderLeft: '1px solid var(--border-color)',
       overflow: 'hidden',
     }}>
@@ -167,7 +167,7 @@ export function TerminalPanel({ selectedProject, onBuildMessage, buildMessages, 
             style={{
               width: '100%', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)',
               border: '1px solid var(--border-color)', borderRadius: '4px',
-              padding: '0.35rem 0.6rem', fontSize: '0.65rem', outline: 'none', fontFamily: 'var(--font-mono)',
+              padding: '0.35rem 0.6rem', fontSize: '0.65rem', outline: 'none',
             }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.3rem' }}>
@@ -225,7 +225,7 @@ export function TerminalPanel({ selectedProject, onBuildMessage, buildMessages, 
               flex: 1, backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
               border: '1px solid var(--border-color)', borderRadius: '4px',
               padding: '0.35rem 0.5rem', fontSize: '0.68rem', outline: 'none',
-              fontFamily: 'var(--font-mono)', resize: 'none',
+              resize: 'none',
               opacity: isRunning ? 0.5 : 1,
             }}
           />

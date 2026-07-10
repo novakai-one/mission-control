@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star } from 'lucide-react';
+import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, MessageSquare } from 'lucide-react';
 import { ProjectInfo, toDisplayPath } from '../index.js';
 
 interface AppHeaderProps {
@@ -8,8 +8,8 @@ interface AppHeaderProps {
   onSelectProject: (dir: string) => void;
   liveMode: boolean;
   eventCount: number;
-  viewMode: 'files' | 'transcript' | 'ruleset' | 'debug';
-  onViewModeChange: (mode: 'files' | 'transcript' | 'ruleset' | 'debug') => void;
+  viewMode: 'files' | 'transcript' | 'livechat' | 'ruleset' | 'debug';
+  onViewModeChange: (mode: 'files' | 'transcript' | 'livechat' | 'ruleset' | 'debug') => void;
   onOpenSettings: () => void;
   activeRepo: string | null;
   homeDir: string | null;
@@ -36,7 +36,6 @@ export function AppHeader({ projects, selectedProject, onSelectProject, liveMode
         <span style={{
           display: 'flex', alignItems: 'center', gap: '0.3rem', marginLeft: '0.5rem',
           fontSize: '0.7rem', color: activeRepo ? 'var(--text-secondary)' : 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)',
         }}>
           {activeRepo ? (
             <>active repo: <Star size={11} color="#c9b57a" style={{ display: 'inline' }} /> {toDisplayPath(activeRepo, homeDir)}</>
@@ -76,6 +75,19 @@ export function AppHeader({ projects, selectedProject, onSelectProject, liveMode
         >
           <Network size={12} />
           <span>Transcript</span>
+        </button>
+        <button
+          onClick={() => onViewModeChange('livechat')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.35rem',
+            padding: '0.35rem 0.8rem', borderRadius: '4px',
+            backgroundColor: viewMode === 'livechat' ? 'var(--bg-tertiary)' : 'transparent',
+            border: 'none', color: viewMode === 'livechat' ? 'var(--text-primary)' : 'var(--text-muted)',
+            fontSize: '0.7rem', fontWeight: viewMode === 'livechat' ? 600 : 400, cursor: 'pointer',
+          }}
+        >
+          <MessageSquare size={12} />
+          <span>Live Chat</span>
         </button>
         <button
           onClick={() => onViewModeChange('ruleset')}

@@ -8,6 +8,7 @@ import { TerminalPanel, BuildMessage } from './terminal/index.js';
 import { SettingsPanel } from './settings/index.js';
 import { DebugPanel } from './debug/index.js';
 import { FilesPanel } from './files/index.js';
+import { SubagentInspector } from './subagent/index.js';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
 export function toDisplayPath(absPath: string | null, homeDir: string | null): string {
@@ -69,7 +70,8 @@ export function DashboardShell() {
   const [liveMode, setLiveMode] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
   const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'files' | 'transcript' | 'ruleset' | 'debug'>('files');
+  const [selectedSubEvent, setSelectedSubEvent] = useState<TranscriptEvent | null>(null);
+  const [viewMode, setViewMode] = useState<'files' | 'transcript' | 'livechat' | 'ruleset' | 'debug'>('files');
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -184,7 +186,7 @@ export function DashboardShell() {
       <AppHeader 
         projects={projects}
         selectedProject={selectedProject}
-        onSelectProject={setSelectedProject}
+        onSelectProject={(dir) => { setSelectedProject(dir); setSelectedEventUuid(null); setSelectedSubEvent(null); }}
         liveMode={liveMode}
         eventCount={events.length}
         viewMode={viewMode}
@@ -202,22 +204,31 @@ export function DashboardShell() {
           />
         ) : viewMode === 'transcript' ? (
           <>
-            <AgentBoard 
+            <AgentBoard
               events={currentEvents}
-              onSelectEvent={setSelectedEventUuid}
+              onSelectEvent={(uuid) => { setSelectedEventUuid(uuid); setSelectedSubEvent(null); }}
               selectedEventUuid={selectedEventUuid}
             />
-            <SelectedInspector 
-              event={selectedEvent}
+            <SelectedInspector
+              event={selectedSubEvent ?? selectedEvent}
               events={currentEvents}
             />
-            <TerminalPanel 
-              selectedProject={selectedProject}
-              onBuildMessage={(msg) => setBuildMessages(prev => [...prev, msg])}
-              buildMessages={buildMessages}
-              wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
+            <SubagentInspector
+              projectDir={selectedProject}
+              sessionId={selectedSession}
+              selectedEvent={selectedEvent}
+              mainEvents={currentEvents}
+              onSelectSubEvent={setSelectedSubEvent}
+              selectedSubEventUuid={selectedSubEvent?.uuid ?? null}
             />
           </>
+        ) : viewMode === 'livechat' ? (
+          <TerminalPanel
+            selectedProject={selectedProject}
+            onBuildMessage={(msg) => setBuildMessages(prev => [...prev, msg])}
+            buildMessages={buildMessages}
+            wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
+          />
         ) : viewMode === 'ruleset' ? (
           <RulesetInspector data={rulesetData} />
         ) : (
@@ -231,7 +242,7 @@ export function DashboardShell() {
         <PlaybackSlider 
           sessions={sessions}
           selectedSession={selectedSession}
-          onSelectSession={(id) => { setSelectedSession(id); setPlaybackIndex(-1); }}
+          onSelectSession={(id) => { setSelectedSession(id); setPlaybackIndex(-1); setSelectedEventUuid(null); setSelectedSubEvent(null); }}
           events={events}
           playbackIndex={playbackIndex}
           onSetPlaybackIndex={setPlaybackIndex}

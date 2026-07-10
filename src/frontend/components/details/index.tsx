@@ -87,7 +87,7 @@ export function SelectedInspector({ event }: SelectedInspectorProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tool</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{event.tool}</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.tool}</span>
           </div>
           <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Input Arguments</span>
@@ -103,7 +103,7 @@ export function SelectedInspector({ event }: SelectedInspectorProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
         <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tool Use ID</span>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{event.toolUseId}</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{event.toolUseId}</span>
         </div>
         <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <span style={{ fontSize: '0.6rem', color: event.isError ? '#c97a7a' : 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -120,7 +120,7 @@ export function SelectedInspector({ event }: SelectedInspectorProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
         <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hook Name</span>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{event.hookName}</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.hookName}</span>
         </div>
         <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hook Event</span>

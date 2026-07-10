@@ -8,7 +8,7 @@ interface AgentBoardProps {
   selectedEventUuid: string | null;
 }
 
-const EVENT_ICONS: Record<string, React.ReactNode> = {
+export const EVENT_ICONS: Record<string, React.ReactNode> = {
   user_text: <FileText size={11} color="var(--text-secondary)" />,
   assistant_text: <FileText size={11} color="#7a9ec9" />,
   assistant_thinking: <Brain size={11} color="#9a7ac9" />,
@@ -19,7 +19,7 @@ const EVENT_ICONS: Record<string, React.ReactNode> = {
   session_meta: <Radio size={11} color="var(--text-muted)" />,
 };
 
-const EVENT_COLORS: Record<string, string> = {
+export const EVENT_COLORS: Record<string, string> = {
   user_text: 'var(--text-secondary)',
   assistant_text: '#7a9ec9',
   assistant_thinking: '#9a7ac9',
@@ -30,7 +30,7 @@ const EVENT_COLORS: Record<string, string> = {
   session_meta: 'var(--text-muted)',
 };
 
-function getEventLabel(ev: TranscriptEvent): string {
+export function getEventLabel(ev: TranscriptEvent): string {
   switch (ev.kind) {
     case 'user_text': return ev.text?.substring(0, 80) || '';
     case 'assistant_text': return ev.text?.substring(0, 80) || '';
@@ -128,7 +128,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid }: AgentBo
                 transition: 'all 0.1s ease',
               }}
             >
-              <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', minWidth: '52px', marginTop: '1px' }}>
+              <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', minWidth: '52px', marginTop: '1px' }}>
                 {new Date(ev.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
               <span style={{ marginTop: '1px' }}>{EVENT_ICONS[ev.kind] || <FileText size={11} color="var(--text-muted)" />}</span>

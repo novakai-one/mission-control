@@ -188,7 +188,6 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <div style={{
               padding: '0.6rem 0.8rem', backgroundColor: 'var(--bg-primary)',
               borderRadius: '6px', fontSize: '0.6rem', color: 'var(--text-muted)',
-              fontFamily: 'var(--font-mono)',
             }}>
               Backend port: {config.serverPort}
             </div>
@@ -233,7 +232,6 @@ const inputStyle: React.CSSProperties = {
   width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
   border: '1px solid var(--border-color)', borderRadius: '6px',
   padding: '0.45rem 0.7rem', fontSize: '0.72rem', outline: 'none',
-  fontFamily: 'var(--font-mono)',
 };
 
 const btnStyle: React.CSSProperties = {
