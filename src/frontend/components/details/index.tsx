@@ -46,7 +46,7 @@ export function SelectedInspector({ event }: SelectedInspectorProps) {
   if (!event) {
     return (
       <div style={{
-        display: 'flex', width: '480px', backgroundColor: 'var(--bg-secondary)',
+        display: 'flex', width: '100%', backgroundColor: 'var(--bg-secondary)',
         alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)',
         flexDirection: 'column', gap: '0.8rem', padding: '2rem', textAlign: 'center'
       }}>
@@ -148,7 +148,7 @@ export function SelectedInspector({ event }: SelectedInspectorProps) {
 
   return (
     <div ref={scrollRef} style={{
-      display: 'flex', flexDirection: 'column', width: '480px',
+      display: 'flex', flexDirection: 'column', width: '100%',
       backgroundColor: 'var(--bg-secondary)', borderLeft: '1px solid var(--border-color)',
       overflowY: 'auto'
     }}>

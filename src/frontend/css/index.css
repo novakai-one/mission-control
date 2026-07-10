@@ -129,3 +129,18 @@ button:active {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Column resize handles (transcript view) — invisible until hovered or dragged */
+.col-resize-handle {
+  width: 6px;
+  margin: 0 -3px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  z-index: 1;
+  background: transparent;
+  transition: background 0.15s;
+}
+.col-resize-handle:hover,
+.col-resize-dragging {
+  background: var(--accent-active);
+}
