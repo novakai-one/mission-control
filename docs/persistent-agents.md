@@ -57,13 +57,24 @@ POST /api/agents ──▶ mint agentId + sessionId(uuid)
         cols:120, rows:32, cwd, env:process.env})
         │      NO -p. NO --permission-mode (real permission prompts wanted).
         ▼
- running ──(user types via ws agent-input)──▶ stays alive across prompts
+ RUNNING ──(user types via ws agent-input)──▶ stays alive across prompts
         │
-        ├── pty onExit ──▶ status 'exited', broadcast agents-changed, keep buffer
-        └── DELETE /api/agents/:id ──▶ pty.kill(), remove, broadcast agents-changed
+        ├──(pty onExit | POST .../kill)──▶ EXITED (record + buffer KEPT, still
+        │                                   listed, registry saved)
+        └──(DELETE /api/agents/:id)──▶ ARCHIVED (hidden from list(), record
+                                        kept in registry file; a RUNNING agent
+                                        is killed first)
 ```
+Registry file `.mission-control/agents.json` (JSON array of `AgentInfo &
+{archived?: boolean}`) lives at `process.cwd()`, rewritten synchronously on every
+create/rename/exit/archive (kill saves via its pty onExit, not synchronously).
+On backend restart every entry is reloaded as
+status `'exited'` (no pty, no buffer) so the panel survives a restart; archived
+entries stay hidden from `list()` but remain in the file. Session transcript
+JSONL is never touched by any of this.
+
 SIGINT semantics: Ctrl-C is a keystroke (`\x03` via agent-input) — interrupt turn,
-NOT terminate. Only DELETE terminates.
+NOT terminate. Only kill/archive terminates the pty.
 
 ## 4. UI layout & flows
 
@@ -106,6 +117,8 @@ Client → server (JSON):
 {type:'watch-session',   projectDir, sessionId}   → EXISTING, but now ADDITIVE per socket
                                                     (Map<socket, Map<sessionId, watchers>>) and
                                                     ALSO starts a SubagentWatcher for the session
+{type:'unwatch-session', projectDir, sessionId}   → stop+remove this socket's watcher pair for
+                                                    sessionId (new-dialect only; invalid → ignored)
 ```
 Server → client (JSON):
 ```
@@ -125,9 +138,11 @@ SubagentSummary = {subagentId, agentType, description, toolUseId, spawnDepth}
 ```
 REST:
 ```
-POST   /api/agents        {title?, cwd?} → 201 AgentInfo
-GET    /api/agents        → {agents: AgentInfo[]}
-DELETE /api/agents/:agentId → 204
+POST   /api/agents             {title?, cwd?} → 201 AgentInfo
+GET    /api/agents             → {agents: AgentInfo[]}
+PATCH  /api/agents/:agentId    {title} → 204 (rename; 404 unknown, 400 missing/non-string title)
+POST   /api/agents/:agentId/kill → 204 (kill; 204 also if already exited; 404 unknown)
+DELETE /api/agents/:agentId    → 204 (archive: hide from list, keep registry+transcript; 404 unknown)
 ```
 
 ## 6. Frozen module contracts
@@ -135,17 +150,26 @@ DELETE /api/agents/:agentId → 204
 `src/backend/terminal/manager.ts` (+ `buffer.ts`; tests in `terminal/tests/`):
 ```
 class TerminalManager {
+  constructor(registryPath?: string)                       // default .mission-control/agents.json
   create(opts: {title?: string; cwd: string}): AgentInfo   // mints ids, spawns pty
-  write(agentId: string, data: string): boolean
-  resize(agentId: string, cols: number, rows: number): boolean
-  kill(agentId: string): boolean
-  snapshot(agentId: string): string                        // AgentBuffer contents
-  list(): AgentInfo[]
+  write(agentId: string, data: string): boolean             // false if pty absent (restored agent)
+  resize(agentId: string, cols: number, rows: number): boolean // false if pty absent
+  rename(agentId: string, title: string): boolean            // persists to registry
+  kill(agentId: string): boolean                             // terminate pty, KEEP record+buffer
+  archive(agentId: string): boolean                          // kill if running, hide from list()
+  snapshot(agentId: string): string                        // AgentBuffer contents, '' if no buffer
+  list(): AgentInfo[]                                       // excludes archived
   onData(cb: (agentId: string, data: string) => void): void   // single subscriber (server)
   onExit(cb: (agentId: string, exitCode: number | null) => void): void
 }
 class AgentBuffer { push(data: string): void; snapshot(): string }  // 2MiB cap, drop oldest chunks
 ```
+- `AgentRecord.ptyProcess` and `.buffer` are OPTIONAL (absent on registry-restored,
+  never-relaunched agents); `AgentInfo.status` stays `'running'|'exited'` on the wire —
+  `archived` is a record-only flag, never sent to clients.
+- Registry: JSON array of `AgentInfo & {archived?: boolean}`, rewritten synchronously
+  (`writeFileSync`/`mkdirSync`) on create/rename/kill/exit/archive. A corrupt/missing
+  file starts empty rather than crashing.
 - claude CLI path: `ConfigManager.load().claudeCliPath || 'claude'` (same as executor).
 - ENV SCRUB (verified live): spawn env = `process.env` minus every key matching
   `/^CLAUDE|^ANTHROPIC/`. Inherited nested-session vars (e.g. CLAUDE_CODE_CHILD_SESSION)
@@ -176,6 +200,7 @@ unsubscribeAgent(agentId): void                   // local only
 sendInput(agentId, data): void
 sendResize(agentId, cols, rows): void
 watchSession(projectDir, sessionId): void
+unwatchSession(projectDir, sessionId): void  // stop watching (exited+hidden panes)
 onAgentsChanged(cb): void
 onTranscriptEvent(cb: (sessionId, event) => void): void
 onSubagentsChanged(cb): void

@@ -46,6 +46,7 @@ interface CalmAgent {
   sessionId: string;
   projectDir: string;
   title: string;
+  status: 'running' | 'exited';
 }
 
 interface CalmViewProps {
@@ -138,11 +139,9 @@ export function CalmView({ agent, visible }: CalmViewProps): React.JSX.Element {
   const stickToBottomRef = useRef(true);
 
   // Mount once per agent (this component stays mounted for the agent's lifetime,
-  // hidden via CSS — see AgentsView). Reconnect re-watching is handled inside the
-  // lib; unsubscribe on unmount so a remount doesn't accumulate duplicate listeners.
+  // hidden via CSS — see AgentsView). Listeners stay live for that whole lifetime;
+  // unsubscribe on unmount so a remount doesn't accumulate duplicate listeners.
   useEffect(() => {
-    agentSocket.watchSession(agent.projectDir, agent.sessionId);
-
     const unsubTranscript = agentSocket.onTranscriptEvent((sessionId, event) => {
       if (sessionId !== agent.sessionId) return;
       setEvents(previous => upsertEvent(previous, event as CalmEvent));
@@ -163,7 +162,18 @@ export function CalmView({ agent, visible }: CalmViewProps): React.JSX.Element {
       unsubSubagentsChanged();
       unsubSubagentEvent();
     };
-  }, [agent.projectDir, agent.sessionId]);
+  }, [agent.sessionId]);
+
+  // Watcher hygiene: only hold a server-side watcher open while it's earning its
+  // keep — the agent is still running (so Raw/other viewers need live updates to
+  // stay in sync) or this pane is actually visible. Otherwise unwatch; re-watching
+  // later replays from offset 0 and upsertEvent's dedupe absorbs the repeats.
+  useEffect(() => {
+    const shouldWatch = agent.status === 'running' || visible;
+    if (!shouldWatch) return undefined;
+    agentSocket.watchSession(agent.projectDir, agent.sessionId);
+    return () => agentSocket.unwatchSession(agent.projectDir, agent.sessionId);
+  }, [agent.projectDir, agent.sessionId, agent.status, visible]);
 
   // Auto-scroll to newest only when visible and the viewer was already near the bottom.
   useEffect(() => {

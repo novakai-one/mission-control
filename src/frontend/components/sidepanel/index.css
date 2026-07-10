@@ -117,9 +117,56 @@
 }
 
 .sidepanel-agent-title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidepanel-rename-input {
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-active);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-family: inherit;
+}
+
+.sidepanel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.sidepanel-agent:hover .sidepanel-row-actions,
+.sidepanel-agent:focus-within .sidepanel-row-actions {
+  opacity: 1;
+}
+
+.sidepanel-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sidepanel-action-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .sidepanel-avatar {

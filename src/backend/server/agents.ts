@@ -51,6 +51,7 @@ export class AgentsHub {
     if (message.type === 'agent-input') return this.input(message);
     if (message.type === 'agent-resize') return this.resize(message);
     if (message.type === 'watch-session') return this.watchSession(socket, message);
+    if (message.type === 'unwatch-session') return this.unwatchSession(socket, message);
     return false;
   }
 
@@ -63,7 +64,9 @@ export class AgentsHub {
   registerRoutes(application: Express): void {
     application.post('/api/agents', (request, response) => this.createAgent(request, response));
     application.get('/api/agents', (_request, response) => response.json({ agents: this.manager.list() }));
-    application.delete('/api/agents/:agentId', (request, response) => this.deleteAgent(request, response));
+    application.patch('/api/agents/:agentId', (request, response) => this.renameAgent(request, response));
+    application.post('/api/agents/:agentId/kill', (request, response) => this.killAgent(request, response));
+    application.delete('/api/agents/:agentId', (request, response) => this.archiveAgent(request, response));
   }
 
   private handleExit(agentId: string, exitCode: number | null): void {
@@ -124,6 +127,17 @@ export class AgentsHub {
     return true;
   }
 
+  private unwatchSession(socket: WebSocket, message: Record<string, unknown>): boolean {
+    const { projectDir, sessionId } = message;
+    if (!isValidProject(projectDir) || !isValidSession(sessionId)) return true;
+    const watcherMap = this.sessionWatchers.get(socket);
+    const pair = watcherMap?.get(sessionId);
+    if (!watcherMap || !pair) return true;
+    this.stopPair(pair);
+    watcherMap.delete(sessionId);
+    return true;
+  }
+
   private stopAllForSocket(socket: WebSocket): void {
     const watcherMap = this.sessionWatchers.get(socket);
     if (!watcherMap) return;
@@ -181,9 +195,31 @@ export class AgentsHub {
     response.status(201).json(info);
   }
 
-  private deleteAgent(request: Request, response: Response): void {
-    const killed = this.manager.kill(request.params.agentId);
-    if (!killed) {
+  private renameAgent(request: Request, response: Response): void {
+    const title = request.body?.title;
+    if (typeof title !== 'string') {
+      response.status(400).json({ error: 'title is required' });
+      return;
+    }
+    if (!this.manager.rename(request.params.agentId, title)) {
+      response.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    this.broadcastAgentsChanged();
+    response.status(204).end();
+  }
+
+  private killAgent(request: Request, response: Response): void {
+    if (!this.manager.kill(request.params.agentId)) {
+      response.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    this.broadcastAgentsChanged();
+    response.status(204).end();
+  }
+
+  private archiveAgent(request: Request, response: Response): void {
+    if (!this.manager.archive(request.params.agentId)) {
       response.status(404).json({ error: 'Agent not found' });
       return;
     }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as agentSocket from '../../lib/agentSocket/index.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import { AgentTerminal } from './terminal.js';
@@ -14,6 +14,9 @@ export interface AgentsState {
   collapsed: boolean;
   toggleCollapsed: () => void;
   createAgent: () => Promise<void>;
+  renameAgent: (agentId: string, title: string) => Promise<void>;
+  killAgent: (agentId: string) => Promise<void>;
+  archiveAgent: (agentId: string) => Promise<void>;
 }
 
 export function useAgentsState(): AgentsState {
@@ -31,6 +34,14 @@ export function useAgentsState(): AgentsState {
     agentSocket.connect();
     return agentSocket.onAgentsChanged(setAgents);
   }, []);
+
+  // Archived agents drop out of `agents` via the ws broadcast — if the active
+  // agent was the one archived, clear the selection so nothing points at a gone pane.
+  useEffect(() => {
+    if (activeAgentId && !agents.some(agent => agent.agentId === activeAgentId)) {
+      setActiveAgentId(null);
+    }
+  }, [agents, activeAgentId]);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {
@@ -50,7 +61,35 @@ export function useAgentsState(): AgentsState {
     setActiveAgentId(created.agentId);
   }, []);
 
-  return { agents, activeAgentId, setActiveAgentId, collapsed, toggleCollapsed, createAgent };
+  // These three only fire the request — the resulting agent list arrives
+  // through the existing agents-changed ws broadcast (onAgentsChanged above).
+  const renameAgent = useCallback(async (agentId: string, title: string) => {
+    await fetch(`/api/agents/${agentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+  }, []);
+
+  const killAgent = useCallback(async (agentId: string) => {
+    await fetch(`/api/agents/${agentId}/kill`, { method: 'POST' });
+  }, []);
+
+  const archiveAgent = useCallback(async (agentId: string) => {
+    await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
+  }, []);
+
+  return {
+    agents,
+    activeAgentId,
+    setActiveAgentId,
+    collapsed,
+    toggleCollapsed,
+    createAgent,
+    renameAgent,
+    killAgent,
+    archiveAgent,
+  };
 }
 
 type RawCalmMode = 'raw' | 'calm';
@@ -112,10 +151,24 @@ function AgentsEmpty({ onCreate }: AgentsEmptyProps) {
 
 export function AgentsView({ agents, activeAgentId, onCreate }: AgentsViewProps) {
   const [modes, setModes] = useState<Map<string, RawCalmMode>>(new Map());
+  // Default mode is seeded once per agentId from the status it had when first
+  // seen (exited → calm, running → raw), then frozen — an agent killed while
+  // watched in Raw must stay on its frozen Raw screen, not flip to Calm.
+  const defaultModesRef = useRef<Map<string, RawCalmMode>>(new Map());
 
   const setModeFor = useCallback((agentId: string, mode: RawCalmMode) => {
     setModes(prev => new Map(prev).set(agentId, mode));
   }, []);
+
+  function modeFor(agent: AgentInfo): RawCalmMode {
+    const explicit = modes.get(agent.agentId);
+    if (explicit) return explicit;
+    const seeded = defaultModesRef.current.get(agent.agentId);
+    if (seeded) return seeded;
+    const initial: RawCalmMode = agent.status === 'exited' ? 'calm' : 'raw';
+    defaultModesRef.current.set(agent.agentId, initial);
+    return initial;
+  }
 
   if (agents.length === 0) return <AgentsEmpty onCreate={onCreate} />;
 
@@ -126,7 +179,7 @@ export function AgentsView({ agents, activeAgentId, onCreate }: AgentsViewProps)
           key={agent.agentId}
           agent={agent}
           active={agent.agentId === activeAgentId}
-          mode={modes.get(agent.agentId) ?? 'raw'}
+          mode={modeFor(agent)}
           onModeChange={setModeFor}
         />
       ))}
