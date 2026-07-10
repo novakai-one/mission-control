@@ -2,5 +2,6 @@
   "workspacePath": "/Users/christopherdasca/.gemini/antigravity/scratch/mission-control",
   "serverPort": 3031,
   "claudeCliPath": "/Users/christopherdasca/.nvm/versions/node/v24.13.0/bin/claude",
-  "geminiApiKey": ""
+  "geminiApiKey": "",
+  "activeRepo": "/Users/christopherdasca/Programming/mission-control"
 }

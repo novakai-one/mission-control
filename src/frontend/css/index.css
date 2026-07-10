@@ -92,3 +92,40 @@ button, select, input {
 button:active {
   transform: scale(0.98);
 }
+
+/* Files tab */
+.files-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  color: var(--text-primary);
+}
+
+.files-tree-row:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.files-tree-row-selected {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-active);
+}
+
+.files-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.files-name {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
