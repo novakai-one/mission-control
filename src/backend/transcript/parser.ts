@@ -58,11 +58,14 @@ export function listSessions(projectDirName: string): SessionMeta[] {
 export function readSession(filePath: string): TranscriptEvent[] {
   const content = fs.readFileSync(filePath, 'utf8');
   const events: TranscriptEvent[] = [];
-  for (const line of content.split('\n')) {
-    if (!line.trim()) continue;
+  const lines = content.split('\n');
+  let lastTs = '';
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    if (!lines[lineIndex].trim()) continue;
     try {
-      const parsed = JSON.parse(line);
-      const parsedEvents = parseJsonlLine(parsed);
+      const parsed = JSON.parse(lines[lineIndex]);
+      if (parsed.timestamp) lastTs = parsed.timestamp;
+      const parsedEvents = parseJsonlLine(parsed, `${lineIndex}`, lastTs);
       if (parsedEvents) events.push(...parsedEvents);
     } catch {
       // skip unparseable lines
@@ -121,6 +124,10 @@ export function readSubagent(projectDirName: string, sessionId: string, agentId:
 export class SessionWatcher extends EventEmitter {
   private lastSize = 0;
   private interval: NodeJS.Timeout | null = null;
+  // 'live:' namespace keeps synthetic uuids from colliding with the initial
+  // fetch's line-index-based uuids for the same file.
+  private liveLineCount = 0;
+  private lastTs = '';
 
   constructor(private filePath: string) {
     super();
@@ -154,7 +161,11 @@ export class SessionWatcher extends EventEmitter {
 
     if (stat.size <= this.lastSize) {
       // File might have been truncated/recreated
-      if (stat.size < this.lastSize) this.lastSize = 0;
+      if (stat.size < this.lastSize) {
+        this.lastSize = 0;
+        this.liveLineCount = 0;
+        this.lastTs = '';
+      }
       return;
     }
 
@@ -168,31 +179,42 @@ export class SessionWatcher extends EventEmitter {
     });
     stream.on('end', () => {
       this.lastSize = stat.size;
-      for (const line of buffer.split('\n')) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line);
-          const events = parseJsonlLine(parsed);
-          if (events) for (const ev of events) this.emit('event', ev);
-        } catch {
-          // partial line, skip
-        }
-      }
+      this.emitParsedLines(buffer);
     });
     stream.on('error', (err) => this.emit('error', err));
+  }
+
+  private emitParsedLines(buffer: string): void {
+    for (const line of buffer.split('\n')) {
+      if (line.trim()) this.emitParsedLine(line);
+    }
+  }
+
+  private emitParsedLine(line: string): void {
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed.timestamp) this.lastTs = parsed.timestamp;
+      const events = parseJsonlLine(parsed, `live:${this.liveLineCount++}`, this.lastTs);
+      for (const ev of events ?? []) this.emit('event', ev);
+    } catch {
+      // partial line, skip
+    }
   }
 }
 
 /**
  * Convert a raw JSONL line object into a typed TranscriptEvent.
+ * Some line types (mode, permission-mode, summary) carry no uuid/timestamp:
+ * lineKey gives them a stable unique uuid, lastTs the preceding event's time —
+ * never a parse-time stamp, which made old events look freshly appended.
  */
-function parseJsonlLine(obj: any): TranscriptEvent[] | null {
+function parseJsonlLine(obj: any, lineKey: string, lastTs: string): TranscriptEvent[] | null {
   if (!obj || typeof obj !== 'object') return null;
   const type = obj.type;
-  const uuid = obj.uuid || obj.sessionId || '';
-  const parentUuid = obj.parentUuid || null;
   const sessionId = obj.sessionId || '';
-  const ts = obj.timestamp || new Date().toISOString();
+  const uuid = obj.uuid || `${sessionId}:${lineKey}`;
+  const parentUuid = obj.parentUuid || null;
+  const ts = obj.timestamp || lastTs || new Date().toISOString();
   const isSidechain = obj.isSidechain || false;
 
   // Session metadata

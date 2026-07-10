@@ -72,6 +72,9 @@ export function DashboardShell() {
   const [activeRepo, setActiveRepo] = useState<string | null>(null);
 
   const webSocketRef = useRef<WebSocket | null>(null);
+  // Mirror for the ws onmessage closure, which only mounts once.
+  const selectedSessionRef = useRef<string | null>(null);
+  selectedSessionRef.current = selectedSession;
 
   // Resolve $HOME once, for '~'-relative display across the shell.
   useEffect(() => {
@@ -145,7 +148,9 @@ export function DashboardShell() {
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
       if (message.event === 'transcript-event') {
-        setEvents(prev => [...prev, message.payload]);
+        // Drop events from a stale watcher during session switches.
+        const matches = message.payload?.sessionId === selectedSessionRef.current;
+        setEvents(prev => (matches ? [...prev, message.payload] : prev));
       } else if (message.event === 'watch-started') {
         setLiveMode(true);
       } else {
