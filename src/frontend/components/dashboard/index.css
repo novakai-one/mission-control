@@ -1,0 +1,21 @@
+/* Matches the visual weight of the sibling inline-styled tab buttons in this
+   file (padding/radius/font-size/colors) without adding new inline styles. */
+.dash-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 4px;
+  background-color: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.dash-tab-active {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 600;
+}

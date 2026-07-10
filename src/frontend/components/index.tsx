@@ -9,6 +9,8 @@ import { SettingsPanel } from './settings/index.js';
 import { DebugPanel } from './debug/index.js';
 import { FilesPanel } from './files/index.js';
 import { SubagentInspector } from './subagent/index.js';
+import { SidePanel } from './sidepanel/index.js';
+import { AgentsView, useAgentsState } from './agents/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
@@ -66,7 +68,8 @@ export function DashboardShell() {
   const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
   const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
   const [selectedSubEvent, setSelectedSubEvent] = useState<TranscriptEvent | null>(null);
-  const [viewMode, setViewMode] = useState<'files' | 'transcript' | 'livechat' | 'ruleset' | 'debug'>('files');
+  const [viewMode, setViewMode] = useState<'files' | 'agents' | 'transcript' | 'livechat' | 'ruleset' | 'debug'>('files');
+  const agentsState = useAgentsState();
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -199,12 +202,22 @@ export function DashboardShell() {
         homeDir={homeDir}
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <SidePanel
+          agents={agentsState.agents}
+          activeAgentId={agentsState.activeAgentId}
+          collapsed={agentsState.collapsed}
+          onToggle={agentsState.toggleCollapsed}
+          onSelect={(agentId) => { agentsState.setActiveAgentId(agentId); setViewMode('agents'); }}
+          onCreate={agentsState.createAgent}
+        />
         {viewMode === 'files' ? (
           <FilesPanel
             homeDir={homeDir}
             activeRepo={activeRepo}
             onActiveRepoChange={setActiveRepo}
           />
+        ) : viewMode === 'agents' ? (
+          <AgentsView agents={agentsState.agents} activeAgentId={agentsState.activeAgentId} onCreate={agentsState.createAgent} />
         ) : viewMode === 'transcript' ? (
           <>
             <AgentBoard

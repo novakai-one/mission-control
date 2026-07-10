@@ -8,10 +8,11 @@ import { AgentCoordinator } from '../agent/index.js';
 import { ConfigManager } from '../config/index.js';
 import { StateManager } from '../state/index.js';
 import { exec } from 'node:child_process';
-import { listSessions, readSession, SessionWatcher, listSubagents, readSubagent, CLAUDE_DIR } from '../transcript/parser.js';
+import { listSessions, readSession, listSubagents, readSubagent, CLAUDE_DIR } from '../transcript/parser.js';
 import { matchSessions } from '../transcript/repoIndex.js';
 import { readRuleset } from '../ruleset/reader.js';
 import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } from '../fs/explorer.js';
+import { AgentsHub } from './agents.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -47,6 +48,7 @@ export class ServerController {
   private readonly server: HttpServer;
   private readonly wsServer: WebSocketServer;
   private readonly activeSockets = new Set<WebSocket>();
+  private readonly agentsHub = new AgentsHub(this.activeSockets);
 
   constructor(
     private readonly port: number,
@@ -76,10 +78,8 @@ export class ServerController {
 
       socket.on('message', (data) => {
         try {
-          const msg = JSON.parse(data.toString());
-          if (msg.type === 'watch-session' && msg.project && msg.session) {
-            this.startSessionWatch(socket, msg.project, msg.session);
-          }
+          const message = JSON.parse(data.toString());
+          this.agentsHub.handleMessage(socket, message);
         } catch {
           // ignore malformed messages
         }
@@ -87,43 +87,14 @@ export class ServerController {
 
       socket.on('close', () => {
         this.activeSockets.delete(socket);
+        this.agentsHub.handleClose(socket);
       });
     });
   }
 
-  private activeWatchers = new Map<WebSocket, SessionWatcher>();
-
-  private startSessionWatch(socket: WebSocket, projectDir: string, sessionId: string): void {
-    if (!isValidProjectDir(projectDir) || !isValidSessionId(sessionId)) return;
-    // Stop any existing watcher for this socket
-    const existing = this.activeWatchers.get(socket);
-    if (existing) {
-      existing.stop();
-      this.activeWatchers.delete(socket);
-    }
-
-    const sessions = listSessions(projectDir);
-    const found = sessions.find(session => session.sessionId === sessionId);
-    const filePath = found
-      ? found.filePath
-      : path.join(CLAUDE_DIR, projectDir, `${sessionId}.jsonl`);
-    // Path-safety: must stay inside CLAUDE_DIR (projectDir/sessionId are already regex-validated above, but double-check).
-    const resolved = path.resolve(filePath);
-    if (!resolved.startsWith(CLAUDE_DIR + path.sep)) return;
-
-    const watcher = new SessionWatcher(resolved);
-    watcher.on('event', (event) => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ event: 'transcript-event', payload: event }));
-      }
-    });
-    watcher.start();
-    this.activeWatchers.set(socket, watcher);
-
-    socket.send(JSON.stringify({ event: 'watch-started', payload: { project: projectDir, session: sessionId } }));
-  }
-
   private configureRoutes(): void {
+    this.agentsHub.registerRoutes(this.app);
+
     this.app.get('/api/config', (_, res) => {
       res.json(ConfigManager.load());
     });
