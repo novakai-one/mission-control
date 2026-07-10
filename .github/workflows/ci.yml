@@ -1,0 +1,27 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      # ponytail: hardcoded test list (no test runner in repo); switch to `find src -name '*.test.ts'` when it grows
+      - run: |
+          for t in src/backend/transcript/tests/parser.test.ts \
+                   src/backend/transcript/tests/encodeCwd.test.ts \
+                   src/backend/agent/resumeThreading.test.ts \
+                   src/backend/agent/executor/buildClaudeArgs.test.ts \
+                   src/frontend/lib/upsertEvents.test.ts; do
+            npx tsx "$t"
+          done
+      - run: npm run lint
+      - run: npm run build
