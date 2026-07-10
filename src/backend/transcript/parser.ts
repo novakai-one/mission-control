@@ -9,7 +9,7 @@ export type TranscriptEvent =
   | { kind: 'tool_use'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; tool: string; toolUseId: string; input: any; isAgentSpawn: boolean; agentDescription?: string; agentPrompt?: string; agentType?: string }
   | { kind: 'tool_result'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; toolUseId: string; content: string; isError: boolean }
   | { kind: 'hook_event'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; hookName: string; hookEvent: string; content: string; toolUseID: string }
-  | { kind: 'system'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean }
+  | { kind: 'system'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean; subtype?: string }
   | { kind: 'session_meta'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string };
 
 /**
@@ -286,7 +286,7 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
   if (type === 'system') {
     const msg = obj.message;
     const text = typeof msg === 'string' ? msg : (msg?.content || JSON.stringify(msg));
-    return [{ kind: 'system', uuid, parentUuid, sessionId, ts, text, isSidechain }];
+    return [{ kind: 'system', uuid, parentUuid, sessionId, ts, text, isSidechain, subtype: obj.subtype }];
   }
 
   // User / assistant messages

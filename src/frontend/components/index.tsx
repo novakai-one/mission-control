@@ -54,6 +54,8 @@ export interface TranscriptEvent {
   // hook events
   hookName?: string;
   hookEvent?: string;
+  // system events
+  subtype?: string;
   // session_meta
   mode?: string;
   permissionMode?: string;

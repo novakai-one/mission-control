@@ -96,12 +96,31 @@ function testStampEventKeys() {
   assert.equal(reEmitted[0].eventKey, 'm1#0');
 }
 
+// System lines carry their subtype through to the event (missing subtype stays undefined).
+function testSystemSubtype() {
+  const rawLine = {
+    type: 'system',
+    subtype: 'turn_duration',
+    uuid: 'sys1',
+    sessionId: 's1',
+    timestamp: '2026-07-10T00:00:00.000Z',
+    message: 'Turn duration: 3s',
+  };
+  const events = parseJsonlLine(rawLine, 'k0', '') ?? [];
+  assert.equal(events.length, 1);
+  assert.equal(events[0].kind, 'system');
+  assert.equal((events[0] as any).subtype, 'turn_duration');
+  const bare = parseJsonlLine({ ...rawLine, subtype: undefined }, 'k1', '') ?? [];
+  assert.equal((bare[0] as any).subtype, undefined);
+}
+
 async function main() {
   await testTailPartialLine();
   unlinkSync(tmpFile);
   await testReplayFromStart();
   unlinkSync(tmpFile);
   testStampEventKeys();
+  testSystemSubtype();
   console.log('PASS');
 }
 
