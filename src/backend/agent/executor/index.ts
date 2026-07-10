@@ -46,7 +46,7 @@ export interface ExecutionOptions {
 
 // Resolve a CLI command to an absolute path so the Debug tab can show what actually ran.
 // A bare name (no separator) is looked up on PATH manually — spawn does this internally but throws the result away.
-function resolveCli(cmd: string): { resolved: string; exists: boolean } {
+export function resolveCli(cmd: string): { resolved: string; exists: boolean } {
   if (cmd.includes(path.sep) || cmd.includes('/')) {
     return { resolved: path.resolve(cmd), exists: fs.existsSync(cmd) };
   }
