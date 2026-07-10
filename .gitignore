@@ -2,3 +2,4 @@
 # file existed are left in place to avoid conflicts (cleanup PR later).
 node_modules/
 dist/
+.mission-control/agents.json

@@ -187,6 +187,13 @@ export function watchSession(projectDir: string, sessionId: string): void {
   if (isOpen()) send({ type: 'watch-session', projectDir, sessionId });
 }
 
+// Same not-queued rule: removing from watchedSessions alone is correct when the
+// socket is closed, since resubscribeAll() only re-sends what's still in the map.
+export function unwatchSession(projectDir: string, sessionId: string): void {
+  watchedSessions.delete(watchKey(projectDir, sessionId));
+  if (isOpen()) send({ type: 'unwatch-session', projectDir, sessionId });
+}
+
 export function onAgentsChanged(listener: (agents: AgentInfo[]) => void): () => void {
   return addListener(agentsChangedListeners, listener);
 }

@@ -40,7 +40,7 @@ class FakeSocket {
 (globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket;
 
 const agentSocket = await import('./index.js');
-const { connect, subscribeAgent, sendInput, watchSession, setBackoffForTest } = agentSocket;
+const { connect, subscribeAgent, sendInput, watchSession, unwatchSession, setBackoffForTest } = agentSocket;
 
 function framesOf(instance: FakeSocket, type: string): Record<string, unknown>[] {
   return instance.sent.map(frame => JSON.parse(frame)).filter(frame => frame.type === type);
@@ -93,5 +93,20 @@ assert.deepEqual(resentSubscribe.map(frame => frame.agentId).sort(), ['agent-1',
 const resentWatch = framesOf(socketTwo, 'watch-session');
 assert.equal(resentWatch.length, 1);
 assert.deepEqual(resentWatch[0], { type: 'watch-session', projectDir: 'proj-dir', sessionId: 'sess-1' });
+
+// unwatchSession sends the frame when open and drops the target from tracking —
+// a later reconnect must not resend watch-session for it.
+unwatchSession('proj-dir', 'sess-1');
+const unwatchFrames = framesOf(socketTwo, 'unwatch-session');
+assert.equal(unwatchFrames.length, 1);
+assert.deepEqual(unwatchFrames[0], { type: 'unwatch-session', projectDir: 'proj-dir', sessionId: 'sess-1' });
+
+socketTwo.triggerClose();
+await new Promise(resolve => setTimeout(resolve, 60));
+assert.equal(FakeSocket.instances.length, 3);
+const socketThree = FakeSocket.instances[2];
+socketThree.triggerOpen();
+const resentWatchAfterUnwatch = framesOf(socketThree, 'watch-session');
+assert.equal(resentWatchAfterUnwatch.length, 0); // unwatched target must not resurrect on reconnect
 
 console.log('PASS');

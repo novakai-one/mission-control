@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
+import path from 'node:path';
 import { spawn as spawnPty, type IPty } from 'node-pty';
 import { ConfigManager } from '../config/index.js';
 import { resolveCli } from '../agent/executor/index.js';
@@ -15,10 +17,13 @@ export interface AgentInfo {
   createdAt: string;
 }
 
+type RegistryEntry = AgentInfo & { archived?: boolean };
+
 interface AgentRecord {
   info: AgentInfo;
-  ptyProcess: IPty;
-  buffer: AgentBuffer;
+  ptyProcess?: IPty;
+  buffer?: AgentBuffer;
+  archived?: boolean;
 }
 
 export interface CreateAgentOptions {
@@ -66,6 +71,35 @@ export class TerminalManager {
   private dataCallback: ((agentId: string, data: string) => void) | null = null;
   private exitCallback: ((agentId: string, exitCode: number | null) => void) | null = null;
 
+  constructor(private readonly registryPath = path.join(process.cwd(), '.mission-control', 'agents.json')) {
+    this.loadRegistry();
+  }
+
+  private loadRegistry(): void {
+    if (!existsSync(this.registryPath)) return;
+    try {
+      const contents = readFileSync(this.registryPath, 'utf8');
+      const entries = JSON.parse(contents) as RegistryEntry[];
+      for (const entry of entries) this.restoreEntry(entry);
+    } catch {
+      // corrupt file: start empty rather than crash
+    }
+  }
+
+  private restoreEntry(entry: RegistryEntry): void {
+    const { archived, ...info } = entry;
+    this.agents.set(info.agentId, { info: { ...info, status: 'exited' }, archived });
+  }
+
+  private saveRegistry(): void {
+    mkdirSync(path.dirname(this.registryPath), { recursive: true });
+    const entries: RegistryEntry[] = Array.from(this.agents.values(), (record) => ({
+      ...record.info,
+      archived: record.archived
+    }));
+    writeFileSync(this.registryPath, JSON.stringify(entries, null, 2));
+  }
+
   create(options: CreateAgentOptions): AgentInfo {
     const agentId = `agent_${randomUUID()}`;
     const sessionId = randomUUID();
@@ -74,6 +108,7 @@ export class TerminalManager {
     const buffer = new AgentBuffer();
     this.agents.set(agentId, { info, ptyProcess: proc, buffer });
     this.wire(agentId, proc, buffer);
+    this.saveRegistry();
     return info;
   }
 
@@ -84,43 +119,60 @@ export class TerminalManager {
     });
     proc.onExit(({ exitCode }) => {
       const record = this.agents.get(agentId);
-      // Killed+removed via DELETE (spec §3): no record left, suppress the exit
-      // callback so a stale agents-changed/agent-exit doesn't resurrect it.
       if (!record) return;
       record.info.status = 'exited';
+      this.saveRegistry();
       this.exitCallback?.(agentId, exitCode);
     });
   }
 
   write(agentId: string, data: string): boolean {
     const record = this.agents.get(agentId);
-    if (!record) return false;
+    if (!record?.ptyProcess) return false;
     record.ptyProcess.write(data);
     return true;
   }
 
   resize(agentId: string, cols: number, rows: number): boolean {
     const record = this.agents.get(agentId);
-    if (!record) return false;
+    if (!record?.ptyProcess) return false;
     record.ptyProcess.resize(cols, rows);
+    return true;
+  }
+
+  rename(agentId: string, title: string): boolean {
+    const record = this.agents.get(agentId);
+    if (!record) return false;
+    record.info.title = title;
+    this.saveRegistry();
     return true;
   }
 
   kill(agentId: string): boolean {
     const record = this.agents.get(agentId);
     if (!record) return false;
+    if (record.info.status !== 'running' || !record.ptyProcess) return true;
     record.ptyProcess.kill();
-    // DELETE = kill + remove (spec §3); natural exits keep their record/buffer.
-    this.agents.delete(agentId);
+    return true;
+  }
+
+  archive(agentId: string): boolean {
+    const record = this.agents.get(agentId);
+    if (!record) return false;
+    if (record.ptyProcess) record.ptyProcess.kill();
+    record.archived = true;
+    this.saveRegistry();
     return true;
   }
 
   snapshot(agentId: string): string {
-    return this.agents.get(agentId)?.buffer.snapshot() ?? '';
+    return this.agents.get(agentId)?.buffer?.snapshot() ?? '';
   }
 
   list(): AgentInfo[] {
-    return Array.from(this.agents.values(), (record) => record.info);
+    return Array.from(this.agents.values())
+      .filter((record) => !record.archived)
+      .map((record) => record.info);
   }
 
   onData(callback: (agentId: string, data: string) => void): void {

@@ -164,8 +164,9 @@ export function DashboardShell() {
           ? prev
           : [{ sessionId, dirName: projectDir, matchReason: 'cwd', modified: Date.now(), size: 0 }, ...prev]);
         setSelectedSession(sessionId);
-      } else {
-        // Build/agent events
+      } else if (!message.type) {
+        // Build/agent events. Type-keyed frames (agents-changed etc.) belong to
+        // the agentSocket dialect and are broadcast to every socket — not ours.
         setBuildMessages(prev => [...prev, message]);
       }
     };
@@ -209,6 +210,9 @@ export function DashboardShell() {
           onToggle={agentsState.toggleCollapsed}
           onSelect={(agentId) => { agentsState.setActiveAgentId(agentId); setViewMode('agents'); }}
           onCreate={agentsState.createAgent}
+          onRename={agentsState.renameAgent}
+          onKill={agentsState.killAgent}
+          onArchive={agentsState.archiveAgent}
         />
         {viewMode === 'files' ? (
           <FilesPanel

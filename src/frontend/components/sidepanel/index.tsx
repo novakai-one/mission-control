@@ -1,5 +1,5 @@
-import React from 'react';
-import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Archive, PanelLeftClose, PanelLeftOpen, Plus, Square } from 'lucide-react';
 import './index.css';
 
 export interface SidePanelAgent {
@@ -15,6 +15,9 @@ export interface SidePanelProps {
   onToggle(): void;
   onSelect(agentId: string): void;
   onCreate(): void;
+  onRename(agentId: string, title: string): void;
+  onKill(agentId: string): void;
+  onArchive(agentId: string): void;
 }
 
 function initialsOf(title: string): string {
@@ -33,35 +36,160 @@ function StatusDot({ status }: StatusDotProps) {
   return <span className={dotClass} />;
 }
 
+interface RenameInputProps {
+  title: string;
+  onCommit(title: string): void;
+  onCancel(): void;
+}
+
+function RenameInput({ title, onCommit, onCancel }: RenameInputProps) {
+  const [value, setValue] = useState(title);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  function commit(): void {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== title) onCommit(trimmed);
+    else onCancel();
+  }
+
+  function cancel(): void {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onCancel();
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+    // Keys must not bubble to the row's role=button handler — it preventDefaults
+    // ' ' (select semantics), which would swallow spaces typed into the title.
+    event.stopPropagation();
+    if (event.key === 'Enter') commit();
+    else if (event.key === 'Escape') cancel();
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      className="sidepanel-rename-input"
+      value={value}
+      onChange={event => setValue(event.target.value)}
+      onBlur={commit}
+      onKeyDown={handleKeyDown}
+      onClick={event => event.stopPropagation()}
+    />
+  );
+}
+
+interface RowActionsProps {
+  agent: SidePanelAgent;
+  onKill(agentId: string): void;
+  onArchive(agentId: string): void;
+}
+
+function RowActions({ agent, onKill, onArchive }: RowActionsProps) {
+  function handleKill(event: React.MouseEvent): void {
+    event.stopPropagation();
+    if (window.confirm('Kill this agent? The running turn is lost; the transcript is kept.')) {
+      onKill(agent.agentId);
+    }
+  }
+
+  function handleArchive(event: React.MouseEvent): void {
+    event.stopPropagation();
+    const running = agent.status === 'running';
+    if (running && !window.confirm('Archive this agent? It will be killed and hidden from the panel.')) return;
+    onArchive(agent.agentId);
+  }
+
+  return (
+    <div className="sidepanel-row-actions">
+      {agent.status === 'running' && (
+        <button type="button" className="sidepanel-action-btn" onClick={handleKill} title="Kill agent" aria-label="Kill agent">
+          <Square size={12} />
+        </button>
+      )}
+      <button type="button" className="sidepanel-action-btn" onClick={handleArchive} title="Archive agent" aria-label="Archive agent">
+        <Archive size={12} />
+      </button>
+    </div>
+  );
+}
+
 interface AgentRowProps {
   agent: SidePanelAgent;
   active: boolean;
   collapsed: boolean;
   onSelect(agentId: string): void;
+  onRename(agentId: string, title: string): void;
+  onKill(agentId: string): void;
+  onArchive(agentId: string): void;
 }
 
-function AgentRow({ agent, active, collapsed, onSelect }: AgentRowProps) {
+function AgentRow({ agent, active, collapsed, onSelect, onRename, onKill, onArchive }: AgentRowProps) {
+  const [renaming, setRenaming] = useState(false);
   const rowClass = `sidepanel-agent${active ? ' sidepanel-agent-active' : ''}${collapsed ? ' sidepanel-agent-collapsed' : ''}`;
-  const handleClick = () => onSelect(agent.agentId);
+
+  function handleSelect(): void {
+    onSelect(agent.agentId);
+  }
 
   if (collapsed) {
     return (
-      <button type="button" className={rowClass} onClick={handleClick} aria-label={agent.title} title={agent.title}>
+      <button type="button" className={rowClass} onClick={handleSelect} aria-label={agent.title} title={agent.title}>
         <span className="sidepanel-avatar">{initialsOf(agent.title)}</span>
       </button>
     );
   }
 
+  function handleKeyDown(event: React.KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleSelect();
+    }
+  }
+
+  function handleRenameCommit(title: string): void {
+    setRenaming(false);
+    onRename(agent.agentId, title);
+  }
+
+  function startRenaming(event: React.MouseEvent): void {
+    event.stopPropagation();
+    setRenaming(true);
+  }
+
   return (
-    <button type="button" className={rowClass} onClick={handleClick} aria-label={agent.title}>
+    <div
+      className={rowClass}
+      role="button"
+      tabIndex={0}
+      onClick={handleSelect}
+      onKeyDown={handleKeyDown}
+      aria-label={agent.title}
+      aria-pressed={active}
+    >
       <StatusDot status={agent.status} />
-      <span className="sidepanel-agent-title">{agent.title}</span>
-    </button>
+      {renaming ? (
+        <RenameInput title={agent.title} onCommit={handleRenameCommit} onCancel={() => setRenaming(false)} />
+      ) : (
+        <span className="sidepanel-agent-title" onDoubleClick={startRenaming}>
+          {agent.title}
+        </span>
+      )}
+      <RowActions agent={agent} onKill={onKill} onArchive={onArchive} />
+    </div>
   );
 }
 
 export function SidePanel(props: SidePanelProps) {
-  const { agents, activeAgentId, collapsed, onToggle, onSelect, onCreate } = props;
+  const { agents, activeAgentId, collapsed, onToggle, onSelect, onCreate, onRename, onKill, onArchive } = props;
   const panelClass = `sidepanel glass-panel${collapsed ? ' sidepanel-collapsed' : ''}`;
   const toggleLabel = collapsed ? 'Expand agent panel' : 'Collapse agent panel';
 
@@ -92,6 +220,9 @@ export function SidePanel(props: SidePanelProps) {
             active={agent.agentId === activeAgentId}
             collapsed={collapsed}
             onSelect={onSelect}
+            onRename={onRename}
+            onKill={onKill}
+            onArchive={onArchive}
           />
         ))}
       </div>
