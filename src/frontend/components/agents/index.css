@@ -6,6 +6,10 @@
   overflow: hidden;
 }
 
+.agents-view-hidden {
+  display: none;
+}
+
 .agent-pane {
   display: none;
   flex-direction: column;

@@ -98,6 +98,8 @@ export interface AgentsViewProps {
   agents: AgentInfo[];
   activeAgentId: string | null;
   onCreate: () => void;
+  /** Stays mounted across tab switches (terminals survive); hidden via CSS when false. */
+  visible: boolean;
 }
 
 interface AgentPaneProps {
@@ -149,7 +151,7 @@ function AgentsEmpty({ onCreate }: AgentsEmptyProps) {
   );
 }
 
-export function AgentsView({ agents, activeAgentId, onCreate }: AgentsViewProps) {
+export function AgentsView({ agents, activeAgentId, onCreate, visible }: AgentsViewProps) {
   const [modes, setModes] = useState<Map<string, RawCalmMode>>(new Map());
   // Default mode is seeded once per agentId from the status it had when first
   // seen (exited → calm, running → raw), then frozen — an agent killed while
@@ -170,19 +172,21 @@ export function AgentsView({ agents, activeAgentId, onCreate }: AgentsViewProps)
     return initial;
   }
 
-  if (agents.length === 0) return <AgentsEmpty onCreate={onCreate} />;
-
   return (
-    <div className="agents-view">
-      {agents.map(agent => (
-        <AgentPane
-          key={agent.agentId}
-          agent={agent}
-          active={agent.agentId === activeAgentId}
-          mode={modeFor(agent)}
-          onModeChange={setModeFor}
-        />
-      ))}
+    <div className={visible ? 'agents-view' : 'agents-view agents-view-hidden'}>
+      {agents.length === 0 ? (
+        <AgentsEmpty onCreate={onCreate} />
+      ) : (
+        agents.map(agent => (
+          <AgentPane
+            key={agent.agentId}
+            agent={agent}
+            active={visible && agent.agentId === activeAgentId}
+            mode={modeFor(agent)}
+            onModeChange={setModeFor}
+          />
+        ))
+      )}
     </div>
   );
 }
