@@ -26,6 +26,7 @@ export interface BuildRecord {
   cwd?: string;
   pid?: number;
   cliExists?: boolean;
+  sessionId?: string;
   exitCode?: number;
   errorMessage?: string;
   durationMs?: number;

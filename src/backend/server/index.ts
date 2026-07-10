@@ -66,7 +66,7 @@ export class ServerController {
   }
 
   private configureExpress(): void {
-    this.app.use(cors());
+    this.app.use(cors({ origin: 'http://localhost:3030' }));
     this.app.use(express.json());
   }
 
@@ -103,10 +103,15 @@ export class ServerController {
     }
 
     const sessions = listSessions(projectDir);
-    const session = sessions.find(s => s.sessionId === sessionId);
-    if (!session) return;
+    const found = sessions.find(session => session.sessionId === sessionId);
+    const filePath = found
+      ? found.filePath
+      : path.join(CLAUDE_DIR, projectDir, `${sessionId}.jsonl`);
+    // Path-safety: must stay inside CLAUDE_DIR (projectDir/sessionId are already regex-validated above, but double-check).
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(CLAUDE_DIR + path.sep)) return;
 
-    const watcher = new SessionWatcher(session.filePath);
+    const watcher = new SessionWatcher(resolved);
     watcher.on('event', (event) => {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ event: 'transcript-event', payload: event }));
@@ -141,9 +146,17 @@ export class ServerController {
     });
 
     this.app.post('/api/builds/start', async (req, res) => {
-      const { prompt, llmType, geminiApiKey } = req.body;
-      const buildId = await this.coordinator.startBuild(prompt, llmType, geminiApiKey);
-      res.json({ buildId });
+      const { prompt, llmType, geminiApiKey, resumeSessionId } = req.body;
+      try {
+        const buildId = await this.coordinator.startBuild(prompt, llmType, geminiApiKey, resumeSessionId);
+        res.json({ buildId });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'BUILD_BUSY') {
+          res.status(409).json({ error: 'A build is already running' });
+          return;
+        }
+        res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+      }
     });
 
     this.app.post('/api/builds/stop', async (req, res) => {
@@ -331,7 +344,7 @@ export class ServerController {
 
   public start(): Promise<void> {
     return new Promise((resolve) => {
-      this.server.listen(this.port, () => {
+      this.server.listen(this.port, '127.0.0.1', () => {
         resolve();
       });
     });

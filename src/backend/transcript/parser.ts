@@ -3,16 +3,34 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 
 export type TranscriptEvent =
-  | { kind: 'user_text'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
-  | { kind: 'assistant_text'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
-  | { kind: 'assistant_thinking'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
-  | { kind: 'tool_use'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; tool: string; toolUseId: string; input: any; isAgentSpawn: boolean; agentDescription?: string; agentPrompt?: string; agentType?: string }
-  | { kind: 'tool_result'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; toolUseId: string; content: string; isError: boolean }
-  | { kind: 'hook_event'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; hookName: string; hookEvent: string; content: string; toolUseID: string }
-  | { kind: 'system'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean }
-  | { kind: 'session_meta'; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string };
+  | { kind: 'user_text'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
+  | { kind: 'assistant_text'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
+  | { kind: 'assistant_thinking'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
+  | { kind: 'tool_use'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; tool: string; toolUseId: string; input: any; isAgentSpawn: boolean; agentDescription?: string; agentPrompt?: string; agentType?: string }
+  | { kind: 'tool_result'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; toolUseId: string; content: string; isError: boolean }
+  | { kind: 'hook_event'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; hookName: string; hookEvent: string; content: string; toolUseID: string }
+  | { kind: 'system'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean }
+  | { kind: 'session_meta'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string };
+
+/**
+ * Stamp each event from a single JSONL line with a stable, unique eventKey so
+ * the frontend can upsert instead of blindly appending. Re-emitted lines
+ * share message.id (or uuid) and produce the same eventKeys; sibling blocks
+ * within one line get distinct indexes.
+ */
+export function stampEventKeys(rawLine: any, lineKey: string, events: TranscriptEvent[]): TranscriptEvent[] {
+  const msgId = rawLine?.message?.id ?? rawLine?.uuid ?? `${rawLine?.sessionId || ''}:${lineKey}`;
+  events.forEach((event, index) => { event.eventKey = `${msgId}#${index}`; });
+  return events;
+}
 
 export const CLAUDE_DIR = path.join(process.env.HOME || '', '.claude', 'projects');
+
+// Encode a cwd to Claude Code's project-dir name: '/' and '.' both become '-'.
+// ponytail: covers normal repo paths; exotic chars (spaces) unhandled — add if a path needs it.
+export function encodeCwd(cwdPath: string): string {
+  return cwdPath.replace(/[/.]/g, '-');
+}
 
 export interface SessionMeta {
   sessionId: string;
@@ -65,8 +83,9 @@ export function readSession(filePath: string): TranscriptEvent[] {
     try {
       const parsed = JSON.parse(lines[lineIndex]);
       if (parsed.timestamp) lastTs = parsed.timestamp;
-      const parsedEvents = parseJsonlLine(parsed, `${lineIndex}`, lastTs);
-      if (parsedEvents) events.push(...parsedEvents);
+      const lineKey = `${lineIndex}`;
+      const parsedEvents = parseJsonlLine(parsed, lineKey, lastTs);
+      if (parsedEvents) events.push(...stampEventKeys(parsed, lineKey, parsedEvents));
     } catch {
       // skip unparseable lines
     }
@@ -122,26 +141,25 @@ export function readSubagent(projectDirName: string, sessionId: string, agentId:
  * Emits 'event' for each new parsed event, 'error' on failure.
  */
 export class SessionWatcher extends EventEmitter {
+  // Start from offset 0: a prompt written before the watcher attaches would
+  // otherwise fall in the gap between the initial fetch and "start from end".
+  // Replayed lines share eventKeys with the initial fetch, so the frontend
+  // upsert dedupes the overlap.
   private lastSize = 0;
   private interval: NodeJS.Timeout | null = null;
-  // 'live:' namespace keeps synthetic uuids from colliding with the initial
-  // fetch's line-index-based uuids for the same file.
+  // Mirrors readSession's line index so uuid-less lines (mode, summary)
+  // produce identical synthetic keys and dedupe too.
   private liveLineCount = 0;
   private lastTs = '';
 
   constructor(private filePath: string) {
     super();
-    // Start from end of file
-    try {
-      this.lastSize = fs.statSync(filePath).size;
-    } catch {
-      this.lastSize = 0;
-    }
   }
 
   start(): void {
     if (this.interval) return;
-    this.interval = setInterval(() => this.check(), 500);
+    // 100ms: claude -p cold-start dominates latency (~8s); keep display lag negligible.
+    this.interval = setInterval(() => this.check(), 100);
   }
 
   stop(): void {
@@ -169,33 +187,46 @@ export class SessionWatcher extends EventEmitter {
       return;
     }
 
+    const start = this.lastSize;
     const stream = fs.createReadStream(this.filePath, {
-      start: this.lastSize,
+      start,
       end: stat.size,
     });
-    let buffer = '';
+    const chunks: Buffer[] = [];
     stream.on('data', (chunk) => {
-      buffer += chunk.toString();
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
     stream.on('end', () => {
-      this.lastSize = stat.size;
-      this.emitParsedLines(buffer);
+      const data = Buffer.concat(chunks);
+      // Only advance past complete lines; an in-progress final line (no
+      // trailing '\n' yet) is left for the next poll so it isn't dropped.
+      const lastNewline = data.lastIndexOf(0x0a);
+      if (lastNewline === -1) return;
+      const complete = data.subarray(0, lastNewline + 1);
+      this.lastSize = start + complete.length;
+      this.emitParsedLines(complete.toString('utf8'));
     });
     stream.on('error', (err) => this.emit('error', err));
   }
 
   private emitParsedLines(buffer: string): void {
-    for (const line of buffer.split('\n')) {
-      if (line.trim()) this.emitParsedLine(line);
+    // buffer always ends with '\n', so drop the trailing '' — but count blank
+    // mid-file lines, exactly like readSession's lineIndex.
+    const lines = buffer.split('\n');
+    lines.pop();
+    for (const line of lines) {
+      const lineIndex = this.liveLineCount++;
+      if (line.trim()) this.emitParsedLine(line, lineIndex);
     }
   }
 
-  private emitParsedLine(line: string): void {
+  private emitParsedLine(line: string, lineIndex: number): void {
     try {
       const parsed = JSON.parse(line);
       if (parsed.timestamp) this.lastTs = parsed.timestamp;
-      const events = parseJsonlLine(parsed, `live:${this.liveLineCount++}`, this.lastTs);
-      for (const ev of events ?? []) this.emit('event', ev);
+      const lineKey = `${lineIndex}`;
+      const events = parseJsonlLine(parsed, lineKey, this.lastTs);
+      for (const event of stampEventKeys(parsed, lineKey, events ?? [])) this.emit('event', event);
     } catch {
       // partial line, skip
     }
@@ -208,7 +239,7 @@ export class SessionWatcher extends EventEmitter {
  * lineKey gives them a stable unique uuid, lastTs the preceding event's time —
  * never a parse-time stamp, which made old events look freshly appended.
  */
-function parseJsonlLine(obj: any, lineKey: string, lastTs: string): TranscriptEvent[] | null {
+export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): TranscriptEvent[] | null {
   if (!obj || typeof obj !== 'object') return null;
   const type = obj.type;
   const sessionId = obj.sessionId || '';
