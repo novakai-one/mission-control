@@ -15,13 +15,13 @@ export interface BuildMessage {
 }
 
 interface TerminalPanelProps {
-  selectedProject: string | null;
+  activeRepo: string | null;
   onBuildMessage: (msg: BuildMessage) => void;
   buildMessages: BuildMessage[];
   wsReady: boolean;
 }
 
-export function TerminalPanel({ selectedProject, onBuildMessage, buildMessages, wsReady }: TerminalPanelProps) {
+export function TerminalPanel({ activeRepo, onBuildMessage, buildMessages, wsReady }: TerminalPanelProps) {
   const [prompt, setPrompt] = useState('');
   const [llmType, setLlmType] = useState<'claude' | 'gemini'>('claude');
   const [buildId, setBuildId] = useState<string | null>(null);
@@ -196,9 +196,9 @@ export function TerminalPanel({ selectedProject, onBuildMessage, buildMessages, 
           }}>
             <Terminal size={24} strokeWidth={1.5} />
             <span style={{ fontSize: '0.7rem' }}>Enter a prompt below to start a build</span>
-            {selectedProject && (
+            {activeRepo && (
               <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>
-                Workspace: {selectedProject.replace(/-/g, '/')}
+                Workspace: {activeRepo}
               </span>
             )}
           </div>

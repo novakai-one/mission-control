@@ -16,7 +16,6 @@ export const CLAUDE_DIR = path.join(process.env.HOME || '', '.claude', 'projects
 
 export interface SessionMeta {
   sessionId: string;
-  projectDir: string;   // display name (decoded from folder)
   filePath: string;
   modified: number;     // mtime ms
   size: number;         // bytes
@@ -33,27 +32,6 @@ export interface SubagentMeta {
 }
 
 /**
- * Recursively list all project folders under ~/.claude/projects/
- */
-export function listProjects(): string[] {
-  if (!fs.existsSync(CLAUDE_DIR)) return [];
-  return fs.readdirSync(CLAUDE_DIR, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => d.name);
-}
-
-/**
- * Decode a Claude project folder name back to a readable path.
- * e.g. "-Users-christopherdasca-Programming-novakai" → "/Users/christopherdasca/Programming/novakai"
- */
-export function decodeProjectDir(dirName: string): string {
-  if (dirName.startsWith('-')) {
-    return dirName.replace(/-/g, '/').replace(/^\//, '/');
-  }
-  return dirName;
-}
-
-/**
  * List all sessions (JSONL files) for a given project folder.
  */
 export function listSessions(projectDirName: string): SessionMeta[] {
@@ -66,7 +44,6 @@ export function listSessions(projectDirName: string): SessionMeta[] {
       const stat = fs.statSync(filePath);
       return {
         sessionId: f.replace('.jsonl', ''),
-        projectDir: decodeProjectDir(projectDirName),
         filePath,
         modified: stat.mtimeMs,
         size: stat.size,

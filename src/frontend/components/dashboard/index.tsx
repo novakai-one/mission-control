@@ -1,11 +1,8 @@
 import React from 'react';
 import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, MessageSquare } from 'lucide-react';
-import { ProjectInfo, toDisplayPath } from '../index.js';
+import { toDisplayPath } from '../index.js';
 
 interface AppHeaderProps {
-  projects: ProjectInfo[];
-  selectedProject: string | null;
-  onSelectProject: (dir: string) => void;
   liveMode: boolean;
   eventCount: number;
   viewMode: 'files' | 'transcript' | 'livechat' | 'ruleset' | 'debug';
@@ -15,7 +12,7 @@ interface AppHeaderProps {
   homeDir: string | null;
 }
 
-export function AppHeader({ projects, selectedProject, onSelectProject, liveMode, eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir }: AppHeaderProps) {
+export function AppHeader({ liveMode, eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir }: AppHeaderProps) {
   return (
     <header className="glass-panel" style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -119,22 +116,6 @@ export function AppHeader({ projects, selectedProject, onSelectProject, liveMode
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{eventCount} events</span>
-        <select
-          value={selectedProject || ''}
-          onChange={(e) => onSelectProject(e.target.value)}
-          style={{
-            backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
-            border: '1px solid var(--border-color)', borderRadius: '4px',
-            padding: '0.45rem 0.8rem', fontSize: '0.75rem', outline: 'none', minWidth: '300px'
-          }}
-        >
-          <option value="">Select project...</option>
-          {projects.map((p) => (
-            <option key={p.dirName} value={p.dirName}>
-              {p.displayPath}
-            </option>
-          ))}
-        </select>
         <button
           onClick={onOpenSettings}
           style={{

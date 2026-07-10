@@ -9,6 +9,7 @@
     "dev:frontend": "vite --port 3030 --host",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "vite build",
+    "lint": "node tools/gates/standards.mjs",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -28,8 +29,11 @@
     "@types/ws": "^8.5.10",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
+    "eslint": "^10.6.0",
+    "eslint-plugin-sonarjs": "^4.1.0",
     "tsx": "^4.15.7",
     "typescript": "^5.5.2",
+    "typescript-eslint": "^8.63.0",
     "vite": "^5.3.1"
   }
 }
