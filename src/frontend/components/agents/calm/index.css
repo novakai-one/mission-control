@@ -1,0 +1,189 @@
+.calm-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 0.6rem;
+  overflow: hidden;
+}
+
+.calm-view-hidden {
+  display: none;
+}
+
+.calm-feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem;
+  background: rgba(26, 27, 31, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.calm-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.calm-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 4px;
+}
+
+.calm-row:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.calm-row-time {
+  flex-shrink: 0;
+  min-width: 60px;
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.calm-row-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.calm-row-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calm-row-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Kind coloring mirrors board/index.tsx EVENT_COLORS — kept in CSS since this
+   dir's inline style= attributes are gate-forbidden. */
+.calm-kind-user_text { color: var(--text-secondary); }
+.calm-kind-assistant_text { color: #7a9ec9; }
+.calm-kind-assistant_thinking { color: #9a7ac9; }
+.calm-kind-tool_use { color: #c9b57a; }
+.calm-kind-tool_result { color: #7ac98f; }
+.calm-kind-hook_event { color: #c97a7a; }
+.calm-kind-system { color: var(--text-muted); }
+.calm-kind-session_meta { color: var(--text-muted); }
+
+.calm-subagents {
+  flex-shrink: 0;
+  max-height: 40%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(26, 27, 31, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.calm-subagents-heading {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.calm-subagents-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.calm-subagent-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.45rem 0.55rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.calm-subagent-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.calm-subagent-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calm-subagent-type {
+  flex-shrink: 0;
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.calm-subagent-activity {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calm-subagent-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calm-status-running {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: #c9b57a;
+}
+
+.calm-status-done {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: #7ac98f;
+}
+
+.calm-subagent-count {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+}

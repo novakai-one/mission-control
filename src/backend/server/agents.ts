@@ -1,0 +1,185 @@
+// Persistent-agent wiring: ws agent-* frames, watch-session (additive per
+// socket, now also drives a SubagentWatcher), and the /api/agents REST
+// surface. Kept out of server/index.ts to hold that file's diff to a few
+// lines per docs/persistent-agents.md §3, §5, §6.
+import type { Express, Request, Response } from 'express';
+import path from 'node:path';
+import { WebSocket } from 'ws';
+import { TerminalManager } from '../terminal/manager.js';
+import { ConfigManager } from '../config/index.js';
+import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.js';
+import { SubagentWatcher } from '../transcript/subagents/index.js';
+
+const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
+const SESSION_RE = /^[A-Za-z0-9-]+$/;
+
+function isValidProject(value: unknown): value is string {
+  return typeof value === 'string' && PROJECT_RE.test(value) && value !== '.' && value !== '..';
+}
+
+function isValidSession(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_RE.test(value);
+}
+
+function resolveSessionPath(projectDir: string, sessionId: string): string | null {
+  const sessions = listSessions(projectDir);
+  const found = sessions.find((session) => session.sessionId === sessionId);
+  const filePath = found ? found.filePath : path.join(CLAUDE_DIR, projectDir, `${sessionId}.jsonl`);
+  const resolved = path.resolve(filePath);
+  return resolved.startsWith(CLAUDE_DIR + path.sep) ? resolved : null;
+}
+
+interface SessionWatchPair {
+  session: SessionWatcher;
+  subagent: SubagentWatcher;
+}
+
+export class AgentsHub {
+  private readonly manager = new TerminalManager();
+  private readonly agentSubs = new Map<WebSocket, Set<string>>();
+  private readonly sessionWatchers = new Map<WebSocket, Map<string, SessionWatchPair>>();
+
+  constructor(private readonly sockets: Set<WebSocket>) {
+    this.manager.onData((agentId, data) => {
+      this.sendToSubscribers(agentId, { type: 'agent-data', agentId, data });
+    });
+    this.manager.onExit((agentId, exitCode) => this.handleExit(agentId, exitCode));
+  }
+
+  handleMessage(socket: WebSocket, message: Record<string, unknown>): boolean {
+    if (message.type === 'agent-subscribe') return this.subscribe(socket, message);
+    if (message.type === 'agent-input') return this.input(message);
+    if (message.type === 'agent-resize') return this.resize(message);
+    if (message.type === 'watch-session') return this.watchSession(socket, message);
+    return false;
+  }
+
+  handleClose(socket: WebSocket): void {
+    this.agentSubs.delete(socket);
+    const watcherMap = this.sessionWatchers.get(socket);
+    if (watcherMap) for (const pair of watcherMap.values()) this.stopPair(pair);
+    this.sessionWatchers.delete(socket);
+  }
+
+  registerRoutes(application: Express): void {
+    application.post('/api/agents', (request, response) => this.createAgent(request, response));
+    application.get('/api/agents', (_request, response) => response.json({ agents: this.manager.list() }));
+    application.delete('/api/agents/:agentId', (request, response) => this.deleteAgent(request, response));
+  }
+
+  private handleExit(agentId: string, exitCode: number | null): void {
+    this.sendToSubscribers(agentId, { type: 'agent-exit', agentId, exitCode });
+    this.broadcastAgentsChanged();
+  }
+
+  private sendToSubscribers(agentId: string, message: object): void {
+    const payload = JSON.stringify(message);
+    for (const [socket, agentIds] of this.agentSubs) {
+      if (agentIds.has(agentId) && socket.readyState === WebSocket.OPEN) socket.send(payload);
+    }
+  }
+
+  private broadcastAgentsChanged(): void {
+    const payload = JSON.stringify({ type: 'agents-changed', agents: this.manager.list() });
+    for (const socket of this.sockets) {
+      if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+    }
+  }
+
+  private subscribe(socket: WebSocket, message: Record<string, unknown>): boolean {
+    if (typeof message.agentId !== 'string') return true;
+    const agentIds = this.agentSubs.get(socket) ?? new Set<string>();
+    agentIds.add(message.agentId);
+    this.agentSubs.set(socket, agentIds);
+    const snapshot = this.manager.snapshot(message.agentId);
+    socket.send(JSON.stringify({ type: 'agent-replay', agentId: message.agentId, data: snapshot }));
+    return true;
+  }
+
+  private input(message: Record<string, unknown>): boolean {
+    if (typeof message.agentId !== 'string' || typeof message.data !== 'string') return true;
+    this.manager.write(message.agentId, message.data);
+    return true;
+  }
+
+  private resize(message: Record<string, unknown>): boolean {
+    const valid = typeof message.agentId === 'string'
+      && typeof message.cols === 'number' && typeof message.rows === 'number';
+    if (!valid) return true;
+    this.manager.resize(message.agentId as string, message.cols as number, message.rows as number);
+    return true;
+  }
+
+  private watchSession(socket: WebSocket, message: Record<string, unknown>): boolean {
+    const projectDir = message.projectDir ?? message.project;
+    const sessionId = message.sessionId ?? message.session;
+    // Dialect: new clients (agentSocket) send projectDir/sessionId and get the
+    // spec §5 type-keyed frames; the legacy tab sends project/session and keeps
+    // the original {event, payload} shape.
+    const newDialect = message.projectDir !== undefined;
+    if (!isValidProject(projectDir) || !isValidSession(sessionId)) return true;
+    if (this.watchersFor(socket).has(sessionId)) return true;
+    this.startWatchers(socket, projectDir, sessionId, newDialect);
+    return true;
+  }
+
+  private watchersFor(socket: WebSocket): Map<string, SessionWatchPair> {
+    let watcherMap = this.sessionWatchers.get(socket);
+    if (!watcherMap) {
+      watcherMap = new Map();
+      this.sessionWatchers.set(socket, watcherMap);
+    }
+    return watcherMap;
+  }
+
+  private startWatchers(socket: WebSocket, projectDir: string, sessionId: string, newDialect: boolean): void {
+    const resolved = resolveSessionPath(projectDir, sessionId);
+    if (!resolved) return;
+    const session = this.startSessionWatcher(socket, projectDir, sessionId, resolved, newDialect);
+    const subagent = new SubagentWatcher(projectDir, sessionId, (event) => this.sendIfOpen(socket, event));
+    subagent.start();
+    this.watchersFor(socket).set(sessionId, { session, subagent });
+  }
+
+  private startSessionWatcher(
+    socket: WebSocket, projectDir: string, sessionId: string, resolved: string, newDialect: boolean
+  ): SessionWatcher {
+    const watcher = new SessionWatcher(resolved);
+    watcher.on('event', (event) => this.sendIfOpen(socket, newDialect
+      ? { type: 'transcript-event', sessionId, event }
+      : { event: 'transcript-event', payload: event }));
+    watcher.start();
+    this.sendIfOpen(socket, newDialect
+      ? { type: 'watch-started', sessionId }
+      : { event: 'watch-started', payload: { project: projectDir, session: sessionId } });
+    return watcher;
+  }
+
+  private sendIfOpen(socket: WebSocket, message: object): void {
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+  }
+
+  private stopPair(pair: SessionWatchPair): void {
+    pair.session.stop();
+    pair.subagent.stop();
+  }
+
+  private createAgent(request: Request, response: Response): void {
+    const configuration = ConfigManager.load();
+    const cwd = request.body?.cwd ?? configuration.activeRepo ?? process.cwd();
+    const title = typeof request.body?.title === 'string' ? request.body.title : undefined;
+    const info = this.manager.create({ title, cwd });
+    this.broadcastAgentsChanged();
+    response.status(201).json(info);
+  }
+
+  private deleteAgent(request: Request, response: Response): void {
+    const killed = this.manager.kill(request.params.agentId);
+    if (!killed) {
+      response.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    this.broadcastAgentsChanged();
+    response.status(204).end();
+  }
+}

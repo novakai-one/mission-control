@@ -14,13 +14,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
-      # ponytail: hardcoded test list (no test runner in repo); switch to `find src -name '*.test.ts'` when it grows
+      # ponytail: no test runner in repo; plain tsx scripts, discovered by name
       - run: |
-          for t in src/backend/transcript/tests/parser.test.ts \
-                   src/backend/transcript/tests/encodeCwd.test.ts \
-                   src/backend/agent/resumeThreading.test.ts \
-                   src/backend/agent/executor/buildClaudeArgs.test.ts \
-                   src/frontend/lib/upsertEvents.test.ts; do
+          for t in $(find src -name '*.test.ts' -not -path '*/node_modules/*'); do
             npx tsx "$t"
           done
       - run: npm run lint

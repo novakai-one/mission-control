@@ -1,12 +1,13 @@
 import React from 'react';
 import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, MessageSquare } from 'lucide-react';
 import { toDisplayPath } from '../index.js';
+import './index.css';
 
 interface AppHeaderProps {
   liveMode: boolean;
   eventCount: number;
-  viewMode: 'files' | 'transcript' | 'livechat' | 'ruleset' | 'debug';
-  onViewModeChange: (mode: 'files' | 'transcript' | 'livechat' | 'ruleset' | 'debug') => void;
+  viewMode: 'files' | 'agents' | 'transcript' | 'livechat' | 'ruleset' | 'debug';
+  onViewModeChange: (mode: 'files' | 'agents' | 'transcript' | 'livechat' | 'ruleset' | 'debug') => void;
   onOpenSettings: () => void;
   activeRepo: string | null;
   homeDir: string | null;
@@ -59,6 +60,13 @@ export function AppHeader({ liveMode, eventCount, viewMode, onViewModeChange, on
         >
           <FolderTree size={12} />
           <span>Files</span>
+        </button>
+        <button
+          onClick={() => onViewModeChange('agents')}
+          className={viewMode === 'agents' ? 'dash-tab dash-tab-active' : 'dash-tab'}
+        >
+          <Radio size={12} />
+          <span>Agents</span>
         </button>
         <button
           onClick={() => onViewModeChange('transcript')}
