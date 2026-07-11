@@ -10,7 +10,30 @@ export type TranscriptEvent =
   | { kind: 'tool_result'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; toolUseId: string; content: string; isError: boolean }
   | { kind: 'hook_event'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; hookName: string; hookEvent: string; content: string; toolUseID: string }
   | { kind: 'system'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean; subtype?: string }
-  | { kind: 'session_meta'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string };
+  | { kind: 'session_meta'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string }
+  | { kind: 'usage'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; model: string; msgId: string; usage: TokenUsage };
+
+/** Per-API-message token usage. One message.id can span multiple JSONL lines with identical usage — always dedupe by msgId. */
+export interface TokenUsage {
+  input: number;
+  cacheWrite5m: number;
+  cacheWrite1h: number;
+  cacheRead: number;
+  output: number;
+}
+
+function parseTokenUsage(raw: any): TokenUsage {
+  const totalWrite = raw.cache_creation_input_tokens || 0;
+  const split = raw.cache_creation;
+  return {
+    input: raw.input_tokens || 0,
+    // Older transcripts lack the 5m/1h split — bill the total as 5m (the cheaper multiplier's tier is the default TTL).
+    cacheWrite5m: split ? (split.ephemeral_5m_input_tokens || 0) : totalWrite,
+    cacheWrite1h: split ? (split.ephemeral_1h_input_tokens || 0) : 0,
+    cacheRead: raw.cache_read_input_tokens || 0,
+    output: raw.output_tokens || 0,
+  };
+}
 
 /**
  * Stamp each event from a single JSONL line with a stable, unique eventKey so
@@ -295,6 +318,12 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
     const role = msg.role || type;
     const content = msg.content;
 
+    // Appended LAST so sibling block eventKeys (msgId#index) stay stable across
+    // re-emitted lines; emitted even when the line has no renderable blocks.
+    const usageEvent: TranscriptEvent | null = (type === 'assistant' && msg.usage)
+      ? { kind: 'usage', uuid, parentUuid, sessionId, ts, isSidechain, model: msg.model || '', msgId: msg.id || uuid, usage: parseTokenUsage(msg.usage) }
+      : null;
+
     // Tool result (user message with tool_result content)
     if (Array.isArray(content)) {
       const events: TranscriptEvent[] = [];
@@ -362,12 +391,13 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
           });
         }
       }
+      if (usageEvent) events.push(usageEvent);
       return events.length > 0 ? events : null;
     }
 
     // Simple text content
     if (typeof content === 'string') {
-      return [{
+      const events: TranscriptEvent[] = [{
         kind: role === 'assistant' ? 'assistant_text' : 'user_text',
         uuid,
         parentUuid,
@@ -376,7 +406,11 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
         isSidechain,
         text: content,
       }];
+      if (usageEvent) events.push(usageEvent);
+      return events;
     }
+
+    return usageEvent ? [usageEvent] : null;
   }
 
   return null;

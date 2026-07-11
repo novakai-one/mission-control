@@ -11,6 +11,9 @@ import {
   masterToggleUpdate,
   storeVariant,
 } from '../board/timelineModel.js';
+import { AgentCostSection, CostSection } from './costSection.js';
+import type { AgentInfo } from '../../lib/agentSocket/index.js';
+import type { CostSettings, SessionUsage } from '../../lib/cost/index.js';
 import './index.css';
 
 const HIDDEN_EVENTS_KEY = 'mc-hidden-events';
@@ -82,6 +85,10 @@ interface ViewPanelProps {
   onToggle: (update: FilterKeyUpdate) => void;
   variant: TimelineVariant;
   onVariantChange: (variant: TimelineVariant) => void;
+  sessionUsage: SessionUsage | null;
+  costSettings: CostSettings;
+  onCostSettingsChange: (next: CostSettings) => void;
+  activeAgent: AgentInfo | null;
 }
 
 function toCategoryEntry(category: string, childCounts: Map<string, number>): CategoryEntry {
@@ -178,7 +185,7 @@ function CategoryRow({ entry, hiddenEvents, onToggle, expanded, onExpand }: Cate
   );
 }
 
-type TranscriptControlsProps = Omit<ViewPanelProps, 'open' | 'viewMode'>;
+type TranscriptControlsProps = Omit<ViewPanelProps, 'open' | 'viewMode' | 'sessionUsage' | 'costSettings' | 'onCostSettingsChange' | 'activeAgent'>;
 
 function TranscriptControls({ events, hiddenEvents, onToggle, variant, onVariantChange }: TranscriptControlsProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -235,18 +242,23 @@ function TranscriptControls({ events, hiddenEvents, onToggle, variant, onVariant
 }
 
 /** Right-hand collapsible settings panel; fully unmounts its body when closed (width 0). */
-export function ViewPanel({ open, viewMode, events, hiddenEvents, onToggle, variant, onVariantChange }: ViewPanelProps) {
+export function ViewPanel({ open, viewMode, events, hiddenEvents, onToggle, variant, onVariantChange, sessionUsage, costSettings, onCostSettingsChange, activeAgent }: ViewPanelProps) {
   if (!open) return null;
   return (
     <div className="vp-panel">
       {viewMode === 'transcript' ? (
-        <TranscriptControls
-          events={events}
-          hiddenEvents={hiddenEvents}
-          onToggle={onToggle}
-          variant={variant}
-          onVariantChange={onVariantChange}
-        />
+        <>
+          <TranscriptControls
+            events={events}
+            hiddenEvents={hiddenEvents}
+            onToggle={onToggle}
+            variant={variant}
+            onVariantChange={onVariantChange}
+          />
+          <CostSection usage={sessionUsage} settings={costSettings} onSettingsChange={onCostSettingsChange} />
+        </>
+      ) : viewMode === 'agents' ? (
+        <AgentCostSection agent={activeAgent} settings={costSettings} onSettingsChange={onCostSettingsChange} />
       ) : (
         <div className="vp-empty">No settings for this view yet</div>
       )}
