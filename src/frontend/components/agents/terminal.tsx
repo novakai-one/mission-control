@@ -4,19 +4,27 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import * as agentSocket from '../../lib/agentSocket/index.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
+import { THEME_CHANGED_EVENT } from '../../lib/theme/index.js';
 import './index.css';
 
-// xterm reads no CSS variables (canvas-rendered) — hexes copied by hand from
-// src/frontend/css/index.css :root tokens; keep in sync if those change.
-const XTERM_THEME: ITheme = {
-  background: '#121316', // --bg-primary
-  foreground: '#e3e4e8', // --text-primary
-  cursor: '#e3e4e8', // --text-primary
-  cursorAccent: '#121316', // --bg-primary
-  selectionBackground: 'rgba(255, 255, 255, 0.15)', // --border-active
-  black: '#121316', // --bg-primary
-  brightBlack: '#535661', // --text-muted
-};
+// xterm reads no CSS variables (canvas-rendered) — resolve the theme tokens
+// to concrete colors at creation time, and again on theme change.
+function xtermTheme(): ITheme {
+  const style = getComputedStyle(document.documentElement);
+  const resolve = (name: string) => style.getPropertyValue(name).trim();
+  const bg = resolve('--theme-bg');
+  const ink = resolve('--theme-ink');
+  // xterm's color parser takes hex/rgb only — #rrggbbaa for the translucent selection.
+  return {
+    background: bg,
+    foreground: ink,
+    cursor: ink,
+    cursorAccent: bg,
+    selectionBackground: `${ink}2e`,
+    black: bg,
+    brightBlack: resolve('--theme-muted'),
+  };
+}
 
 // --font-mono value, literal because canvas font strings can't resolve var().
 const XTERM_FONT_FAMILY =
@@ -42,7 +50,7 @@ export function AgentTerminal({ agent, visible }: AgentTerminalProps) {
     if (!container) return undefined;
 
     const term = new Terminal({
-      theme: XTERM_THEME,
+      theme: xtermTheme(),
       fontFamily: XTERM_FONT_FAMILY,
       fontSize: 13,
       cursorBlink: true,
@@ -53,6 +61,10 @@ export function AgentTerminal({ agent, visible }: AgentTerminalProps) {
     fitRef.current = fitAddon;
 
     term.onData(data => agentSocket.sendInput(agent.agentId, data));
+
+    // Terminals stay mounted across tab switches, so re-theme in place.
+    const onThemeChange = () => { term.options.theme = xtermTheme(); };
+    window.addEventListener(THEME_CHANGED_EVENT, onThemeChange);
 
     const resizeObserver = new ResizeObserver(() => {
       // Never fit/resize before open (cols/rows would still be the 80x24
@@ -65,6 +77,7 @@ export function AgentTerminal({ agent, visible }: AgentTerminalProps) {
     resizeObserver.observe(container);
 
     return () => {
+      window.removeEventListener(THEME_CHANGED_EVENT, onThemeChange);
       resizeObserver.disconnect();
       agentSocket.unsubscribeAgent(agent.agentId);
       term.dispose();

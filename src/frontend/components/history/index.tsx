@@ -48,7 +48,7 @@ export function PlaybackSlider({ sessions, selectedSession, onSelectSession, eve
                     padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer',
                     backgroundColor: isSelected ? 'var(--bg-tertiary)' : 'transparent',
                     border: isSelected ? '1px solid var(--border-active)' : '1px solid transparent',
-                    transition: 'all 0.15s ease'
+                    transition: 'all var(--anim)'
                   }}
                 >
                   <span className="session-row-label">
@@ -83,7 +83,7 @@ export function PlaybackSlider({ sessions, selectedSession, onSelectSession, eve
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
               <span>Event {isLive ? stepsCount : playbackIndex + 1} of {stepsCount}</span>
               {isLive && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#5d7c9a' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--kind-assistant)' }}>
                   <Radio size={10} />
                   <span>live</span>
                 </div>

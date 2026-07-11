@@ -14,6 +14,7 @@ import {
 import { AgentCostSection, CostSection } from './costSection.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import type { CostSettings, SessionUsage } from '../../lib/cost/index.js';
+import { FONTS, THEMES, applyFont, applyTheme, currentFont, currentTheme } from '../../lib/theme/index.js';
 import './index.css';
 
 const HIDDEN_EVENTS_KEY = 'mc-hidden-events';
@@ -185,9 +186,92 @@ function CategoryRow({ entry, hiddenEvents, onToggle, expanded, onExpand }: Cate
   );
 }
 
-type TranscriptControlsProps = Omit<ViewPanelProps, 'open' | 'viewMode' | 'sessionUsage' | 'costSettings' | 'onCostSettingsChange' | 'activeAgent'>;
+/** Collapsible sub-menu section. Body height animates via the grid 0fr→1fr trick. */
+function VpSection({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="vp-section">
+      <button type="button" className="vp-section-toggle" onClick={() => setOpen(!open)}>
+        <span className="vp-section-title">{title}</span>
+        <span className={open ? 'vp-section-caret vp-section-caret-open' : 'vp-section-caret'}>▸</span>
+      </button>
+      <div className={open ? 'vp-section-body vp-section-body-open' : 'vp-section-body'}>
+        <div className="vp-section-inner">{children}</div>
+      </div>
+    </div>
+  );
+}
 
-function TranscriptControls({ events, hiddenEvents, onToggle, variant, onVariantChange }: TranscriptControlsProps) {
+/** Vertical option list in the rail style: quiet rows, active row gets a dot + brighter text. */
+function OptionList<T extends string>({ options, active, onSelect }: {
+  options: { id: T; label: string; description?: string; fontFamily?: string }[];
+  active: T;
+  onSelect: (id: T) => void;
+}) {
+  return (
+    <div className="vp-options">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          className={active === option.id ? 'vp-option vp-option-active' : 'vp-option'}
+          onClick={() => onSelect(option.id)}
+        >
+          <span className="vp-option-dot" />
+          <span className="vp-option-body">
+            <span className="vp-option-name" style={option.fontFamily ? { fontFamily: option.fontFamily } : undefined}>{option.label}</span>
+            {option.description && <span className="vp-option-desc">{option.description}</span>}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const FONT_FAMILIES: Record<string, string> = {
+  'source-serif': "'Source Serif 4', serif",
+  newsreader: "'Newsreader', serif",
+  inter: "'Inter', sans-serif",
+  hanken: "'Hanken Grotesk', sans-serif",
+  plex: "'IBM Plex Sans', sans-serif",
+};
+
+/** App-wide theme + font picker; present in every view's panel. */
+function AppearanceSection() {
+  const [theme, setTheme] = useState(currentTheme);
+  const [font, setFont] = useState(currentFont);
+  const activeName = THEMES.find((entry) => entry.id === theme)?.name ?? theme;
+
+  return (
+    <>
+      <div className="vp-group-title">Theme · {activeName}</div>
+      {(['dark', 'light'] as const).map((mode) => (
+        <div key={mode} className="vp-swatch-row">
+          {THEMES.filter((entry) => entry.mode === mode).map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              title={entry.name}
+              className={theme === entry.id ? 'vp-swatch vp-swatch-active' : 'vp-swatch'}
+              style={{ backgroundColor: entry.bg }}
+              onClick={() => { applyTheme(entry.id); setTheme(entry.id); }}
+            >
+              <span className="vp-swatch-dot" style={{ backgroundColor: entry.accent }} />
+            </button>
+          ))}
+        </div>
+      ))}
+      <div className="vp-group-title">Font</div>
+      <OptionList
+        options={FONTS.map((entry) => ({ id: entry.id, label: entry.name, fontFamily: FONT_FAMILIES[entry.id] }))}
+        active={font}
+        onSelect={(id) => { applyFont(id); setFont(id); }}
+      />
+    </>
+  );
+}
+
+function EventVisibility({ events, hiddenEvents, onToggle }: { events: TranscriptEvent[]; hiddenEvents: Set<string>; onToggle: (update: FilterKeyUpdate) => void }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const categories = useMemo(() => enumerateCategories(events), [events]);
   const sections = [...new Set(categories.map((entry) => entry.section))];
@@ -203,25 +287,6 @@ function TranscriptControls({ events, hiddenEvents, onToggle, variant, onVariant
 
   return (
     <>
-      <div className="vp-section-head">
-        <span className="vp-section-title">Layout</span>
-        <div className="tl-switcher">
-          {VARIANT_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              title={option.title}
-              className={variant === option.id ? 'tl-switch-btn tl-switch-active' : 'tl-switch-btn'}
-              onClick={() => onVariantChange(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="vp-section-head">
-        <span className="vp-section-title">Event visibility</span>
-      </div>
       {sections.map((section) => (
         <div key={section} className="vp-group">
           <div className="vp-group-title">{section}</div>
@@ -246,22 +311,27 @@ export function ViewPanel({ open, viewMode, events, hiddenEvents, onToggle, vari
   if (!open) return null;
   return (
     <div className="vp-panel">
-      {viewMode === 'transcript' ? (
+      {viewMode === 'transcript' && (
         <>
-          <TranscriptControls
-            events={events}
-            hiddenEvents={hiddenEvents}
-            onToggle={onToggle}
-            variant={variant}
-            onVariantChange={onVariantChange}
-          />
-          <CostSection usage={sessionUsage} settings={costSettings} onSettingsChange={onCostSettingsChange} />
+          <VpSection title="Layout" defaultOpen>
+            <OptionList options={VARIANT_OPTIONS} active={variant} onSelect={onVariantChange} />
+          </VpSection>
+          <VpSection title="Events">
+            <EventVisibility events={events} hiddenEvents={hiddenEvents} onToggle={onToggle} />
+          </VpSection>
+          <VpSection title="Cost">
+            <CostSection usage={sessionUsage} settings={costSettings} onSettingsChange={onCostSettingsChange} />
+          </VpSection>
         </>
-      ) : viewMode === 'agents' ? (
-        <AgentCostSection agent={activeAgent} settings={costSettings} onSettingsChange={onCostSettingsChange} />
-      ) : (
-        <div className="vp-empty">No settings for this view yet</div>
       )}
+      {viewMode === 'agents' && (
+        <VpSection title="Cost" defaultOpen>
+          <AgentCostSection agent={activeAgent} settings={costSettings} onSettingsChange={onCostSettingsChange} />
+        </VpSection>
+      )}
+      <VpSection title="Appearance" defaultOpen={viewMode !== 'transcript' && viewMode !== 'agents'}>
+        <AppearanceSection />
+      </VpSection>
     </div>
   );
 }

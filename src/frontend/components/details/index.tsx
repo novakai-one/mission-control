@@ -20,11 +20,11 @@ const KIND_LABELS: Record<string, string> = {
 
 const KIND_ICONS: Record<string, React.ReactNode> = {
   user_text: <FileText size={14} color="var(--text-secondary)" />,
-  assistant_text: <FileText size={14} color="#7a9ec9" />,
-  assistant_thinking: <Brain size={14} color="#9a7ac9" />,
-  tool_use: <Wrench size={14} color="#c9b57a" />,
-  tool_result: <Wrench size={14} color="#7ac98f" />,
-  hook_event: <AlertTriangle size={14} color="#c97a7a" />,
+  assistant_text: <FileText size={14} color="var(--kind-assistant)" />,
+  assistant_thinking: <Brain size={14} color="var(--kind-thinking)" />,
+  tool_use: <Wrench size={14} color="var(--kind-tool)" />,
+  tool_result: <Wrench size={14} color="var(--kind-result)" />,
+  hook_event: <AlertTriangle size={14} color="var(--kind-error)" />,
   system: <Radio size={14} color="var(--text-muted)" />,
   session_meta: <Radio size={14} color="var(--text-muted)" />,
 };
@@ -106,10 +106,10 @@ export function SelectedInspector({ event }: SelectedInspectorProps) {
           <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{event.toolUseId}</span>
         </div>
         <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: event.isError ? '#c97a7a' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: '0.6rem', color: event.isError ? 'var(--kind-error)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
             {event.isError ? 'Error Output' : 'Result'}
           </span>
-          <pre style={{ fontSize: '0.7rem', color: event.isError ? '#c97a7a' : 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0, maxHeight: '400px', overflowY: 'auto' }}>
+          <pre style={{ fontSize: '0.7rem', color: event.isError ? 'var(--kind-error)' : 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0, maxHeight: '400px', overflowY: 'auto' }}>
             {truncate(event.content || '', 50000)}
           </pre>
         </div>
@@ -161,7 +161,7 @@ export function SelectedInspector({ event }: SelectedInspectorProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
           <span>{new Date(event.ts).toLocaleString()}</span>
           {event.isSidechain && (
-            <span style={{ color: '#c9b57a', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+            <span style={{ color: 'var(--kind-tool)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
               <GitBranch size={10} /> sidechain
             </span>
           )}

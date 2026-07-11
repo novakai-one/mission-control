@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mission Control - Agent Commander</title>
+  <script>
+    // Apply persisted theme/font before first paint so there's no flash.
+    try {
+      var root = document.documentElement;
+      root.dataset.theme = localStorage.getItem('mc-theme') || 'carbon';
+      root.dataset.font = localStorage.getItem('mc-font') || 'source-serif';
+      root.dataset.mode = ['graphite', 'fog', 'slate'].indexOf(root.dataset.theme) >= 0 ? 'light' : 'dark';
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="./css/index.css">
 </head>
 <body>

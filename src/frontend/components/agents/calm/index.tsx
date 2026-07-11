@@ -119,7 +119,7 @@ function SubagentRow({ entry, done }: { entry: SubagentEntry; done: boolean }): 
   return (
     <div className="calm-subagent-row">
       <div className="calm-subagent-head">
-        <GitBranch size={11} color="#c9b57a" />
+        <GitBranch size={11} color="var(--kind-tool)" />
         <span className="calm-subagent-desc">{summary.description || 'subagent'}</span>
         <span className="calm-subagent-type">{summary.agentType || 'default'}</span>
       </div>

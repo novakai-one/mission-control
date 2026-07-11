@@ -21,22 +21,22 @@ interface AgentBoardProps extends TimelineProps {
 
 export const EVENT_ICONS: Record<string, React.ReactNode> = {
   user_text: <FileText size={11} color="var(--text-secondary)" />,
-  assistant_text: <FileText size={11} color="#7a9ec9" />,
-  assistant_thinking: <Brain size={11} color="#9a7ac9" />,
-  tool_use: <Wrench size={11} color="#c9b57a" />,
-  tool_result: <Wrench size={11} color="#7ac98f" />,
-  hook_event: <AlertTriangle size={11} color="#c97a7a" />,
+  assistant_text: <FileText size={11} color="var(--kind-assistant)" />,
+  assistant_thinking: <Brain size={11} color="var(--kind-thinking)" />,
+  tool_use: <Wrench size={11} color="var(--kind-tool)" />,
+  tool_result: <Wrench size={11} color="var(--kind-result)" />,
+  hook_event: <AlertTriangle size={11} color="var(--kind-error)" />,
   system: <Radio size={11} color="var(--text-muted)" />,
   session_meta: <Radio size={11} color="var(--text-muted)" />,
 };
 
 export const EVENT_COLORS: Record<string, string> = {
   user_text: 'var(--text-secondary)',
-  assistant_text: '#7a9ec9',
-  assistant_thinking: '#9a7ac9',
-  tool_use: '#c9b57a',
-  tool_result: '#7ac98f',
-  hook_event: '#c97a7a',
+  assistant_text: 'var(--kind-assistant)',
+  assistant_thinking: 'var(--kind-thinking)',
+  tool_use: 'var(--kind-tool)',
+  tool_result: 'var(--kind-result)',
+  hook_event: 'var(--kind-error)',
   system: 'var(--text-muted)',
   session_meta: 'var(--text-muted)',
 };
@@ -298,7 +298,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, 
         </div>
         <div className="glass-panel" style={{ padding: '0.6rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Subagents</span>
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#c9b57a' }}>{subagentSpawns.length}</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--kind-tool)' }}>{subagentSpawns.length}</span>
         </div>
         <div className="glass-panel" style={{ padding: '0.6rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Sidechain</span>
@@ -341,7 +341,7 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, 
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <GitBranch size={10} color="#c9b57a" />
+                <GitBranch size={10} color="var(--kind-tool)" />
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-primary)', fontWeight: 500 }}>{spawn.agentDescription || 'subagent'}</span>
               </div>
               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{spawn.agentType || ''} · {new Date(spawn.ts).toLocaleTimeString()}</span>
