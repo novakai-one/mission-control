@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ChevronDown, History } from 'lucide-react';
 import { SessionMeta } from '../index.js';
 import { formatCost, formatTokens, sessionCost, sessionTokens, type CostSettings, type SessionUsage } from '../../lib/cost/index.js';
+import { currentTimeZone } from '../../lib/timezone/index.js';
 import './index.css';
 
 interface SessionBarProps {
@@ -15,7 +16,7 @@ interface SessionBarProps {
 }
 
 function formatWhen(modified: number): string {
-  return new Date(modified).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return new Date(modified).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: currentTimeZone() });
 }
 
 /** Transcript header: session dropdown + title on the left, aggregate stats on the right. */

@@ -14,6 +14,7 @@ import { AgentsView, useAgentsState } from './agents/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
+import { useTimeZone } from '../lib/timezone/index.js';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
 export function toDisplayPath(absPath: string | null, homeDir: string | null): string {
@@ -123,6 +124,9 @@ export function DashboardShell() {
   const [subTimelineWidth, setSubTimelineWidth] = useState(300);
   const [subagentWidth, setSubagentWidth] = useState(420);
   const viewPanel = useViewPanelState();
+  // Repaints the whole tree once per timezone select so every timestamp
+  // formatter picks up the new zone. Typing in the picker never fires this.
+  useTimeZone();
   const [sessionUsage, setSessionUsage] = useState<SessionUsage | null>(null);
   const [costSettings, setCostSettings] = useCostSettings();
 

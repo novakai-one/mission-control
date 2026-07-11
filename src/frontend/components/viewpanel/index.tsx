@@ -15,6 +15,7 @@ import { AgentCostSection, CostSection } from './costSection.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import type { CostSettings, SessionUsage } from '../../lib/cost/index.js';
 import { FONTS, THEMES, applyFont, applyTheme, currentFont, currentTheme } from '../../lib/theme/index.js';
+import { TimezonePicker } from './timezone/index.js';
 import './index.css';
 
 const HIDDEN_EVENTS_KEY = 'mc-hidden-events';
@@ -329,6 +330,9 @@ export function ViewPanel({ open, viewMode, events, hiddenEvents, onToggle, vari
           <AgentCostSection agent={activeAgent} settings={costSettings} onSettingsChange={onCostSettingsChange} />
         </VpSection>
       )}
+      <VpSection title="User Settings">
+        <TimezonePicker />
+      </VpSection>
       <VpSection title="Appearance" defaultOpen={viewMode !== 'transcript' && viewMode !== 'agents'}>
         <AppearanceSection />
       </VpSection>
