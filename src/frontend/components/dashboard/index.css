@@ -1,9 +1,9 @@
-/* Header view-mode tabs. */
+/* Header view-mode tabs — quiet rows, dot marks active (mirrors .vp-option). */
 .dash-tab {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.8rem;
+  gap: 0.45rem;
+  padding: 0.35rem 0.7rem;
   border-radius: var(--radius-sm);
   background-color: transparent;
   border: none;
@@ -13,6 +13,15 @@
   cursor: pointer;
 }
 
+.dash-tab::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: transparent;
+  transition: background-color var(--anim);
+}
+
 .dash-tab:hover {
   color: var(--text-secondary);
   background-color: var(--hover-bg);
@@ -20,7 +29,11 @@
 
 .dash-tab-active,
 .dash-tab-active:hover {
-  background-color: var(--bg-tertiary);
+  background-color: transparent;
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.dash-tab-active::before {
+  background-color: var(--text-primary);
 }

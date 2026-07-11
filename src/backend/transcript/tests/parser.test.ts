@@ -89,11 +89,16 @@ function testStampEventKeys() {
   };
   const events = stampEventKeys(rawLine, 'k0', parseJsonlLine(rawLine, 'k0', '') ?? []);
   assert.equal(events.length, 2);
-  assert.equal(events[0].eventKey, 'm1#0');
-  assert.equal(events[1].eventKey, 'm1#1');
+  assert.equal(events[0].eventKey, 'u1#0');
+  assert.equal(events[1].eventKey, 'u1#1');
   // Re-emit: same line parsed again must yield the same eventKey.
   const reEmitted = stampEventKeys(rawLine, 'k0', parseJsonlLine(rawLine, 'k0', '') ?? []);
-  assert.equal(reEmitted[0].eventKey, 'm1#0');
+  assert.equal(reEmitted[0].eventKey, 'u1#0');
+  // A second line of the SAME API message (streamed blocks share message.id)
+  // must get a distinct key — colliding keys broke React reconciliation.
+  const siblingLine = { ...rawLine, uuid: 'u2', message: { ...rawLine.message, content: [{ type: 'text', text: 'more' }] } };
+  const siblingEvents = stampEventKeys(siblingLine, 'k1', parseJsonlLine(siblingLine, 'k1', '') ?? []);
+  assert.equal(siblingEvents[0].eventKey, 'u2#0');
 }
 
 // System lines carry their subtype through to the event (missing subtype stays undefined).

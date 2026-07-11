@@ -53,6 +53,53 @@ export function getToolLabel(event: TranscriptEvent): string {
   return `${tool}  ${value.length > 80 ? `${value.slice(0, 80)}…` : value}`;
 }
 
+// Canonical event identity lives beside upsertEvent so selection, React keys,
+// and live upserts share one rule; re-exported here for timeline consumers.
+export { selKey } from '../../lib/upsertEvents.js';
+
+/** Chip-style row label: the event's kind, not its content (content lives in the inspector). */
+export function getChipLabel(event: TranscriptEvent): string {
+  switch (event.kind) {
+    case 'user_text': return 'user message';
+    case 'assistant_text': return 'assistant text';
+    case 'assistant_thinking': return 'thinking';
+    case 'tool_use':
+      return event.isAgentSpawn
+        ? `spawn: ${event.agentDescription || event.agentType || 'subagent'}`
+        : `tool: ${(event.tool || 'unknown').toLowerCase()}`;
+    case 'tool_result': return event.isError ? 'tool error' : 'tool result';
+    case 'hook_event': return event.hookName ? `hook: ${event.hookName}` : `ctx: ${event.hookEvent || 'update'}`;
+    case 'system': return event.subtype ? `system: ${event.subtype}` : 'system';
+    case 'session_meta': return event.summary ? 'summary' : 'session meta';
+    default: return event.kind;
+  }
+}
+
+export type SpawnRun = { spawnRun: TranscriptEvent[] };
+
+/**
+ * Collapse consecutive spawn rows sharing a (truthy) description into one
+ * "spawn: x ×N" run. Description-less spawns never group — undefined ===
+ * undefined would merge unrelated agent types into one row.
+ */
+export function groupSpawnRuns(items: (TranscriptEvent | NoiseRun)[]): (TranscriptEvent | NoiseRun | SpawnRun)[] {
+  const output: (TranscriptEvent | NoiseRun | SpawnRun)[] = [];
+  for (const item of items) {
+    if ('noiseRun' in item || item.kind !== 'tool_use' || !item.isAgentSpawn) {
+      output.push(item);
+      continue;
+    }
+    const last = output[output.length - 1];
+    if (last && 'spawnRun' in last && item.agentDescription
+      && last.spawnRun[0].agentDescription === item.agentDescription) {
+      last.spawnRun.push(item);
+    } else {
+      output.push({ spawnRun: [item] });
+    }
+  }
+  return output;
+}
+
 export interface ToolPairs {
   results: Map<string, TranscriptEvent>;
   toolUseIds: Set<string>;

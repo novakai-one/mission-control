@@ -37,13 +37,15 @@ function parseTokenUsage(raw: any): TokenUsage {
 
 /**
  * Stamp each event from a single JSONL line with a stable, unique eventKey so
- * the frontend can upsert instead of blindly appending. Re-emitted lines
- * share message.id (or uuid) and produce the same eventKeys; sibling blocks
- * within one line get distinct indexes.
+ * the frontend can upsert instead of blindly appending. Keyed on the line's
+ * uuid — unique per line, identical when the watcher re-emits the same line.
+ * message.id must NOT lead here: one API message spans many lines (thinking,
+ * text, tool_use blocks), so message.id#0 collides across distinct events.
+ * Sibling blocks within one line get distinct indexes.
  */
 export function stampEventKeys(rawLine: any, lineKey: string, events: TranscriptEvent[]): TranscriptEvent[] {
-  const msgId = rawLine?.message?.id ?? rawLine?.uuid ?? `${rawLine?.sessionId || ''}:${lineKey}`;
-  events.forEach((event, index) => { event.eventKey = `${msgId}#${index}`; });
+  const lineId = rawLine?.uuid ?? rawLine?.message?.id ?? `${rawLine?.sessionId || ''}:${lineKey}`;
+  events.forEach((event, index) => { event.eventKey = `${lineId}#${index}`; });
   return events;
 }
 
@@ -318,8 +320,8 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
     const role = msg.role || type;
     const content = msg.content;
 
-    // Appended LAST so sibling block eventKeys (msgId#index) stay stable across
-    // re-emitted lines; emitted even when the line has no renderable blocks.
+    // Appended LAST so sibling block eventKeys (lineUuid#index) keep their
+    // positional index stable; emitted even when the line has no renderable blocks.
     const usageEvent: TranscriptEvent | null = (type === 'assistant' && msg.usage)
       ? { kind: 'usage', uuid, parentUuid, sessionId, ts, isSidechain, model: msg.model || '', msgId: msg.id || uuid, usage: parseTokenUsage(msg.usage) }
       : null;

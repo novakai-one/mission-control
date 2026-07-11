@@ -1,22 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { Network, Brain, Wrench, GitBranch, FileText, AlertTriangle, Radio } from 'lucide-react';
+import { Network, Brain, FileText, Wrench, AlertTriangle, Radio } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
-import type { TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
-import { buildToolPairs, compressNoiseRuns, getToolLabel, groupIntoTurns, noiseSummary, visibilityPredicate } from './timelineModel.js';
-import { formatCost, formatTokens, sessionCost, sessionTokens, type CostSettings, type SessionUsage } from '../../lib/cost/index.js';
+import type { SpawnRun, TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
+import { compressNoiseRuns, getChipLabel, getToolLabel, groupIntoTurns, groupSpawnRuns, noiseSummary, selKey } from './timelineModel.js';
 import './index.css';
 
 interface TimelineProps {
   events: TranscriptEvent[];
-  onSelectEvent: (uuid: string | null) => void;
-  selectedEventUuid: string | null;
+  onSelectEvent: (event: TranscriptEvent) => void;
+  selectedKey: string | null;
 }
 
 interface AgentBoardProps extends TimelineProps {
+  visibleEvents: TranscriptEvent[];
+  pairs: ToolPairs;
   variant: TimelineVariant;
-  hiddenEvents: Set<string>;
-  sessionUsage: SessionUsage | null;
-  costSettings: CostSettings;
 }
 
 export const EVENT_ICONS: Record<string, React.ReactNode> = {
@@ -30,25 +28,13 @@ export const EVENT_ICONS: Record<string, React.ReactNode> = {
   session_meta: <Radio size={11} color="var(--text-muted)" />,
 };
 
-export const EVENT_COLORS: Record<string, string> = {
-  user_text: 'var(--text-secondary)',
-  assistant_text: 'var(--kind-assistant)',
-  assistant_thinking: 'var(--kind-thinking)',
-  tool_use: 'var(--kind-tool)',
-  tool_result: 'var(--kind-result)',
-  hook_event: 'var(--kind-error)',
-  system: 'var(--text-muted)',
-  session_meta: 'var(--text-muted)',
-};
-
+/** Content preview — used for row tooltips and turn headers; chips themselves show the kind. */
 export function getEventLabel(ev: TranscriptEvent): string {
   switch (ev.kind) {
     case 'user_text': return ev.text?.substring(0, 80) || '';
     case 'assistant_text': return ev.text?.substring(0, 80) || '';
     case 'assistant_thinking': return ev.text?.substring(0, 80) || '';
-    case 'tool_use':
-      if (ev.isAgentSpawn) return `Spawn: ${ev.agentDescription || ev.agentType || 'subagent'}`;
-      return `${ev.tool}(${Object.keys(ev.input || {}).slice(0, 3).join(', ')})`;
+    case 'tool_use': return getToolLabel(ev);
     case 'tool_result':
       return ev.isError ? 'ERROR' : (ev.content?.substring(0, 80) || '');
     case 'hook_event': return `${ev.hookName || ev.hookEvent}`;
@@ -64,21 +50,24 @@ function formatTime(stamp: string): string {
 
 interface EventRowProps {
   event: TranscriptEvent;
-  label: string;
   selected: boolean;
   onSelect: () => void;
+  countSuffix?: number;
   resultChip?: TranscriptEvent;
   onSelectChip?: () => void;
   chipSelected?: boolean;
 }
 
-function EventRow({ event, label, selected, onSelect, resultChip, onSelectChip, chipSelected }: EventRowProps) {
+/** Compact chip row: time + kind label; the content preview lives in the tooltip. */
+export function EventRow({ event, selected, onSelect, countSuffix, resultChip, onSelectChip, chipSelected }: EventRowProps) {
   const chipTone = resultChip?.isError ? 'tl-chip tl-chip-err' : 'tl-chip tl-chip-ok';
   return (
-    <div className={selected ? 'tl-row tl-row-selected' : 'tl-row'} onClick={onSelect}>
+    <div className={selected ? 'tl-row tl-row-selected' : 'tl-row'} onClick={onSelect} title={getEventLabel(event)}>
       <span className="tl-time">{formatTime(event.ts)}</span>
       <span className="tl-icon">{EVENT_ICONS[event.kind] || <FileText size={11} color="var(--text-muted)" />}</span>
-      <span className={`tl-label tl-kind-${event.kind}`}>{label}</span>
+      <span className={`tl-label tl-kind-${event.kind}`}>
+        {getChipLabel(event)}{countSuffix && countSuffix > 1 ? ` ×${countSuffix}` : ''}
+      </span>
       {resultChip && (
         <span
           className={chipSelected ? `${chipTone} tl-chip-selected` : chipTone}
@@ -94,24 +83,25 @@ function EventRow({ event, label, selected, onSelect, resultChip, onSelectChip, 
 
 interface MergedRowProps {
   event: TranscriptEvent;
+  selected: boolean;
   pairs: ToolPairs;
-  onSelectEvent: (uuid: string | null) => void;
-  selectedEventUuid: string | null;
+  onSelectEvent: (event: TranscriptEvent) => void;
+  selectedKey: string | null;
+  countSuffix?: number;
 }
 
-/** A-style row: tool_use rows get the value label plus the paired result as a clickable chip. */
-function MergedRow({ event, pairs, onSelectEvent, selectedEventUuid }: MergedRowProps) {
-  const isTool = event.kind === 'tool_use';
-  const chip = isTool && event.toolUseId ? pairs.results.get(event.toolUseId) : undefined;
+/** Tool rows carry their paired result as a clickable chip. */
+function MergedRow({ event, selected, pairs, onSelectEvent, selectedKey, countSuffix }: MergedRowProps) {
+  const chip = event.kind === 'tool_use' && event.toolUseId ? pairs.results.get(event.toolUseId) : undefined;
   return (
     <EventRow
       event={event}
-      label={isTool ? getToolLabel(event) : getEventLabel(event)}
+      countSuffix={countSuffix}
       resultChip={chip}
-      selected={selectedEventUuid === event.uuid}
-      onSelect={() => onSelectEvent(event.uuid)}
-      onSelectChip={chip ? () => onSelectEvent(chip.uuid) : undefined}
-      chipSelected={chip ? selectedEventUuid === chip.uuid : false}
+      selected={selected}
+      onSelect={() => onSelectEvent(event)}
+      onSelectChip={chip ? () => onSelectEvent(chip) : undefined}
+      chipSelected={chip ? selectedKey === selKey(chip) : false}
     />
   );
 }
@@ -122,46 +112,63 @@ function withoutPairedResults(events: TranscriptEvent[], pairs: ToolPairs): Tran
   return events.filter((event) => !(event.kind === 'tool_result' && pairs.toolUseIds.has(event.toolUseId || '')));
 }
 
-interface MergedListProps {
-  events: TranscriptEvent[];
-  pairs: ToolPairs;
-  compressNoise: boolean;
-  onSelectEvent: (uuid: string | null) => void;
-  selectedEventUuid: string | null;
+/** Row props shared by every variant for a plain event or a collapsed spawn run. */
+function rowProps(item: TranscriptEvent | SpawnRun, selectedKey: string | null) {
+  const run = 'spawnRun' in item ? item.spawnRun : null;
+  const event = 'spawnRun' in item ? item.spawnRun[0] : item;
+  return {
+    event,
+    countSuffix: run?.length,
+    selected: run ? run.some((member) => selKey(member) === selectedKey) : selKey(event) === selectedKey,
+  };
 }
 
-/** Merged rows; optionally compresses consecutive noise into dim non-clickable strips. */
-function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedEventUuid }: MergedListProps) {
-  const items = useMemo(() => (compressNoise ? compressNoiseRuns(events) : events), [events, compressNoise]);
+interface MergedListProps extends TimelineProps {
+  pairs: ToolPairs;
+  compressNoise: boolean;
+}
+
+/** Merged rows; spawn runs collapsed, optional noise compression into dim strips. */
+function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedKey }: MergedListProps) {
+  const items = useMemo(
+    () => groupSpawnRuns(compressNoise ? compressNoiseRuns(events) : events),
+    [events, compressNoise],
+  );
   return (
     <>
-      {items.map((item, index) => ('noiseRun' in item ? (
-        <div key={`noise-${index}`} className="tl-noise-strip">····&ensp;{noiseSummary(item.noiseRun)}</div>
-      ) : (
-        <MergedRow
-          key={item.eventKey || item.uuid || index}
-          event={item}
-          pairs={pairs}
-          onSelectEvent={onSelectEvent}
-          selectedEventUuid={selectedEventUuid}
-        />
-      )))}
+      {items.map((item, index) => {
+        if ('noiseRun' in item) {
+          return <div key={`noise-${index}`} className="tl-noise-strip">····&ensp;{noiseSummary(item.noiseRun)}</div>;
+        }
+        const props = rowProps(item, selectedKey);
+        return (
+          <MergedRow
+            key={selKey(props.event) || index}
+            {...props}
+            pairs={pairs}
+            onSelectEvent={onSelectEvent}
+            selectedKey={selectedKey}
+          />
+        );
+      })}
     </>
   );
 }
 
-function CurrentTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
+function CurrentTimeline({ events, onSelectEvent, selectedKey }: TimelineProps) {
+  const items = useMemo(() => groupSpawnRuns(events), [events]);
   return (
     <>
-      {events.map((event, index) => (
-        <EventRow
-          key={event.eventKey || event.uuid || index}
-          event={event}
-          label={getEventLabel(event)}
-          selected={selectedEventUuid === event.uuid}
-          onSelect={() => onSelectEvent(event.uuid)}
-        />
-      ))}
+      {items.map((item, index) => {
+        const props = rowProps(item as TranscriptEvent | SpawnRun, selectedKey);
+        return (
+          <EventRow
+            key={selKey(props.event) || index}
+            {...props}
+            onSelect={() => onSelectEvent(props.event)}
+          />
+        );
+      })}
     </>
   );
 }
@@ -170,11 +177,11 @@ interface TurnHeaderProps {
   turn: Turn;
   collapsed: boolean;
   onToggle: () => void;
-  onSelect: (uuid: string | null) => void;
-  selectedUuid: string | null;
+  onSelect: (event: TranscriptEvent) => void;
+  selectedKey: string | null;
 }
 
-function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedUuid }: TurnHeaderProps) {
+function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedKey }: TurnHeaderProps) {
   const header = turn.header;
   return (
     <div className="tl-turn-header">
@@ -186,8 +193,8 @@ function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedUuid }: TurnH
             {header.kind === 'user_text' ? 'YOU' : 'CLAUDE'}
           </span>
           <span
-            className={selectedUuid === header.uuid ? 'tl-turn-text tl-turn-text-selected' : 'tl-turn-text'}
-            onClick={() => onSelect(header.uuid)}
+            className={selectedKey === selKey(header) ? 'tl-turn-text tl-turn-text-selected' : 'tl-turn-text'}
+            onClick={() => onSelect(header)}
           >
             {(header.text || '').substring(0, 80)}
           </span>
@@ -204,20 +211,20 @@ interface TurnBlockProps extends TurnHeaderProps {
   pairs: ToolPairs;
 }
 
-function TurnBlock({ turn, pairs, collapsed, onToggle, onSelect, selectedUuid }: TurnBlockProps) {
+function TurnBlock({ turn, pairs, collapsed, onToggle, onSelect, selectedKey }: TurnBlockProps) {
   return (
     <div className="tl-turn">
-      <TurnHeader turn={turn} collapsed={collapsed} onToggle={onToggle} onSelect={onSelect} selectedUuid={selectedUuid} />
+      <TurnHeader turn={turn} collapsed={collapsed} onToggle={onToggle} onSelect={onSelect} selectedKey={selectedKey} />
       {!collapsed && (
         <div className="tl-turn-children">
-          <MergedList events={turn.children} pairs={pairs} compressNoise onSelectEvent={onSelect} selectedEventUuid={selectedUuid} />
+          <MergedList events={turn.children} pairs={pairs} compressNoise onSelectEvent={onSelect} selectedKey={selectedKey} />
         </div>
       )}
     </div>
   );
 }
 
-function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: TimelineProps & { pairs: ToolPairs }) {
+function GroupedTimeline({ events, pairs, onSelectEvent, selectedKey }: TimelineProps & { pairs: ToolPairs }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const turns = useMemo(() => groupIntoTurns(events), [events]);
 
@@ -233,7 +240,7 @@ function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: Ti
   return (
     <>
       {turns.map((turn, index) => {
-        const turnId = turn.header?.eventKey || turn.header?.uuid || `pre-${index}`;
+        const turnId = turn.header ? selKey(turn.header) : `pre-${index}`;
         return (
           <TurnBlock
             key={turnId}
@@ -242,7 +249,7 @@ function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: Ti
             collapsed={collapsed.has(turnId)}
             onToggle={() => toggleTurn(turnId)}
             onSelect={onSelectEvent}
-            selectedUuid={selectedEventUuid}
+            selectedKey={selectedKey}
           />
         );
       })}
@@ -251,10 +258,10 @@ function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: Ti
 }
 
 // Pure layout: visibility is the view panel's job; variants never hide events themselves.
-function TimelineBody({ variant, events, pairs, onSelectEvent, selectedEventUuid }: TimelineProps & { variant: TimelineVariant; pairs: ToolPairs }) {
+function TimelineBody({ variant, events, pairs, onSelectEvent, selectedKey }: TimelineProps & { variant: TimelineVariant; pairs: ToolPairs }) {
   const merged = useMemo(() => withoutPairedResults(events, pairs), [events, pairs]);
   if (variant === 'grouped') {
-    return <GroupedTimeline events={merged} pairs={pairs} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+    return <GroupedTimeline events={merged} pairs={pairs} onSelectEvent={onSelectEvent} selectedKey={selectedKey} />;
   }
   if (variant === 'signal' || variant === 'ledger') {
     return (
@@ -263,113 +270,30 @@ function TimelineBody({ variant, events, pairs, onSelectEvent, selectedEventUuid
         pairs={pairs}
         compressNoise={variant === 'ledger'}
         onSelectEvent={onSelectEvent}
-        selectedEventUuid={selectedEventUuid}
+        selectedKey={selectedKey}
       />
     );
   }
-  return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+  return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedKey={selectedKey} />;
 }
 
-export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, hiddenEvents, sessionUsage, costSettings }: AgentBoardProps) {
-  const subagentSpawns = events.filter(e => e.kind === 'tool_use' && e.isAgentSpawn);
-  const sidechainEvents = events.filter(e => e.isSidechain);
-  // Visibility filters apply to the timeline only; stats and the spawn tree stay unfiltered.
-  // Pairing indexes toolUseIds from ALL tool_use events (hidden or not) so hiding a tool
-  // category drops its results too, while hidden results are excluded so their chips go away.
-  const { visibleEvents, pairs } = useMemo(() => {
-    const predicate = visibilityPredicate(hiddenEvents);
-    return {
-      visibleEvents: events.filter(predicate),
-      pairs: buildToolPairs(events.filter((event) => event.kind !== 'tool_result' || predicate(event))),
-    };
-  }, [events, hiddenEvents]);
-
+/** Left column: the main agent's event chips. Stats live in the session bar above. */
+export function AgentBoard({ events, visibleEvents, pairs, onSelectEvent, selectedKey, variant }: AgentBoardProps) {
   return (
-    <div style={{
-      display: 'flex', flex: 1, minWidth: '320px', backgroundColor: 'var(--bg-primary)',
-      borderRight: '1px solid var(--border-color)', overflowY: 'auto', padding: '1.5rem',
-      flexDirection: 'column', gap: '1rem'
-    }}>
-      {/* Summary stats */}
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        <div className="glass-panel" style={{ padding: '0.6rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Events</span>
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>{events.length}</span>
+    <div className="tl-col">
+      <div className="tl-col-title">Agent Timeline</div>
+      {events.length === 0 ? (
+        <div className="tl-col-hint">
+          <Network size={28} strokeWidth={1.5} />
+          <span>Select a session to view transcript</span>
         </div>
-        <div className="glass-panel" style={{ padding: '0.6rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Subagents</span>
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--kind-tool)' }}>{subagentSpawns.length}</span>
-        </div>
-        <div className="glass-panel" style={{ padding: '0.6rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Sidechain</span>
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{sidechainEvents.length}</span>
-        </div>
-        {sessionUsage && (
-          <>
-            <div className="glass-panel tl-stat-tile">
-              <span className="tl-stat-label">Tokens</span>
-              <span className="tl-stat-value" title="Main + subagents, from the full transcript (view filters don't apply)">
-                {formatTokens(sessionTokens(sessionUsage))}
-              </span>
-            </div>
-            <div className="glass-panel tl-stat-tile">
-              <span className="tl-stat-label">Est. Cost</span>
-              <span className="tl-stat-value tl-stat-cost" title="Main + subagents; assumptions in the view panel">
-                {formatCost(sessionCost(sessionUsage, costSettings), costSettings.currency)}
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Subagent spawn tree */}
-      {subagentSpawns.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <GitBranch size={12} color="var(--text-secondary)" />
-            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Subagent Spawns</span>
-          </div>
-          {subagentSpawns.map((spawn) => (
-            <div
-              key={spawn.toolUseId || spawn.uuid}
-              onClick={() => onSelectEvent(spawn.uuid)}
-              className="glass-panel"
-              style={{
-                padding: '0.5rem 0.8rem', cursor: 'pointer',
-                backgroundColor: selectedEventUuid === spawn.uuid ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-                borderColor: selectedEventUuid === spawn.uuid ? 'var(--border-active)' : 'var(--border-color)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <GitBranch size={10} color="var(--kind-tool)" />
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-primary)', fontWeight: 500 }}>{spawn.agentDescription || 'subagent'}</span>
-              </div>
-              <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{spawn.agentType || ''} · {new Date(spawn.ts).toLocaleTimeString()}</span>
-            </div>
-          ))}
+      ) : visibleEvents.length === 0 ? (
+        <div className="tl-empty">All events hidden by view filters</div>
+      ) : (
+        <div className="tl-col-scroll">
+          <TimelineBody variant={variant} events={visibleEvents} pairs={pairs} onSelectEvent={onSelectEvent} selectedKey={selectedKey} />
         </div>
       )}
-
-      {/* Event timeline */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
-          <Network size={12} color="var(--text-secondary)" />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Event Timeline</span>
-        </div>
-        {events.length === 0 ? (
-          <div style={{
-            display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', color: 'var(--text-muted)', gap: '0.8rem'
-          }}>
-            <Network size={28} strokeWidth={1.5} />
-            <span style={{ fontSize: '0.75rem' }}>Select a session to view transcript</span>
-          </div>
-        ) : visibleEvents.length === 0 ? (
-          <div className="tl-empty">All events hidden by view filters</div>
-        ) : (
-          <TimelineBody variant={variant} events={visibleEvents} pairs={pairs} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />
-        )}
-      </div>
     </div>
   );
 }
