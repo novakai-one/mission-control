@@ -3,6 +3,7 @@ import { Network, Brain, Wrench, GitBranch, FileText, AlertTriangle, Radio } fro
 import { TranscriptEvent } from '../index.js';
 import type { TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
 import { buildToolPairs, compressNoiseRuns, getToolLabel, groupIntoTurns, noiseSummary, visibilityPredicate } from './timelineModel.js';
+import { formatCost, formatTokens, sessionCost, sessionTokens, type CostSettings, type SessionUsage } from '../../lib/cost/index.js';
 import './index.css';
 
 interface TimelineProps {
@@ -14,6 +15,8 @@ interface TimelineProps {
 interface AgentBoardProps extends TimelineProps {
   variant: TimelineVariant;
   hiddenEvents: Set<string>;
+  sessionUsage: SessionUsage | null;
+  costSettings: CostSettings;
 }
 
 export const EVENT_ICONS: Record<string, React.ReactNode> = {
@@ -267,7 +270,7 @@ function TimelineBody({ variant, events, pairs, onSelectEvent, selectedEventUuid
   return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
 }
 
-export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, hiddenEvents }: AgentBoardProps) {
+export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, hiddenEvents, sessionUsage, costSettings }: AgentBoardProps) {
   const subagentSpawns = events.filter(e => e.kind === 'tool_use' && e.isAgentSpawn);
   const sidechainEvents = events.filter(e => e.isSidechain);
   // Visibility filters apply to the timeline only; stats and the spawn tree stay unfiltered.
@@ -301,6 +304,22 @@ export function AgentBoard({ events, onSelectEvent, selectedEventUuid, variant, 
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Sidechain</span>
           <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{sidechainEvents.length}</span>
         </div>
+        {sessionUsage && (
+          <>
+            <div className="glass-panel tl-stat-tile">
+              <span className="tl-stat-label">Tokens</span>
+              <span className="tl-stat-value" title="Main + subagents, from the full transcript (view filters don't apply)">
+                {formatTokens(sessionTokens(sessionUsage))}
+              </span>
+            </div>
+            <div className="glass-panel tl-stat-tile">
+              <span className="tl-stat-label">Est. Cost</span>
+              <span className="tl-stat-value tl-stat-cost" title="Main + subagents; assumptions in the view panel">
+                {formatCost(sessionCost(sessionUsage, costSettings), costSettings.currency)}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Subagent spawn tree */}

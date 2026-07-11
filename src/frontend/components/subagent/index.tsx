@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GitBranch, CornerDownLeft, FileText } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
 import { EVENT_ICONS, EVENT_COLORS, getEventLabel } from '../board/index.js';
+import { costOf, formatCost, formatTokens, tokensOf, type CostSettings, type SessionUsage } from '../../lib/cost/index.js';
 
 // SubagentMeta lives backend-side (src/backend/transcript/parser.ts) and cannot be
 // imported by the frontend build — kept in sync with the frozen API contract by hand.
@@ -22,6 +23,8 @@ interface SubagentInspectorProps {
   mainEvents: TranscriptEvent[];
   onSelectSubEvent: (ev: TranscriptEvent | null) => void;
   selectedSubEventUuid: string | null;
+  sessionUsage: SessionUsage | null;
+  costSettings: CostSettings;
 }
 
 function truncate(text: string, max: number): string {
@@ -29,7 +32,7 @@ function truncate(text: string, max: number): string {
   return text.substring(0, max) + '...';
 }
 
-export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEvents, onSelectSubEvent, selectedSubEventUuid }: SubagentInspectorProps) {
+export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEvents, onSelectSubEvent, selectedSubEventUuid, sessionUsage, costSettings }: SubagentInspectorProps) {
   const [subagents, setSubagents] = useState<SubagentMeta[]>([]);
   const [subEvents, setSubEvents] = useState<TranscriptEvent[] | null>(null);
 
@@ -56,7 +59,7 @@ export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEv
     if (!matchedMeta || !projectDir || !sessionId) return;
     fetch(`/api/subagent-transcript?project=${projectDir}&session=${sessionId}&agent=${matchedMeta.agentId}`)
       .then(res => (res.ok ? res.json() : Promise.reject(res)))
-      .then((data: TranscriptEvent[]) => { if (!ignore) setSubEvents(data); })
+      .then((data: TranscriptEvent[]) => { if (!ignore) setSubEvents(data.filter(event => event.kind !== 'usage')); })
       .catch(() => { if (!ignore) setSubEvents([]); });
     return () => { ignore = true; };
   }, [matchedMeta?.agentId, projectDir, sessionId]);
@@ -93,6 +96,7 @@ export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEv
 
   const returnEvent = mainEvents.find(e => e.kind === 'tool_result' && e.toolUseId === matchedMeta.toolUseId);
   const events = subEvents ?? [];
+  const subUsage = sessionUsage?.subagents.find(subagent => subagent.agentId === matchedMeta.agentId) ?? null;
 
   return (
     <div style={containerStyle}>
@@ -107,6 +111,11 @@ export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEv
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
           <span>{matchedMeta.agentType || 'default'}</span>
           <span>{events.length} events</span>
+          {subUsage && (
+            <span title="This subagent's tokens and estimated cost (full transcript)">
+              {formatTokens(tokensOf(subUsage))} tok · {formatCost(costOf(subUsage, costSettings), costSettings.currency)}
+            </span>
+          )}
         </div>
       </div>
 

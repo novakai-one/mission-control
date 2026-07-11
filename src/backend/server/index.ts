@@ -10,6 +10,7 @@ import { StateManager } from '../state/index.js';
 import { exec } from 'node:child_process';
 import { listSessions, readSession, listSubagents, readSubagent, CLAUDE_DIR } from '../transcript/parser.js';
 import { matchSessions } from '../transcript/repoIndex.js';
+import { sessionUsage } from '../transcript/usage/index.js';
 import { readRuleset } from '../ruleset/reader.js';
 import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } from '../fs/explorer.js';
 import { AgentsHub } from './agents.js';
@@ -194,6 +195,17 @@ export class ServerController {
         return;
       }
       response.json(readSession(session.filePath));
+    });
+
+    this.app.get('/api/usage', (request, response) => {
+      const params = validateTranscriptParams(request, response);
+      if (!params) return;
+      const session = listSessions(params.projectDir).find(entry => entry.sessionId === params.sessionId);
+      if (!session) {
+        response.status(404).json({ error: 'Session not found' });
+        return;
+      }
+      response.json(sessionUsage(session.filePath, params.projectDir, params.sessionId));
     });
 
     // ===== Subagent transcript API =====

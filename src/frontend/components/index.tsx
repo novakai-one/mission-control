@@ -13,6 +13,7 @@ import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
+import { useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
 export function toDisplayPath(absPath: string | null, homeDir: string | null): string {
@@ -61,6 +62,10 @@ export interface TranscriptEvent {
   mode?: string;
   permissionMode?: string;
   summary?: string;
+  // usage events (kind 'usage' — stripped from the events state; granular record + refetch trigger)
+  model?: string;
+  msgId?: string;
+  usage?: { input: number; cacheWrite5m: number; cacheWrite1h: number; cacheRead: number; output: number };
 }
 
 const COL_MIN = 280;
@@ -118,11 +123,31 @@ export function DashboardShell() {
   const [detailsWidth, setDetailsWidth] = useState(480);
   const [subagentWidth, setSubagentWidth] = useState(480);
   const viewPanel = useViewPanelState();
+  const [sessionUsage, setSessionUsage] = useState<SessionUsage | null>(null);
+  const [costSettings, setCostSettings] = useCostSettings();
 
   const webSocketRef = useRef<WebSocket | null>(null);
   // Mirror for the ws onmessage closure, which only mounts once.
   const selectedSessionRef = useRef<string | null>(null);
   selectedSessionRef.current = selectedSession;
+
+  // Debounced /api/usage refetch: fired per usage-bearing ws frame (main or
+  // subagent); trailing debounce keeps re-parsing the jsonl files cheap.
+  const usageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedMetaRef = useRef<{ dirName: string; sessionId: string } | null>(null);
+  function refetchUsage(delayMs: number): void {
+    if (usageTimerRef.current) clearTimeout(usageTimerRef.current);
+    usageTimerRef.current = setTimeout(() => {
+      const meta = selectedMetaRef.current;
+      if (!meta) return;
+      fetch(`/api/usage?project=${meta.dirName}&session=${meta.sessionId}`)
+        .then(res => res.json())
+        .then((data: SessionUsage) => {
+          if (selectedMetaRef.current?.sessionId === meta.sessionId) setSessionUsage(data);
+        })
+        .catch(() => {});
+    }, delayMs);
+  }
 
   // Resolve $HOME once, for '~'-relative display across the shell.
   useEffect(() => {
@@ -171,19 +196,24 @@ export function DashboardShell() {
   }, [activeRepo]);
 
   const selectedMeta = sessions.find((session) => session.sessionId === selectedSession) ?? null;
+  selectedMetaRef.current = selectedMeta ? { dirName: selectedMeta.dirName, sessionId: selectedMeta.sessionId } : null;
 
-  // Load transcript when the selected session changes
+  // Load transcript when the selected session changes. Usage events are data,
+  // not rows — stripped here so counts/turns/playback never see them; costs
+  // come from /api/usage over the full files (visibility filters never apply).
   useEffect(() => {
     let cancelled = false;
+    setSessionUsage(null);
     if (!selectedMeta) return;
     fetch(`/api/transcript?project=${selectedMeta.dirName}&session=${selectedMeta.sessionId}`)
       .then(res => res.json())
       .then((data: TranscriptEvent[]) => {
         if (cancelled) return;
-        setEvents(data);
+        setEvents(data.filter(event => event.kind !== 'usage'));
         setPlaybackIndex(-1); // live mode
       })
       .catch(() => {});
+    refetchUsage(0);
     return () => { cancelled = true; };
   }, [selectedMeta]);
 
@@ -198,7 +228,14 @@ export function DashboardShell() {
       if (message.event === 'transcript-event') {
         // Drop events from a stale watcher during session switches.
         const matches = message.payload?.sessionId === selectedSessionRef.current;
-        setEvents(prev => (matches ? upsertEvent(prev, message.payload) : prev));
+        if (matches && message.payload?.kind === 'usage') {
+          refetchUsage(1500); // usage events never enter the events state; they trigger a re-aggregate
+        } else {
+          setEvents(prev => (matches ? upsertEvent(prev, message.payload) : prev));
+        }
+      } else if (message.type === 'subagent-event') {
+        // Subagent tails stream over the same socket; their usage growth must refresh costs too.
+        if (message.sessionId === selectedSessionRef.current && message.event?.kind === 'usage') refetchUsage(1500);
       } else if (message.event === 'watch-started') {
         setLiveMode(true);
       } else if (message.event === 'build-session' && message.payload?.sessionId && message.payload?.projectDir) {
@@ -280,6 +317,8 @@ export function DashboardShell() {
               selectedEventUuid={selectedEventUuid}
               variant={viewPanel.variant}
               hiddenEvents={viewPanel.hiddenEvents}
+              sessionUsage={sessionUsage}
+              costSettings={costSettings}
             />
             <ResizeHandle width={detailsWidth} onWidthChange={setDetailsWidth} />
             <div style={{ width: detailsWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
@@ -297,6 +336,8 @@ export function DashboardShell() {
                 mainEvents={currentEvents}
                 onSelectSubEvent={setSelectedSubEvent}
                 selectedSubEventUuid={selectedSubEvent?.uuid ?? null}
+                sessionUsage={sessionUsage}
+                costSettings={costSettings}
               />
             </div>
           </>
@@ -318,7 +359,15 @@ export function DashboardShell() {
           />
         ) : null}
         {/* Panel enumerates from the FULL event array; the board filters its own slice. */}
-        <ViewPanel viewMode={viewMode} events={events} {...viewPanel} />
+        <ViewPanel
+          viewMode={viewMode}
+          events={events}
+          {...viewPanel}
+          sessionUsage={sessionUsage}
+          costSettings={costSettings}
+          onCostSettingsChange={setCostSettings}
+          activeAgent={agentsState.agents.find(agent => agent.agentId === agentsState.activeAgentId) ?? null}
+        />
       </div>
       {viewMode === 'transcript' && (
         <PlaybackSlider 
