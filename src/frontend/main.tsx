@@ -7,9 +7,11 @@ import { DashboardShell } from './components/index.js';
 // React reconciliation never wipes it on re-render.
 const scrollTimers = new WeakMap<Element, number>();
 document.addEventListener('scroll', (scrollEvent) => {
-  const el = scrollEvent.target;
-  if (!(el instanceof Element)) return;
-  el.setAttribute('data-scrolling', '');
+  // Viewport scrolls target document itself; stamp the root element instead.
+  const el = scrollEvent.target === document ? document.documentElement
+    : scrollEvent.target instanceof Element ? scrollEvent.target : null;
+  if (!el) return;
+  if (!el.hasAttribute('data-scrolling')) el.setAttribute('data-scrolling', '');
   window.clearTimeout(scrollTimers.get(el));
   scrollTimers.set(el, window.setTimeout(() => el.removeAttribute('data-scrolling'), 800));
 }, { capture: true, passive: true });

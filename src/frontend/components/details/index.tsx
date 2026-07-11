@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Terminal, Brain, Wrench, FileText, AlertTriangle, Radio, GitBranch } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
-import { getChipLabel } from '../board/timelineModel.js';
+import { getChipLabel, selKey } from '../board/timelineModel.js';
 import './index.css';
 
 const KIND_ICONS: Record<string, React.ReactNode> = {
@@ -15,7 +15,7 @@ const KIND_ICONS: Record<string, React.ReactNode> = {
   session_meta: <Radio size={14} color="var(--text-muted)" />,
 };
 
-function truncate(text: string, max: number): string {
+export function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return text.substring(0, max) + '...';
 }
@@ -120,9 +120,11 @@ interface EventNavProps {
 
 /** Footer strip: ◀ prev event · next event ▶, plus optional trailing stats. */
 export function EventNav({ events, current, onNavigate, extra }: EventNavProps) {
-  const index = events.findIndex((event) => event.uuid === current.uuid);
+  // O(n) over the full timeline — skip it on renders where neither input moved (live frames, resize drags).
+  const index = useMemo(() => events.findIndex((event) => selKey(event) === selKey(current)), [events, current]);
   const prev = index > 0 ? events[index - 1] : null;
-  const next = index >= 0 && index < events.length - 1 ? events[index + 1] : null;
+  // index -1 = current was filtered out of the list after selection; offer the first visible event as an escape hatch.
+  const next = index === -1 ? (events[0] ?? null) : index < events.length - 1 ? events[index + 1] : null;
   return (
     <div className="insp-nav">
       <button className="insp-nav-btn" disabled={!prev} onClick={() => prev && onNavigate(prev)}>
@@ -147,11 +149,13 @@ interface SelectedInspectorProps {
 export function SelectedInspector({ event, events, onNavigate }: SelectedInspectorProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Keyed on selKey, not uuid: sibling blocks of one jsonl line share a uuid
+  // but are distinct events, and live re-emits swap the object identity.
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
-  }, [event?.uuid]);
+  }, [event ? selKey(event) : null]);
 
   return (
     <div className="insp-col">

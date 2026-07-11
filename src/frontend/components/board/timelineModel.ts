@@ -53,6 +53,10 @@ export function getToolLabel(event: TranscriptEvent): string {
   return `${tool}  ${value.length > 80 ? `${value.slice(0, 80)}…` : value}`;
 }
 
+// Canonical event identity lives beside upsertEvent so selection, React keys,
+// and live upserts share one rule; re-exported here for timeline consumers.
+export { selKey } from '../../lib/upsertEvents.js';
+
 /** Chip-style row label: the event's kind, not its content (content lives in the inspector). */
 export function getChipLabel(event: TranscriptEvent): string {
   switch (event.kind) {
@@ -73,7 +77,11 @@ export function getChipLabel(event: TranscriptEvent): string {
 
 export type SpawnRun = { spawnRun: TranscriptEvent[] };
 
-/** Collapse consecutive spawn rows sharing a description into one "spawn: x ×N" run. */
+/**
+ * Collapse consecutive spawn rows sharing a (truthy) description into one
+ * "spawn: x ×N" run. Description-less spawns never group — undefined ===
+ * undefined would merge unrelated agent types into one row.
+ */
 export function groupSpawnRuns(items: (TranscriptEvent | NoiseRun)[]): (TranscriptEvent | NoiseRun | SpawnRun)[] {
   const output: (TranscriptEvent | NoiseRun | SpawnRun)[] = [];
   for (const item of items) {
@@ -82,7 +90,8 @@ export function groupSpawnRuns(items: (TranscriptEvent | NoiseRun)[]): (Transcri
       continue;
     }
     const last = output[output.length - 1];
-    if (last && 'spawnRun' in last && last.spawnRun[0].agentDescription === item.agentDescription) {
+    if (last && 'spawnRun' in last && item.agentDescription
+      && last.spawnRun[0].agentDescription === item.agentDescription) {
       last.spawnRun.push(item);
     } else {
       output.push({ spawnRun: [item] });

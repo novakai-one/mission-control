@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Network, Brain, FileText, Wrench, AlertTriangle, Radio } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
-import type { TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
-import { compressNoiseRuns, getChipLabel, getToolLabel, groupIntoTurns, groupSpawnRuns, noiseSummary } from './timelineModel.js';
+import type { SpawnRun, TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
+import { compressNoiseRuns, getChipLabel, getToolLabel, groupIntoTurns, groupSpawnRuns, noiseSummary, selKey } from './timelineModel.js';
 import './index.css';
 
 interface TimelineProps {
   events: TranscriptEvent[];
-  onSelectEvent: (uuid: string | null) => void;
-  selectedEventUuid: string | null;
+  onSelectEvent: (event: TranscriptEvent) => void;
+  selectedKey: string | null;
 }
 
 interface AgentBoardProps extends TimelineProps {
@@ -26,17 +26,6 @@ export const EVENT_ICONS: Record<string, React.ReactNode> = {
   hook_event: <AlertTriangle size={11} color="var(--kind-error)" />,
   system: <Radio size={11} color="var(--text-muted)" />,
   session_meta: <Radio size={11} color="var(--text-muted)" />,
-};
-
-export const EVENT_COLORS: Record<string, string> = {
-  user_text: 'var(--text-secondary)',
-  assistant_text: 'var(--kind-assistant)',
-  assistant_thinking: 'var(--kind-thinking)',
-  tool_use: 'var(--kind-tool)',
-  tool_result: 'var(--kind-result)',
-  hook_event: 'var(--kind-error)',
-  system: 'var(--text-muted)',
-  session_meta: 'var(--text-muted)',
 };
 
 /** Content preview — used for row tooltips and turn headers; chips themselves show the kind. */
@@ -69,11 +58,12 @@ interface EventRowProps {
   chipSelected?: boolean;
 }
 
-/** Compact chip row: kind label only; the content preview lives in the tooltip. */
+/** Compact chip row: time + kind label; the content preview lives in the tooltip. */
 export function EventRow({ event, selected, onSelect, countSuffix, resultChip, onSelectChip, chipSelected }: EventRowProps) {
   const chipTone = resultChip?.isError ? 'tl-chip tl-chip-err' : 'tl-chip tl-chip-ok';
   return (
     <div className={selected ? 'tl-row tl-row-selected' : 'tl-row'} onClick={onSelect} title={getEventLabel(event)}>
+      <span className="tl-time">{formatTime(event.ts)}</span>
       <span className="tl-icon">{EVENT_ICONS[event.kind] || <FileText size={11} color="var(--text-muted)" />}</span>
       <span className={`tl-label tl-kind-${event.kind}`}>
         {getChipLabel(event)}{countSuffix && countSuffix > 1 ? ` ×${countSuffix}` : ''}
@@ -93,24 +83,25 @@ export function EventRow({ event, selected, onSelect, countSuffix, resultChip, o
 
 interface MergedRowProps {
   event: TranscriptEvent;
+  selected: boolean;
   pairs: ToolPairs;
-  onSelectEvent: (uuid: string | null) => void;
-  selectedEventUuid: string | null;
+  onSelectEvent: (event: TranscriptEvent) => void;
+  selectedKey: string | null;
   countSuffix?: number;
 }
 
 /** Tool rows carry their paired result as a clickable chip. */
-function MergedRow({ event, pairs, onSelectEvent, selectedEventUuid, countSuffix }: MergedRowProps) {
+function MergedRow({ event, selected, pairs, onSelectEvent, selectedKey, countSuffix }: MergedRowProps) {
   const chip = event.kind === 'tool_use' && event.toolUseId ? pairs.results.get(event.toolUseId) : undefined;
   return (
     <EventRow
       event={event}
       countSuffix={countSuffix}
       resultChip={chip}
-      selected={selectedEventUuid === event.uuid}
-      onSelect={() => onSelectEvent(event.uuid)}
-      onSelectChip={chip ? () => onSelectEvent(chip.uuid) : undefined}
-      chipSelected={chip ? selectedEventUuid === chip.uuid : false}
+      selected={selected}
+      onSelect={() => onSelectEvent(event)}
+      onSelectChip={chip ? () => onSelectEvent(chip) : undefined}
+      chipSelected={chip ? selectedKey === selKey(chip) : false}
     />
   );
 }
@@ -121,16 +112,24 @@ function withoutPairedResults(events: TranscriptEvent[], pairs: ToolPairs): Tran
   return events.filter((event) => !(event.kind === 'tool_result' && pairs.toolUseIds.has(event.toolUseId || '')));
 }
 
-interface MergedListProps {
-  events: TranscriptEvent[];
+/** Row props shared by every variant for a plain event or a collapsed spawn run. */
+function rowProps(item: TranscriptEvent | SpawnRun, selectedKey: string | null) {
+  const run = 'spawnRun' in item ? item.spawnRun : null;
+  const event = 'spawnRun' in item ? item.spawnRun[0] : item;
+  return {
+    event,
+    countSuffix: run?.length,
+    selected: run ? run.some((member) => selKey(member) === selectedKey) : selKey(event) === selectedKey,
+  };
+}
+
+interface MergedListProps extends TimelineProps {
   pairs: ToolPairs;
   compressNoise: boolean;
-  onSelectEvent: (uuid: string | null) => void;
-  selectedEventUuid: string | null;
 }
 
 /** Merged rows; spawn runs collapsed, optional noise compression into dim strips. */
-function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedEventUuid }: MergedListProps) {
+function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedKey }: MergedListProps) {
   const items = useMemo(
     () => groupSpawnRuns(compressNoise ? compressNoiseRuns(events) : events),
     [events, compressNoise],
@@ -141,26 +140,14 @@ function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedEvent
         if ('noiseRun' in item) {
           return <div key={`noise-${index}`} className="tl-noise-strip">····&ensp;{noiseSummary(item.noiseRun)}</div>;
         }
-        if ('spawnRun' in item) {
-          const head = item.spawnRun[0];
-          return (
-            <MergedRow
-              key={head.eventKey || head.uuid || index}
-              event={head}
-              countSuffix={item.spawnRun.length}
-              pairs={pairs}
-              onSelectEvent={onSelectEvent}
-              selectedEventUuid={item.spawnRun.some((spawn) => spawn.uuid === selectedEventUuid) ? head.uuid : selectedEventUuid}
-            />
-          );
-        }
+        const props = rowProps(item, selectedKey);
         return (
           <MergedRow
-            key={item.eventKey || item.uuid || index}
-            event={item}
+            key={selKey(props.event) || index}
+            {...props}
             pairs={pairs}
             onSelectEvent={onSelectEvent}
-            selectedEventUuid={selectedEventUuid}
+            selectedKey={selectedKey}
           />
         );
       })}
@@ -168,20 +155,17 @@ function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedEvent
   );
 }
 
-function CurrentTimeline({ events, onSelectEvent, selectedEventUuid }: TimelineProps) {
+function CurrentTimeline({ events, onSelectEvent, selectedKey }: TimelineProps) {
   const items = useMemo(() => groupSpawnRuns(events), [events]);
   return (
     <>
       {items.map((item, index) => {
-        const event = 'spawnRun' in item ? item.spawnRun[0] : (item as TranscriptEvent);
-        const run = 'spawnRun' in item ? item.spawnRun : [event];
+        const props = rowProps(item as TranscriptEvent | SpawnRun, selectedKey);
         return (
           <EventRow
-            key={event.eventKey || event.uuid || index}
-            event={event}
-            countSuffix={run.length}
-            selected={run.some((member) => member.uuid === selectedEventUuid)}
-            onSelect={() => onSelectEvent(event.uuid)}
+            key={selKey(props.event) || index}
+            {...props}
+            onSelect={() => onSelectEvent(props.event)}
           />
         );
       })}
@@ -193,11 +177,11 @@ interface TurnHeaderProps {
   turn: Turn;
   collapsed: boolean;
   onToggle: () => void;
-  onSelect: (uuid: string | null) => void;
-  selectedUuid: string | null;
+  onSelect: (event: TranscriptEvent) => void;
+  selectedKey: string | null;
 }
 
-function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedUuid }: TurnHeaderProps) {
+function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedKey }: TurnHeaderProps) {
   const header = turn.header;
   return (
     <div className="tl-turn-header">
@@ -209,8 +193,8 @@ function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedUuid }: TurnH
             {header.kind === 'user_text' ? 'YOU' : 'CLAUDE'}
           </span>
           <span
-            className={selectedUuid === header.uuid ? 'tl-turn-text tl-turn-text-selected' : 'tl-turn-text'}
-            onClick={() => onSelect(header.uuid)}
+            className={selectedKey === selKey(header) ? 'tl-turn-text tl-turn-text-selected' : 'tl-turn-text'}
+            onClick={() => onSelect(header)}
           >
             {(header.text || '').substring(0, 80)}
           </span>
@@ -227,20 +211,20 @@ interface TurnBlockProps extends TurnHeaderProps {
   pairs: ToolPairs;
 }
 
-function TurnBlock({ turn, pairs, collapsed, onToggle, onSelect, selectedUuid }: TurnBlockProps) {
+function TurnBlock({ turn, pairs, collapsed, onToggle, onSelect, selectedKey }: TurnBlockProps) {
   return (
     <div className="tl-turn">
-      <TurnHeader turn={turn} collapsed={collapsed} onToggle={onToggle} onSelect={onSelect} selectedUuid={selectedUuid} />
+      <TurnHeader turn={turn} collapsed={collapsed} onToggle={onToggle} onSelect={onSelect} selectedKey={selectedKey} />
       {!collapsed && (
         <div className="tl-turn-children">
-          <MergedList events={turn.children} pairs={pairs} compressNoise onSelectEvent={onSelect} selectedEventUuid={selectedUuid} />
+          <MergedList events={turn.children} pairs={pairs} compressNoise onSelectEvent={onSelect} selectedKey={selectedKey} />
         </div>
       )}
     </div>
   );
 }
 
-function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: TimelineProps & { pairs: ToolPairs }) {
+function GroupedTimeline({ events, pairs, onSelectEvent, selectedKey }: TimelineProps & { pairs: ToolPairs }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const turns = useMemo(() => groupIntoTurns(events), [events]);
 
@@ -256,7 +240,7 @@ function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: Ti
   return (
     <>
       {turns.map((turn, index) => {
-        const turnId = turn.header?.eventKey || turn.header?.uuid || `pre-${index}`;
+        const turnId = turn.header ? selKey(turn.header) : `pre-${index}`;
         return (
           <TurnBlock
             key={turnId}
@@ -265,7 +249,7 @@ function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: Ti
             collapsed={collapsed.has(turnId)}
             onToggle={() => toggleTurn(turnId)}
             onSelect={onSelectEvent}
-            selectedUuid={selectedEventUuid}
+            selectedKey={selectedKey}
           />
         );
       })}
@@ -274,10 +258,10 @@ function GroupedTimeline({ events, pairs, onSelectEvent, selectedEventUuid }: Ti
 }
 
 // Pure layout: visibility is the view panel's job; variants never hide events themselves.
-function TimelineBody({ variant, events, pairs, onSelectEvent, selectedEventUuid }: TimelineProps & { variant: TimelineVariant; pairs: ToolPairs }) {
+function TimelineBody({ variant, events, pairs, onSelectEvent, selectedKey }: TimelineProps & { variant: TimelineVariant; pairs: ToolPairs }) {
   const merged = useMemo(() => withoutPairedResults(events, pairs), [events, pairs]);
   if (variant === 'grouped') {
-    return <GroupedTimeline events={merged} pairs={pairs} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+    return <GroupedTimeline events={merged} pairs={pairs} onSelectEvent={onSelectEvent} selectedKey={selectedKey} />;
   }
   if (variant === 'signal' || variant === 'ledger') {
     return (
@@ -286,15 +270,15 @@ function TimelineBody({ variant, events, pairs, onSelectEvent, selectedEventUuid
         pairs={pairs}
         compressNoise={variant === 'ledger'}
         onSelectEvent={onSelectEvent}
-        selectedEventUuid={selectedEventUuid}
+        selectedKey={selectedKey}
       />
     );
   }
-  return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />;
+  return <CurrentTimeline events={events} onSelectEvent={onSelectEvent} selectedKey={selectedKey} />;
 }
 
 /** Left column: the main agent's event chips. Stats live in the session bar above. */
-export function AgentBoard({ events, visibleEvents, pairs, onSelectEvent, selectedEventUuid, variant }: AgentBoardProps) {
+export function AgentBoard({ events, visibleEvents, pairs, onSelectEvent, selectedKey, variant }: AgentBoardProps) {
   return (
     <div className="tl-col">
       <div className="tl-col-title">Agent Timeline</div>
@@ -307,7 +291,7 @@ export function AgentBoard({ events, visibleEvents, pairs, onSelectEvent, select
         <div className="tl-empty">All events hidden by view filters</div>
       ) : (
         <div className="tl-col-scroll">
-          <TimelineBody variant={variant} events={visibleEvents} pairs={pairs} onSelectEvent={onSelectEvent} selectedEventUuid={selectedEventUuid} />
+          <TimelineBody variant={variant} events={visibleEvents} pairs={pairs} onSelectEvent={onSelectEvent} selectedKey={selectedKey} />
         </div>
       )}
     </div>

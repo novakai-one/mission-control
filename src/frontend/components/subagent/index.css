@@ -1,0 +1,23 @@
+/* Subagent inspector column (rightmost — no trailing border). */
+.insp-col-last {
+  border-right: none;
+}
+
+.sub-return-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.sub-return-body { color: var(--text-primary); }
+.sub-return-error { color: var(--kind-error); }
+
+.sub-return-empty {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}

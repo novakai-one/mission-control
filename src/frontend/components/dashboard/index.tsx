@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, PanelRight } from 'lucide-react';
+import { Terminal, Settings, Star, PanelRight } from 'lucide-react';
 import { toDisplayPath } from '../index.js';
 import './index.css';
 
@@ -16,12 +16,12 @@ interface AppHeaderProps {
   onToggleViewPanel: () => void;
 }
 
-const TABS: { mode: ViewMode; label: string; icon: React.ComponentType<{ size?: number | string }> }[] = [
-  { mode: 'files', label: 'Files', icon: FolderTree },
-  { mode: 'agents', label: 'Agents', icon: Radio },
-  { mode: 'transcript', label: 'Transcript', icon: Network },
-  { mode: 'ruleset', label: 'Ruleset', icon: Shield },
-  { mode: 'debug', label: 'Debug', icon: Bug },
+const TABS: { mode: ViewMode; label: string }[] = [
+  { mode: 'files', label: 'Files' },
+  { mode: 'agents', label: 'Agents' },
+  { mode: 'transcript', label: 'Transcript' },
+  { mode: 'ruleset', label: 'Ruleset' },
+  { mode: 'debug', label: 'Debug' },
 ];
 
 export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir, viewPanelOpen, onToggleViewPanel }: AppHeaderProps) {
@@ -48,18 +48,14 @@ export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettin
         </span>
       </div>
 
-      {/* View mode toggle */}
-      <div style={{
-        display: 'flex', backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)',
-        border: '1px solid var(--border-color)', padding: '2px',
-      }}>
-        {TABS.map(({ mode, label, icon: Icon }) => (
+      {/* View mode toggle — quiet buttons, active marked by a dot */}
+      <div style={{ display: 'flex', gap: '0.2rem' }}>
+        {TABS.map(({ mode, label }) => (
           <button
             key={mode}
             onClick={() => onViewModeChange(mode)}
             className={viewMode === mode ? 'dash-tab dash-tab-active' : 'dash-tab'}
           >
-            <Icon size={12} />
             <span>{label}</span>
           </button>
         ))}

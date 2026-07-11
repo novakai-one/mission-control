@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppHeader } from './dashboard/index.js';
 import { AgentBoard } from './board/index.js';
-import { buildToolPairs, visibilityPredicate } from './board/timelineModel.js';
+import { buildToolPairs, selKey, visibilityPredicate } from './board/timelineModel.js';
 import { SelectedInspector } from './details/index.js';
 import { SessionBar } from './sessionbar/index.js';
 import { RulesetInspector, RulesetData } from './ruleset/index.js';
@@ -110,8 +110,8 @@ export function DashboardShell() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
-  const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
-  const [selectedSubEvent, setSelectedSubEvent] = useState<TranscriptEvent | null>(null);
+  const [selectedEventKey, setSelectedEventKey] = useState<string | null>(null);
+  const [selectedSubKey, setSelectedSubKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'files' | 'agents' | 'transcript' | 'ruleset' | 'debug'>('files');
   const agentsState = useAgentsState();
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
@@ -127,9 +127,10 @@ export function DashboardShell() {
   const [costSettings, setCostSettings] = useCostSettings();
 
   const webSocketRef = useRef<WebSocket | null>(null);
-  // Mirror for the ws onmessage closure, which only mounts once.
+  // Mirrors for the ws onmessage closure, which only mounts once.
   const selectedSessionRef = useRef<string | null>(null);
   selectedSessionRef.current = selectedSession;
+  const subagentLiveRef = useRef<((subagentId: string, event: TranscriptEvent) => void) | null>(null);
 
   // Debounced /api/usage refetch: fired per usage-bearing ws frame (main or
   // subagent); trailing debounce keeps re-parsing the jsonl files cheap.
@@ -203,12 +204,19 @@ export function DashboardShell() {
   useEffect(() => {
     let cancelled = false;
     setSessionUsage(null);
+    setEvents([]); // never show session A's timeline under session B's header while (or if) the fetch stalls
     if (!selectedMeta) return;
     fetch(`/api/transcript?project=${selectedMeta.dirName}&session=${selectedMeta.sessionId}`)
       .then(res => res.json())
       .then((data: TranscriptEvent[]) => {
         if (cancelled) return;
-        setEvents(data.filter(event => event.kind !== 'usage'));
+        // Live ws frames may have landed while the fetch was in flight; upsert
+        // them over the file snapshot instead of clobbering them (the watcher
+        // emits each appended line exactly once).
+        setEvents(prev => prev.reduce(
+          (merged, liveEvent) => upsertEvent(merged, liveEvent),
+          data.filter(event => event.kind !== 'usage'),
+        ));
       })
       .catch(() => {});
     refetchUsage(0);
@@ -232,8 +240,12 @@ export function DashboardShell() {
           setEvents(prev => (matches ? upsertEvent(prev, message.payload) : prev));
         }
       } else if (message.type === 'subagent-event') {
-        // Subagent tails stream over the same socket; their usage growth must refresh costs too.
-        if (message.sessionId === selectedSessionRef.current && message.event?.kind === 'usage') refetchUsage(1500);
+        // Subagent tails stream over the same socket; their usage growth must
+        // refresh costs, and their rows feed the live sub timeline.
+        if (message.sessionId === selectedSessionRef.current) {
+          if (message.event?.kind === 'usage') refetchUsage(1500);
+          if (message.subagentId && message.event) subagentLiveRef.current?.(message.subagentId, message.event);
+        }
       } else if (message.event === 'watch-started') {
         // Watch acknowledgement — must not fall through to the debug message list.
       } else if (message.event === 'build-session' && message.payload?.sessionId && message.payload?.projectDir) {
@@ -242,6 +254,9 @@ export function DashboardShell() {
           ? prev
           : [{ sessionId, dirName: projectDir, matchReason: 'cwd', modified: Date.now(), size: 0 }, ...prev]);
         setSelectedSession(sessionId);
+        // Same resets as a SessionBar switch — stale selections must not outlive their session.
+        setSelectedEventKey(null);
+        setSelectedSubKey(null);
       } else if (!message.type) {
         // Build/agent events. Type-keyed frames (agents-changed etc.) belong to
         // the agentSocket dialect and are broadcast to every socket — not ours.
@@ -261,8 +276,14 @@ export function DashboardShell() {
     }
   }, [selectedMeta, webSocketRef.current?.readyState]);
 
-  const selectedEvent = events.find(e => e.uuid === selectedEventUuid);
-  const subagentState = useSubagentState(selectedMeta?.dirName ?? null, selectedSession, selectedEvent);
+  const selectedEvent = useMemo(() => events.find(e => selKey(e) === selectedEventKey), [events, selectedEventKey]);
+  const subagentState = useSubagentState(selectedMeta?.dirName ?? null, selectedSession);
+  subagentLiveRef.current = subagentState.onLiveEvent;
+  // Derived from live subEvents so streaming updates to the selected sub event render, not a click-time snapshot.
+  const selectedSubEvent = useMemo(
+    () => subagentState.subEvents.find(e => selKey(e) === selectedSubKey) ?? null,
+    [subagentState.subEvents, selectedSubKey],
+  );
 
   // Visibility filters apply to the timeline only; the view panel and stats see everything.
   // Pairing indexes toolUseIds from ALL tool_use events (hidden or not) so hiding a tool
@@ -275,9 +296,18 @@ export function DashboardShell() {
     };
   }, [events, viewPanel.hiddenEvents]);
 
-  function selectMainEvent(uuid: string | null): void {
-    setSelectedEventUuid(uuid);
-    setSelectedSubEvent(null);
+  // Sub-event selection survives main-timeline clicks; only clicking a spawn
+  // (which switches the focused subagent) resets the sub columns.
+  function selectMainEvent(event: TranscriptEvent | null): void {
+    setSelectedEventKey(event ? selKey(event) : null);
+    if (event?.isAgentSpawn && event.toolUseId) {
+      subagentState.focusSpawn(event.toolUseId);
+      setSelectedSubKey(null);
+    }
+  }
+
+  function selectSubEvent(event: TranscriptEvent | null): void {
+    setSelectedSubKey(event ? selKey(event) : null);
   }
 
   return (
@@ -322,7 +352,7 @@ export function DashboardShell() {
             <SessionBar
               sessions={sessions}
               selectedSession={selectedSession}
-              onSelectSession={(id) => { setSelectedSession(id); selectMainEvent(null); }}
+              onSelectSession={(id) => { setSelectedSession(id); setSelectedEventKey(null); setSelectedSubKey(null); }}
               eventCount={events.length}
               subagentCount={subagentState.subagents.length}
               sessionUsage={sessionUsage}
@@ -334,7 +364,7 @@ export function DashboardShell() {
                 visibleEvents={visibleEvents}
                 pairs={pairs}
                 onSelectEvent={selectMainEvent}
-                selectedEventUuid={selectedEventUuid}
+                selectedKey={selectedEventKey}
                 variant={viewPanel.variant}
               />
               <ResizeHandle width={detailsWidth} onWidthChange={setDetailsWidth} />
@@ -342,15 +372,15 @@ export function DashboardShell() {
                 <SelectedInspector
                   event={selectedEvent}
                   events={visibleEvents}
-                  onNavigate={(event) => selectMainEvent(event.uuid)}
+                  onNavigate={selectMainEvent}
                 />
               </div>
               <ResizeHandle width={subTimelineWidth} onWidthChange={setSubTimelineWidth} />
               <div style={{ width: subTimelineWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
                 <SubTimeline
                   {...subagentState}
-                  onSelectSubEvent={setSelectedSubEvent}
-                  selectedSubEventUuid={selectedSubEvent?.uuid ?? null}
+                  onSelectSubEvent={selectSubEvent}
+                  selectedSubKey={selectedSubKey}
                 />
               </div>
               <ResizeHandle width={subagentWidth} onWidthChange={setSubagentWidth} />
@@ -359,7 +389,7 @@ export function DashboardShell() {
                   meta={subagentState.selected}
                   subEvents={subagentState.subEvents}
                   event={selectedSubEvent}
-                  onNavigate={setSelectedSubEvent}
+                  onNavigate={selectSubEvent}
                   mainEvents={events}
                   sessionUsage={sessionUsage}
                   costSettings={costSettings}
