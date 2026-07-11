@@ -108,7 +108,6 @@ export function DashboardShell() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
-  const [liveMode, setLiveMode] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
   const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
   const [selectedSubEvent, setSelectedSubEvent] = useState<TranscriptEvent | null>(null);
@@ -235,7 +234,7 @@ export function DashboardShell() {
         // Subagent tails stream over the same socket; their usage growth must refresh costs too.
         if (message.sessionId === selectedSessionRef.current && message.event?.kind === 'usage') refetchUsage(1500);
       } else if (message.event === 'watch-started') {
-        setLiveMode(true);
+        // Watch acknowledgement — must not fall through to the debug message list.
       } else if (message.event === 'build-session' && message.payload?.sessionId && message.payload?.projectDir) {
         const { sessionId, projectDir } = message.payload;
         setSessions(prev => prev.some(session => session.sessionId === sessionId)
@@ -272,7 +271,6 @@ export function DashboardShell() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       <AppHeader
-        liveMode={liveMode}
         eventCount={events.length}
         viewMode={viewMode}
         onViewModeChange={setViewMode}

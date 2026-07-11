@@ -205,7 +205,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
             placeholder="~/path/to/dir"
           />
           {rootError && (
-            <div style={{ fontSize: '0.6rem', color: '#c97a7a', marginTop: '0.3rem' }}>
+            <div style={{ fontSize: '0.6rem', color: 'var(--kind-error)', marginTop: '0.3rem' }}>
               {rootError}
             </div>
           )}
@@ -264,7 +264,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
             <Star size={12} /> Set as Active Repo
           </button>
           {activeError && (
-            <div style={{ fontSize: '0.6rem', color: '#c97a7a' }}>
+            <div style={{ fontSize: '0.6rem', color: 'var(--kind-error)' }}>
               {activeError}
             </div>
           )}
@@ -331,13 +331,13 @@ function TreeNode({ entry, depth, cache, expanded, expandErrors, loadingPaths, s
         ) : (
           <span style={{ width: '14px', flexShrink: 0 }} />
         )}
-        {isDir ? <Folder size={13} color="#c9b57a" /> : <FileIcon size={13} color="var(--text-secondary)" />}
+        {isDir ? <Folder size={13} color="var(--kind-tool)" /> : <FileIcon size={13} color="var(--text-secondary)" />}
         <span className="files-name" onClick={() => onSelect(entry)}>{entry.name}</span>
       </div>
       {isDir && isExpanded && (
         <div>
           {error ? (
-            <div style={{ paddingLeft: `${(depth + 1) * 14 + 4}px`, fontSize: '0.6rem', color: '#c97a7a' }}>{error}</div>
+            <div style={{ paddingLeft: `${(depth + 1) * 14 + 4}px`, fontSize: '0.6rem', color: 'var(--kind-error)' }}>{error}</div>
           ) : loading ? (
             <div style={{ paddingLeft: `${(depth + 1) * 14 + 4}px`, fontSize: '0.6rem', color: 'var(--text-muted)' }}>loading…</div>
           ) : (

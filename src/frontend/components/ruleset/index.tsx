@@ -33,11 +33,11 @@ interface RulesetInspectorProps {
 type Tab = 'hooks' | 'gates' | 'claude-md';
 
 const EVENT_COLORS: Record<string, string> = {
-  PreToolUse: '#c9b57a',
-  PostToolUse: '#7ac98f',
-  SessionStart: '#7a9ec9',
-  Stop: '#c97a7a',
-  SubagentStop: '#9a7ac9',
+  PreToolUse: 'var(--kind-tool)',
+  PostToolUse: 'var(--kind-result)',
+  SessionStart: 'var(--kind-assistant)',
+  Stop: 'var(--kind-error)',
+  SubagentStop: 'var(--kind-thinking)',
   Notification: 'var(--text-muted)',
 };
 

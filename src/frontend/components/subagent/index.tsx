@@ -103,7 +103,7 @@ export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEv
       {/* Header */}
       <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-          <GitBranch size={14} color="#c9b57a" />
+          <GitBranch size={14} color="var(--kind-tool)" />
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>
             {matchedMeta.description || 'subagent'}
           </span>
@@ -139,7 +139,7 @@ export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEv
                 borderRadius: '4px', cursor: 'pointer',
                 backgroundColor: selectedSubEventUuid === ev.uuid ? 'var(--bg-tertiary)' : 'transparent',
                 border: selectedSubEventUuid === ev.uuid ? '1px solid var(--border-active)' : '1px solid transparent',
-                transition: 'all 0.1s ease',
+                transition: 'all var(--anim)',
               }}
             >
               <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', minWidth: '52px', marginTop: '1px' }}>
@@ -162,7 +162,7 @@ export function SubagentInspector({ projectDir, sessionId, selectedEvent, mainEv
         </div>
         {returnEvent ? (
           <pre style={{
-            fontSize: '0.65rem', color: returnEvent.isError ? '#c97a7a' : 'var(--text-primary)',
+            fontSize: '0.65rem', color: returnEvent.isError ? 'var(--kind-error)' : 'var(--text-primary)',
             whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)',
             lineHeight: '1.25rem', margin: 0, maxHeight: '140px', overflowY: 'auto',
           }}>

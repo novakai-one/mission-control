@@ -5,11 +5,11 @@ export type TimelineVariant = 'current' | 'signal' | 'grouped' | 'ledger';
 
 const VARIANT_STORAGE_KEY = 'mc-timeline-variant';
 
-export const VARIANT_OPTIONS: { id: TimelineVariant; label: string; title: string }[] = [
-  { id: 'current', label: 'CUR', title: 'Current timeline' },
-  { id: 'signal', label: 'A', title: 'Signal: flat, tool results merged into their call rows' },
-  { id: 'grouped', label: 'B', title: 'Grouped: collapsible user/assistant turns' },
-  { id: 'ledger', label: 'C', title: 'Ledger: dense, noise compressed to strips' },
+export const VARIANT_OPTIONS: { id: TimelineVariant; label: string; description: string }[] = [
+  { id: 'current', label: 'Current', description: 'The original event timeline' },
+  { id: 'signal', label: 'Signal', description: 'Flat, tool results merged into call rows' },
+  { id: 'grouped', label: 'Grouped', description: 'Collapsible user and assistant turns' },
+  { id: 'ledger', label: 'Ledger', description: 'Dense, noise compressed to strips' },
 ];
 
 export function loadStoredVariant(): TimelineVariant {

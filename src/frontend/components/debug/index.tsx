@@ -64,10 +64,10 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-        <Bug size={16} color="#c9b57a" />
+        <Bug size={16} color="var(--kind-tool)" />
         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>BUILD DEBUG</span>
         {!wsReady && (
-          <span style={{ marginLeft: '0.5rem', color: '#c97a7a', fontSize: '0.7rem' }}>● WebSocket disconnected — no live events</span>
+          <span style={{ marginLeft: '0.5rem', color: 'var(--kind-error)', fontSize: '0.7rem' }}>● WebSocket disconnected — no live events</span>
         )}
       </div>
 
@@ -83,10 +83,10 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
       {/* Per-build diagnostics */}
       <Section title="Last build">
         <Row k="Build ID" v={build.id || started?.payload?.build?.id || '—'} />
-        <Row k="Status" v={status} color={status === 'success' ? '#7ac98f' : status === 'failed' ? '#c97a7a' : status === 'stopped' ? '#c9b57a' : '#7a9ec9'} />
+        <Row k="Status" v={status} color={status === 'success' ? 'var(--kind-result)' : status === 'failed' ? 'var(--kind-error)' : status === 'stopped' ? 'var(--kind-tool)' : 'var(--kind-assistant)'} />
         <Row k="Exit code" v={exitCode === undefined ? '—' : String(exitCode)} />
         <Row k="Duration" v={durationMs !== undefined ? `${durationMs} ms` : '—'} />
-        {errorMessage && <Row k="Error" v={errorMessage} color="#c97a7a" mono />}
+        {errorMessage && <Row k="Error" v={errorMessage} color="var(--kind-error)" mono />}
       </Section>
 
       {/* Checks */}
@@ -94,7 +94,7 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '0.25rem 0.75rem', alignItems: 'baseline' }}>
           {checks.map((c, i) => (
             <React.Fragment key={i}>
-              <span style={{ color: c.ok === null ? 'var(--text-muted)' : c.ok ? '#7ac98f' : '#c97a7a' }}>
+              <span style={{ color: c.ok === null ? 'var(--text-muted)' : c.ok ? 'var(--kind-result)' : 'var(--kind-error)' }}>
                 {c.ok === null ? '·' : c.ok ? '✓' : '✗'}
               </span>
               <span style={{ color: 'var(--text-secondary)' }}>{c.label}</span>
@@ -107,7 +107,7 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
       {/* stderr */}
       {stderrText && (
         <Section title="stderr">
-          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#c97a7a', backgroundColor: 'var(--bg-primary)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--kind-error)', backgroundColor: 'var(--bg-primary)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
             {stderrText}
           </pre>
         </Section>
@@ -126,7 +126,7 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
             <span style={{ color: 'var(--text-muted)' }}>No events.</span>
           ) : visible.map((m, i) => (
             <div key={i} style={{ marginBottom: '0.3rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              <span style={{ color: '#7a9ec9' }}>{m.event}</span>{' '}
+              <span style={{ color: 'var(--kind-assistant)' }}>{m.event}</span>{' '}
               <span style={{ color: 'var(--text-muted)' }}>{JSON.stringify(m.payload)}</span>
             </div>
           ))}

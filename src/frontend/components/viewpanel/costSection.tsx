@@ -62,9 +62,6 @@ function numberInput(value: number, onCommit: (parsed: number) => void): React.R
 export function CostSection({ usage, settings, onSettingsChange }: CostSectionProps) {
   return (
     <>
-      <div className="vp-section-head">
-        <span className="vp-section-title">Cost</span>
-      </div>
       {usage ? (
         <div className="vp-group">
           <div className="vp-row">

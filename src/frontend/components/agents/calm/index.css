@@ -19,7 +19,7 @@
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.75rem;
-  background: rgba(26, 27, 31, 0.7);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
@@ -83,11 +83,11 @@
 /* Kind coloring mirrors board/index.tsx EVENT_COLORS — kept in CSS since this
    dir's inline style= attributes are gate-forbidden. */
 .calm-kind-user_text { color: var(--text-secondary); }
-.calm-kind-assistant_text { color: #7a9ec9; }
-.calm-kind-assistant_thinking { color: #9a7ac9; }
-.calm-kind-tool_use { color: #c9b57a; }
-.calm-kind-tool_result { color: #7ac98f; }
-.calm-kind-hook_event { color: #c97a7a; }
+.calm-kind-assistant_text { color: var(--kind-assistant); }
+.calm-kind-assistant_thinking { color: var(--kind-thinking); }
+.calm-kind-tool_use { color: var(--kind-tool); }
+.calm-kind-tool_result { color: var(--kind-result); }
+.calm-kind-hook_event { color: var(--kind-error); }
 .calm-kind-system { color: var(--text-muted); }
 .calm-kind-session_meta { color: var(--text-muted); }
 
@@ -98,7 +98,7 @@
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.65rem 0.75rem;
-  background: rgba(26, 27, 31, 0.7);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
@@ -174,13 +174,13 @@
 .calm-status-running {
   font-size: 0.6rem;
   font-weight: 600;
-  color: #c9b57a;
+  color: var(--kind-tool);
 }
 
 .calm-status-done {
   font-size: 0.6rem;
   font-weight: 600;
-  color: #7ac98f;
+  color: var(--kind-result);
 }
 
 .calm-subagent-count {
