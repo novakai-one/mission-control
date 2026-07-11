@@ -4,9 +4,8 @@ import { AgentBoard } from './board/index.js';
 import { SelectedInspector } from './details/index.js';
 import { PlaybackSlider } from './history/index.js';
 import { RulesetInspector, RulesetData } from './ruleset/index.js';
-import { TerminalPanel, BuildMessage } from './terminal/index.js';
 import { SettingsPanel } from './settings/index.js';
-import { DebugPanel } from './debug/index.js';
+import { DebugPanel, BuildMessage } from './debug/index.js';
 import { FilesPanel } from './files/index.js';
 import { SubagentInspector } from './subagent/index.js';
 import { SidePanel } from './sidepanel/index.js';
@@ -113,7 +112,7 @@ export function DashboardShell() {
   const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
   const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
   const [selectedSubEvent, setSelectedSubEvent] = useState<TranscriptEvent | null>(null);
-  const [viewMode, setViewMode] = useState<'files' | 'agents' | 'transcript' | 'livechat' | 'ruleset' | 'debug'>('files');
+  const [viewMode, setViewMode] = useState<'files' | 'agents' | 'transcript' | 'ruleset' | 'debug'>('files');
   const agentsState = useAgentsState();
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
@@ -340,15 +339,6 @@ export function DashboardShell() {
               />
             </div>
           </>
-        ) : viewMode === 'livechat' ? (
-          <TerminalPanel
-            activeRepo={activeRepo}
-            onBuildMessage={(msg) => setBuildMessages(prev => [...prev, msg])}
-            buildMessages={buildMessages}
-            wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
-            resumeSessionId={selectedSession}
-            canResume={liveMode && !!selectedSession}
-          />
         ) : viewMode === 'ruleset' ? (
           <RulesetInspector data={rulesetData} />
         ) : viewMode === 'debug' ? (

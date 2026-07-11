@@ -1,13 +1,13 @@
 import React from 'react';
-import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, MessageSquare, PanelRight } from 'lucide-react';
+import { Terminal, Radio, Network, Shield, Settings, Bug, FolderTree, Star, PanelRight } from 'lucide-react';
 import { toDisplayPath } from '../index.js';
 import './index.css';
 
 interface AppHeaderProps {
   liveMode: boolean;
   eventCount: number;
-  viewMode: 'files' | 'agents' | 'transcript' | 'livechat' | 'ruleset' | 'debug';
-  onViewModeChange: (mode: 'files' | 'agents' | 'transcript' | 'livechat' | 'ruleset' | 'debug') => void;
+  viewMode: 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug';
+  onViewModeChange: (mode: 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug') => void;
   onOpenSettings: () => void;
   activeRepo: string | null;
   homeDir: string | null;
@@ -82,19 +82,6 @@ export function AppHeader({ liveMode, eventCount, viewMode, onViewModeChange, on
         >
           <Network size={12} />
           <span>Transcript</span>
-        </button>
-        <button
-          onClick={() => onViewModeChange('livechat')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.35rem',
-            padding: '0.35rem 0.8rem', borderRadius: '4px',
-            backgroundColor: viewMode === 'livechat' ? 'var(--bg-tertiary)' : 'transparent',
-            border: 'none', color: viewMode === 'livechat' ? 'var(--text-primary)' : 'var(--text-muted)',
-            fontSize: '0.7rem', fontWeight: viewMode === 'livechat' ? 600 : 400, cursor: 'pointer',
-          }}
-        >
-          <MessageSquare size={12} />
-          <span>Live Chat</span>
         </button>
         <button
           onClick={() => onViewModeChange('ruleset')}

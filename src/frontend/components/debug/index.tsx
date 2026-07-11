@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Bug } from 'lucide-react';
-import { BuildMessage } from '../terminal/index.js';
+export interface BuildMessage {
+  event: string;
+  payload: any;
+}
 
 interface DebugPanelProps {
   buildMessages: BuildMessage[];
