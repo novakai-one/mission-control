@@ -1,6 +1,6 @@
 // Run with `npx tsx src/frontend/lib/cost/cost.test.ts`.
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS, costOfModel, formatCost, formatTokens, priceFor, sessionCost, sessionTokens, type SessionUsage } from './index.js';
+import { DEFAULT_SETTINGS, costOfModel, fetchUsage, formatCost, formatTokens, priceFor, sessionCost, sessionTokens, type SessionUsage } from './index.js';
 
 // Prefix pricing: longest match wins; unknown models fall back to Opus rates.
 assert.equal(priceFor('claude-fable-5', DEFAULT_SETTINGS.prices).inputPerMTok, 10);
@@ -30,5 +30,14 @@ assert.equal(formatTokens(1_234_000), '1.23M');
 assert.equal(formatTokens(12_340), '12.3k');
 assert.equal(formatCost(1.234, 'USD'), '$1.23');
 assert.equal(formatCost(123.4, 'AUD'), 'A$123');
+
+// fetchUsage: 404 and non-SessionUsage bodies resolve to null instead of leaking into state.
+const fetchStub = (ok: boolean, body: unknown) => async () => ({ ok, json: async () => body }) as Response;
+globalThis.fetch = fetchStub(false, { error: 'Session not found' }) as typeof fetch;
+assert.equal(await fetchUsage('-proj', 's1'), null);
+globalThis.fetch = fetchStub(true, { error: 'weird 200' }) as typeof fetch;
+assert.equal(await fetchUsage('-proj', 's1'), null);
+globalThis.fetch = fetchStub(true, session) as typeof fetch;
+assert.deepEqual(await fetchUsage('-proj', 's1'), session);
 
 console.log('cost tests passed');

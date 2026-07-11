@@ -99,6 +99,14 @@ export function sessionTokens(usage: SessionUsage): number {
   return tokensOf(usage.main) + usage.subagents.reduce((total, subagent) => total + tokensOf(subagent), 0);
 }
 
+/** Fetch /api/usage; null on HTTP errors (404 until the transcript file exists) or a non-SessionUsage body. */
+export async function fetchUsage(projectDir: string, sessionId: string): Promise<SessionUsage | null> {
+  const response = await fetch(`/api/usage?project=${encodeURIComponent(projectDir)}&session=${encodeURIComponent(sessionId)}`);
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data?.main?.perModel && Array.isArray(data.subagents) ? data as SessionUsage : null;
+}
+
 export function formatTokens(count: number): string {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(2)}M`;
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;

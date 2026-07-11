@@ -13,7 +13,7 @@ import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
-import { useCostSettings, type SessionUsage } from '../lib/cost/index.js';
+import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
 export function toDisplayPath(absPath: string | null, homeDir: string | null): string {
@@ -140,10 +140,9 @@ export function DashboardShell() {
     usageTimerRef.current = setTimeout(() => {
       const meta = selectedMetaRef.current;
       if (!meta) return;
-      fetch(`/api/usage?project=${meta.dirName}&session=${meta.sessionId}`)
-        .then(res => res.json())
-        .then((data: SessionUsage) => {
-          if (selectedMetaRef.current?.sessionId === meta.sessionId) setSessionUsage(data);
+      fetchUsage(meta.dirName, meta.sessionId)
+        .then((data) => {
+          if (data && selectedMetaRef.current?.sessionId === meta.sessionId) setSessionUsage(data);
         })
         .catch(() => {});
     }, delayMs);
