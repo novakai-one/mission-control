@@ -10,6 +10,7 @@ import {
   CACHE_WRITE_5M_MULT,
   costOf,
   costOfModel,
+  fetchUsage,
   formatCost,
   formatTokens,
   sessionCost,
@@ -136,9 +137,8 @@ export function AgentCostSection({ agent, settings, onSettingsChange }: { agent:
     function refetch(delayMs: number): void {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        fetch(`/api/usage?project=${projectDir}&session=${sessionId}`)
-          .then(response => response.json())
-          .then((data: SessionUsage) => { if (!disposed) setUsage(data); })
+        fetchUsage(projectDir, sessionId)
+          .then((data) => { if (!disposed) setUsage(data); })
           .catch(() => {});
       }, delayMs);
     }
