@@ -3,6 +3,7 @@ import { GitBranch, Radio } from 'lucide-react';
 import * as agentSocket from '../../../lib/agentSocket/index.js';
 import type { SubagentSummary } from '../../../lib/agentSocket/index.js';
 import { upsertEvent } from '../../../lib/upsertEvents.js';
+import { currentTimeZone } from '../../../lib/timezone/index.js';
 import { EVENT_ICONS, getEventLabel } from '../../board/index.js';
 import './index.css';
 
@@ -92,7 +93,7 @@ function isSubagentDone(events: CalmEvent[], toolUseId: string): boolean {
 }
 
 function formatTime(ts: string): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: currentTimeZone() });
 }
 
 function EventRow({ event }: { event: CalmEvent }): React.JSX.Element {

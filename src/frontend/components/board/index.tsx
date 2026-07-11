@@ -3,6 +3,7 @@ import { Network, Brain, FileText, Wrench, AlertTriangle, Radio } from 'lucide-r
 import { TranscriptEvent } from '../index.js';
 import type { SpawnRun, TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
 import { compressNoiseRuns, getChipLabel, getToolLabel, groupIntoTurns, groupSpawnRuns, noiseSummary, selKey } from './timelineModel.js';
+import { currentTimeZone } from '../../lib/timezone/index.js';
 import './index.css';
 
 interface TimelineProps {
@@ -45,7 +46,7 @@ export function getEventLabel(ev: TranscriptEvent): string {
 }
 
 function formatTime(stamp: string): string {
-  return new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: currentTimeZone() });
 }
 
 interface EventRowProps {

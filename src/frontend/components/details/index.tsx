@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Terminal, Brain, Wrench, FileText, AlertTriangle, Radio, GitBranch } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
 import { getChipLabel, selKey } from '../board/timelineModel.js';
+import { currentTimeZone } from '../../lib/timezone/index.js';
 import './index.css';
 
 const KIND_ICONS: Record<string, React.ReactNode> = {
@@ -21,7 +22,7 @@ export function truncate(text: string, max: number): string {
 }
 
 export function formatClock(stamp: string): string {
-  return new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: currentTimeZone() });
 }
 
 /** Kind-specific detail panels for one event; shared by both inspector columns. */
