@@ -10,6 +10,7 @@ interface IndexEntry {
   size: number;
   cwds: string[];
   touchedPaths: string[];
+  title: string;
 }
 
 export interface SessionMatch {
@@ -18,6 +19,7 @@ export interface SessionMatch {
   modified: number;
   size: number;
   matchReason: 'cwd' | 'files';
+  title: string;
 }
 
 const cache = new Map<string, IndexEntry>();
@@ -94,17 +96,19 @@ function sweepSessionFile(filePath: string): boolean {
   return true;
 }
 
-function parseSessionFile(filePath: string): { cwds: string[]; touchedPaths: string[] } {
+function parseSessionFile(filePath: string): { cwds: string[]; touchedPaths: string[]; title: string } {
   const content = readFileSync(filePath, 'utf8');
   const cwds = new Set<string>();
   const touchedPaths = new Set<string>();
+  const titles = { ai: '', custom: '' };
   for (const line of content.split('\n')) {
-    parseLine(line, cwds, touchedPaths);
+    parseLine(line, cwds, touchedPaths, titles);
   }
-  return { cwds: [...cwds], touchedPaths: [...touchedPaths] };
+  // Manual rename beats the generated title; later lines beat earlier ones.
+  return { cwds: [...cwds], touchedPaths: [...touchedPaths], title: titles.custom || titles.ai };
 }
 
-function parseLine(line: string, cwds: Set<string>, touchedPaths: Set<string>): void {
+function parseLine(line: string, cwds: Set<string>, touchedPaths: Set<string>, titles: { ai: string; custom: string }): void {
   if (!line.trim()) return;
   let entry: any;
   try {
@@ -113,6 +117,8 @@ function parseLine(line: string, cwds: Set<string>, touchedPaths: Set<string>): 
     return;
   }
   if (typeof entry.cwd === 'string' && entry.cwd.startsWith('/')) cwds.add(entry.cwd);
+  if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string') titles.ai = entry.aiTitle;
+  if (entry.type === 'custom-title' && typeof entry.customTitle === 'string') titles.custom = entry.customTitle;
   extractToolPaths(entry, touchedPaths);
 }
 
@@ -155,7 +161,7 @@ function matchEntry(filePath: string, entry: IndexEntry, repo: string): SessionM
   if (!reason) return null;
   const dirName = path.basename(path.dirname(filePath));
   const sessionId = path.basename(filePath, '.jsonl');
-  return { sessionId, dirName, modified: entry.mtimeMs, size: entry.size, matchReason: reason };
+  return { sessionId, dirName, modified: entry.mtimeMs, size: entry.size, matchReason: reason, title: entry.title };
 }
 
 function matchReason(entry: IndexEntry, repo: string): 'cwd' | 'files' | null {

@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppHeader } from './dashboard/index.js';
 import { AgentBoard } from './board/index.js';
+import { buildToolPairs, visibilityPredicate } from './board/timelineModel.js';
 import { SelectedInspector } from './details/index.js';
-import { PlaybackSlider } from './history/index.js';
+import { SessionBar } from './sessionbar/index.js';
 import { RulesetInspector, RulesetData } from './ruleset/index.js';
 import { SettingsPanel } from './settings/index.js';
 import { DebugPanel, BuildMessage } from './debug/index.js';
 import { FilesPanel } from './files/index.js';
-import { SubagentInspector } from './subagent/index.js';
+import { SubTimeline, SubagentInspector, useSubagentState } from './subagent/index.js';
 import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
@@ -29,6 +30,7 @@ export interface SessionMeta {
   matchReason: 'cwd' | 'files';
   modified: number;
   size: number;
+  title?: string;
 }
 
 export interface TranscriptEvent {
@@ -108,7 +110,6 @@ export function DashboardShell() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
-  const [playbackIndex, setPlaybackIndex] = useState<number>(-1);
   const [selectedEventUuid, setSelectedEventUuid] = useState<string | null>(null);
   const [selectedSubEvent, setSelectedSubEvent] = useState<TranscriptEvent | null>(null);
   const [viewMode, setViewMode] = useState<'files' | 'agents' | 'transcript' | 'ruleset' | 'debug'>('files');
@@ -118,8 +119,9 @@ export function DashboardShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [homeDir, setHomeDir] = useState<string | null>(null);
   const [activeRepo, setActiveRepo] = useState<string | null>(null);
-  const [detailsWidth, setDetailsWidth] = useState(480);
-  const [subagentWidth, setSubagentWidth] = useState(480);
+  const [detailsWidth, setDetailsWidth] = useState(420);
+  const [subTimelineWidth, setSubTimelineWidth] = useState(300);
+  const [subagentWidth, setSubagentWidth] = useState(420);
   const viewPanel = useViewPanelState();
   const [sessionUsage, setSessionUsage] = useState<SessionUsage | null>(null);
   const [costSettings, setCostSettings] = useCostSettings();
@@ -207,7 +209,6 @@ export function DashboardShell() {
       .then((data: TranscriptEvent[]) => {
         if (cancelled) return;
         setEvents(data.filter(event => event.kind !== 'usage'));
-        setPlaybackIndex(-1); // live mode
       })
       .catch(() => {});
     refetchUsage(0);
@@ -260,13 +261,24 @@ export function DashboardShell() {
     }
   }, [selectedMeta, webSocketRef.current?.readyState]);
 
-  const currentEvents = playbackIndex >= 0
-    ? events.slice(0, playbackIndex + 1)
-    : events;
+  const selectedEvent = events.find(e => e.uuid === selectedEventUuid);
+  const subagentState = useSubagentState(selectedMeta?.dirName ?? null, selectedSession, selectedEvent);
 
-  // Build agent tree from events
-  const agentSpawns = currentEvents.filter(e => e.kind === 'tool_use' && e.isAgentSpawn);
-  const selectedEvent = currentEvents.find(e => e.uuid === selectedEventUuid);
+  // Visibility filters apply to the timeline only; the view panel and stats see everything.
+  // Pairing indexes toolUseIds from ALL tool_use events (hidden or not) so hiding a tool
+  // category drops its results too, while hidden results are excluded so their chips go away.
+  const { visibleEvents, pairs } = useMemo(() => {
+    const predicate = visibilityPredicate(viewPanel.hiddenEvents);
+    return {
+      visibleEvents: events.filter(predicate),
+      pairs: buildToolPairs(events.filter((event) => event.kind !== 'tool_result' || predicate(event))),
+    };
+  }, [events, viewPanel.hiddenEvents]);
+
+  function selectMainEvent(uuid: string | null): void {
+    setSelectedEventUuid(uuid);
+    setSelectedSubEvent(null);
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
@@ -306,37 +318,55 @@ export function DashboardShell() {
             onActiveRepoChange={setActiveRepo}
           />
         ) : viewMode === 'transcript' ? (
-          <>
-            <AgentBoard
-              events={currentEvents}
-              onSelectEvent={(uuid) => { setSelectedEventUuid(uuid); setSelectedSubEvent(null); }}
-              selectedEventUuid={selectedEventUuid}
-              variant={viewPanel.variant}
-              hiddenEvents={viewPanel.hiddenEvents}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+            <SessionBar
+              sessions={sessions}
+              selectedSession={selectedSession}
+              onSelectSession={(id) => { setSelectedSession(id); selectMainEvent(null); }}
+              eventCount={events.length}
+              subagentCount={subagentState.subagents.length}
               sessionUsage={sessionUsage}
               costSettings={costSettings}
             />
-            <ResizeHandle width={detailsWidth} onWidthChange={setDetailsWidth} />
-            <div style={{ width: detailsWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
-              <SelectedInspector
-                event={selectedSubEvent ?? selectedEvent}
-                events={currentEvents}
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+              <AgentBoard
+                events={events}
+                visibleEvents={visibleEvents}
+                pairs={pairs}
+                onSelectEvent={selectMainEvent}
+                selectedEventUuid={selectedEventUuid}
+                variant={viewPanel.variant}
               />
+              <ResizeHandle width={detailsWidth} onWidthChange={setDetailsWidth} />
+              <div style={{ width: detailsWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+                <SelectedInspector
+                  event={selectedEvent}
+                  events={visibleEvents}
+                  onNavigate={(event) => selectMainEvent(event.uuid)}
+                />
+              </div>
+              <ResizeHandle width={subTimelineWidth} onWidthChange={setSubTimelineWidth} />
+              <div style={{ width: subTimelineWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+                <SubTimeline
+                  {...subagentState}
+                  onSelectSubEvent={setSelectedSubEvent}
+                  selectedSubEventUuid={selectedSubEvent?.uuid ?? null}
+                />
+              </div>
+              <ResizeHandle width={subagentWidth} onWidthChange={setSubagentWidth} />
+              <div style={{ width: subagentWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+                <SubagentInspector
+                  meta={subagentState.selected}
+                  subEvents={subagentState.subEvents}
+                  event={selectedSubEvent}
+                  onNavigate={setSelectedSubEvent}
+                  mainEvents={events}
+                  sessionUsage={sessionUsage}
+                  costSettings={costSettings}
+                />
+              </div>
             </div>
-            <ResizeHandle width={subagentWidth} onWidthChange={setSubagentWidth} />
-            <div style={{ width: subagentWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
-              <SubagentInspector
-                projectDir={selectedMeta?.dirName ?? null}
-                sessionId={selectedSession}
-                selectedEvent={selectedEvent}
-                mainEvents={currentEvents}
-                onSelectSubEvent={setSelectedSubEvent}
-                selectedSubEventUuid={selectedSubEvent?.uuid ?? null}
-                sessionUsage={sessionUsage}
-                costSettings={costSettings}
-              />
-            </div>
-          </>
+          </div>
         ) : viewMode === 'ruleset' ? (
           <RulesetInspector data={rulesetData} />
         ) : viewMode === 'debug' ? (
@@ -356,16 +386,6 @@ export function DashboardShell() {
           activeAgent={agentsState.agents.find(agent => agent.agentId === agentsState.activeAgentId) ?? null}
         />
       </div>
-      {viewMode === 'transcript' && (
-        <PlaybackSlider 
-          sessions={sessions}
-          selectedSession={selectedSession}
-          onSelectSession={(id) => { setSelectedSession(id); setPlaybackIndex(-1); setSelectedEventUuid(null); setSelectedSubEvent(null); }}
-          events={events}
-          playbackIndex={playbackIndex}
-          onSetPlaybackIndex={setPlaybackIndex}
-        />
-      )}
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );

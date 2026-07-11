@@ -7,8 +7,10 @@ import {
   childToggleUpdate,
   classifyEvent,
   compressNoiseRuns,
+  getChipLabel,
   getToolLabel,
   groupIntoTurns,
+  groupSpawnRuns,
   isContextNoise,
   masterState,
   masterToggleUpdate,
@@ -215,8 +217,28 @@ function testVisibilityPredicate() {
   );
 }
 
+function testChipLabelsAndSpawnRuns() {
+  const bash = makeEvent('tool_use', { tool: 'Bash', toolUseId: 't1', input: {} });
+  const spawnA1 = makeEvent('tool_use', { isAgentSpawn: true, agentDescription: 'review', toolUseId: 's1' });
+  const spawnA2 = makeEvent('tool_use', { isAgentSpawn: true, agentDescription: 'review', toolUseId: 's2' });
+  const spawnB = makeEvent('tool_use', { isAgentSpawn: true, agentDescription: 'verify', toolUseId: 's3' });
+  const reply = makeEvent('assistant_text', { text: 'done' });
+
+  assert.equal(getChipLabel(bash), 'tool: bash');
+  assert.equal(getChipLabel(spawnA1), 'spawn: review');
+  assert.equal(getChipLabel(reply), 'assistant text');
+  assert.equal(getChipLabel(makeEvent('user_text', { text: 'hi' })), 'user message');
+
+  const grouped = groupSpawnRuns([bash, spawnA1, spawnA2, spawnB, reply]);
+  assert.equal(grouped.length, 4, 'same-description consecutive spawns collapse');
+  assert.deepEqual(grouped[1], { spawnRun: [spawnA1, spawnA2] });
+  assert.deepEqual(grouped[2], { spawnRun: [spawnB] }, 'different description starts a new run');
+  assert.equal(grouped[3], reply, 'non-spawn events pass through');
+}
+
 function main() {
   testGetToolLabel();
+  testChipLabelsAndSpawnRuns();
   testIsContextNoise();
   testBuildToolPairs();
   testGroupIntoTurns();
