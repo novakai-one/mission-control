@@ -30,7 +30,7 @@ export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettin
       <div className="dash-header-group">
         <Terminal size={18} color="var(--text-secondary)" />
         <span className="dash-title">
-          MISSION CONTROL
+          NOVAKAI COMMAND
         </span>
         <span className={activeRepo ? 'dash-repo-label dash-repo-label-active' : 'dash-repo-label'}>
           {activeRepo ? (

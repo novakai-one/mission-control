@@ -214,7 +214,7 @@ export class AgentCoordinator {
     this.activeBuild.durationMs = new Date(this.activeBuild.endTime).getTime() - new Date(this.activeBuild.startTime).getTime();
     this.stateManager.saveBuild(this.activeBuild);
 
-    this.stateManager.createGitCommit(`Mission Control: Automated commit for build ${this.activeBuild.id} (${finalStatus})`)
+    this.stateManager.createGitCommit(`Novakai Command: Automated commit for build ${this.activeBuild.id} (${finalStatus})`)
       .then((commitHash) => {
         if (this.activeBuild && commitHash) {
           this.activeBuild.gitCommitHash = commitHash;

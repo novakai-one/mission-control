@@ -334,7 +334,7 @@ export class ServerController {
       this.server.on('error', (error: NodeJS.ErrnoException) => {
         if (error.code === 'EADDRINUSE') {
           console.error(
-            `[Mission Control Backend] Port ${this.port} is already in use — a stale dev backend is probably still running.\n` +
+            `[Novakai Command Backend] Port ${this.port} is already in use — a stale dev backend is probably still running.\n` +
             `Free it with: lsof -ti:${this.port} | xargs kill`
           );
         }
