@@ -310,7 +310,12 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
   // System messages
   if (type === 'system') {
     const msg = obj.message;
-    const text = typeof msg === 'string' ? msg : (msg?.content || JSON.stringify(msg));
+    let text = typeof msg === 'string' ? msg : (msg?.content ?? '');
+    if (!text && typeof obj.content === 'string') text = obj.content;            // away_summary
+    if (!text && obj.subtype === 'turn_duration' && typeof obj.durationMs === 'number') {
+      text = `turn: ${(obj.durationMs / 1000).toFixed(1)}s · ${obj.messageCount ?? 0} messages`;
+    }
+    // ponytail: unknown content-less subtypes render blank, not the string "undefined"
     return [{ kind: 'system', uuid, parentUuid, sessionId, ts, text, isSidechain, subtype: typeof obj.subtype === 'string' ? obj.subtype : undefined }];
   }
 

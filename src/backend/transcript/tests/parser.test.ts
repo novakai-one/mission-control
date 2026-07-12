@@ -121,6 +121,46 @@ function testSystemSubtype() {
   assert.equal((nonString[0] as any).subtype, undefined, 'non-string subtype is dropped');
 }
 
+// system(turn_duration) reads top-level durationMs/messageCount, not obj.message
+// (which real system lines never carry).
+function testSystemTurnDuration() {
+  const durationLine = {
+    type: 'system',
+    subtype: 'turn_duration',
+    uuid: 'sys-dur',
+    sessionId: 's1',
+    timestamp: '2026-07-10T00:00:00.000Z',
+    durationMs: 3200,
+    messageCount: 5,
+  };
+  const durationEvents = parseJsonlLine(durationLine, 'k0', '') ?? [];
+  assert.equal(durationEvents.length, 1);
+  assert.ok((durationEvents[0] as any).text.includes('3.2s'), 'turn_duration text should include seconds');
+  assert.ok((durationEvents[0] as any).text.includes('5 messages'), 'turn_duration text should include message count');
+}
+
+// system(away_summary) reads top-level content, not obj.message.
+function testSystemAwaySummary() {
+  const awaySummaryLine = {
+    type: 'system',
+    subtype: 'away_summary',
+    uuid: 'sys-away',
+    sessionId: 's1',
+    timestamp: '2026-07-10T00:00:00.000Z',
+    content: 'Recap text here',
+  };
+  const awayEvents = parseJsonlLine(awaySummaryLine, 'k1', '') ?? [];
+  assert.equal((awayEvents[0] as any).text, 'Recap text here');
+}
+
+// A summary line produces a session_meta event carrying the summary field.
+function testSummaryLine() {
+  const summaryLine = { type: 'summary', sessionId: 's1', summary: 'My summary' };
+  const summaryEvents = parseJsonlLine(summaryLine, 'k2', '') ?? [];
+  assert.equal(summaryEvents[0].kind, 'session_meta');
+  assert.equal((summaryEvents[0] as any).summary, 'My summary');
+}
+
 async function main() {
   await testTailPartialLine();
   unlinkSync(tmpFile);
@@ -128,6 +168,9 @@ async function main() {
   unlinkSync(tmpFile);
   testStampEventKeys();
   testSystemSubtype();
+  testSystemTurnDuration();
+  testSystemAwaySummary();
+  testSummaryLine();
   console.log('PASS');
 }
 

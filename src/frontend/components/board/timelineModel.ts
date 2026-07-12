@@ -57,10 +57,18 @@ export function getToolLabel(event: TranscriptEvent): string {
 // and live upserts share one rule; re-exported here for timeline consumers.
 export { selKey } from '../../lib/upsertEvents.js';
 
+const USER_CARRIER_LABELS: Record<string, string> = {
+  'system-reminder': 'system reminder', 'task-notification': 'notification',
+  'ide_opened_file': 'ide file', 'slash-commands': 'slash command', 'request-interrupted': 'interrupted',
+};
+
 /** Chip-style row label: the event's kind, not its content (content lives in the inspector). */
 export function getChipLabel(event: TranscriptEvent): string {
   switch (event.kind) {
-    case 'user_text': return 'user message';
+    case 'user_text': {
+      const eventClass = classifyUserText(event.text || '');
+      return eventClass.category === 'user-prompts' ? 'user message' : (USER_CARRIER_LABELS[eventClass.child] ?? eventClass.child);
+    }
     case 'assistant_text': return 'assistant text';
     case 'assistant_thinking': return 'thinking';
     case 'tool_use':
