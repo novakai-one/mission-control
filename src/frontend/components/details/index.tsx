@@ -31,31 +31,29 @@ export function EventDetailBody({ event }: { event: TranscriptEvent }) {
   if (event.kind === 'tool_use') {
     if (event.isAgentSpawn) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <div className="insp-fields">
           <div className="insp-spawn-hint">↳ Opened in the Sub Timeline →</div>
-          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.agentDescription}</span>
+          <div className="glass-panel insp-field">
+            <span className="insp-field-label">Description</span>
+            <span className="insp-field-value">{event.agentDescription}</span>
           </div>
-          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Type</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.agentType || 'default'}</span>
+          <div className="glass-panel insp-field">
+            <span className="insp-field-label">Type</span>
+            <span className="insp-field-value">{event.agentType || 'default'}</span>
           </div>
-          <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Prompt (Handover Contract)</span>
-            <pre style={{ fontSize: '0.7rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0 }}>
-              {event.agentPrompt}
-            </pre>
+          <div className="glass-panel insp-field">
+            <span className="insp-field-label">Prompt (Handover Contract)</span>
+            <pre className="insp-pre">{event.agentPrompt}</pre>
           </div>
         </div>
       );
     }
     const bashCommand = event.tool === 'Bash' && typeof event.input?.command === 'string' ? event.input.command : '';
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tool</span>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.tool}</span>
+      <div className="insp-fields">
+        <div className="glass-panel insp-field">
+          <span className="insp-field-label">Tool</span>
+          <span className="insp-field-value">{event.tool}</span>
         </div>
         {bashCommand && (
           <div className="glass-panel insp-field">
@@ -67,27 +65,25 @@ export function EventDetailBody({ event }: { event: TranscriptEvent }) {
             </div>
           </div>
         )}
-        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Input Arguments</span>
-          <pre style={{ fontSize: '0.7rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0 }}>
-            {JSON.stringify(event.input, null, 2)}
-          </pre>
+        <div className="glass-panel insp-field">
+          <span className="insp-field-label">Input Arguments</span>
+          <pre className="insp-pre">{JSON.stringify(event.input, null, 2)}</pre>
         </div>
       </div>
     );
   }
   if (event.kind === 'tool_result') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tool Use ID</span>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{event.toolUseId}</span>
+      <div className="insp-fields">
+        <div className="glass-panel insp-field">
+          <span className="insp-field-label">Tool Use ID</span>
+          <span className="insp-field-value-sm">{event.toolUseId}</span>
         </div>
-        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: event.isError ? 'var(--kind-error)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+        <div className="glass-panel insp-field">
+          <span className={`insp-field-label${event.isError ? ' insp-field-label-error' : ''}`}>
             {event.isError ? 'Error Output' : 'Result'}
           </span>
-          <pre style={{ fontSize: '0.7rem', color: event.isError ? 'var(--kind-error)' : 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0 }}>
+          <pre className={`insp-pre${event.isError ? ' insp-pre-error' : ''}`}>
             {truncate(event.content || '', 50000)}
           </pre>
         </div>
@@ -96,20 +92,18 @@ export function EventDetailBody({ event }: { event: TranscriptEvent }) {
   }
   if (event.kind === 'hook_event') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hook Name</span>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.hookName}</span>
+      <div className="insp-fields">
+        <div className="glass-panel insp-field">
+          <span className="insp-field-label">Hook Name</span>
+          <span className="insp-field-value">{event.hookName}</span>
         </div>
-        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hook Event</span>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.hookEvent}</span>
+        <div className="glass-panel insp-field">
+          <span className="insp-field-label">Hook Event</span>
+          <span className="insp-field-value">{event.hookEvent}</span>
         </div>
-        <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Content</span>
-          <pre style={{ fontSize: '0.7rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0 }}>
-            {truncate(event.content || '', 50000)}
-          </pre>
+        <div className="glass-panel insp-field">
+          <span className="insp-field-label">Content</span>
+          <pre className="insp-pre">{truncate(event.content || '', 50000)}</pre>
         </div>
       </div>
     );
@@ -148,12 +142,10 @@ export function EventDetailBody({ event }: { event: TranscriptEvent }) {
   }
   // Text-based events (user_text, assistant_text, assistant_thinking, system)
   return (
-    <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Content</span>
+    <div className="glass-panel insp-field">
+      <span className="insp-field-label">Content</span>
       {event.text ? (
-        <pre style={{ fontSize: '0.75rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.4rem', margin: 0 }}>
-          {truncate(event.text, 50000)}
-        </pre>
+        <pre className="insp-pre insp-pre-text">{truncate(event.text, 50000)}</pre>
       ) : (
         <span className="insp-empty">
           {event.kind === 'assistant_thinking' ? 'thinking not recorded (encrypted)' : '(no content)'}
@@ -219,7 +211,7 @@ export function SelectedInspector({ event, events, onNavigate }: SelectedInspect
             {KIND_ICONS[event.kind] || <FileText size={14} color="var(--text-muted)" />}
             {getChipLabel(event)} · {formatClock(event.ts)}
             {event.isSidechain && (
-              <span style={{ color: 'var(--kind-tool)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+              <span className="insp-sidechain">
                 <GitBranch size={10} /> sidechain
               </span>
             )}

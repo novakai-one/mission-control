@@ -133,3 +133,9 @@
 .insp-explain-line { font-size: 0.7rem; color: var(--text-primary); }
 .insp-spawn-hint { font-size: 0.65rem; color: var(--text-secondary); }
 .insp-author { font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; }
+.insp-field-label-error { color: var(--kind-error); }
+.insp-field-value-sm { font-size: 0.7rem; color: var(--text-secondary); }
+.insp-pre { font-size: 0.7rem; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); line-height: 1.3rem; margin: 0; }
+.insp-pre-error { color: var(--kind-error); }
+.insp-pre-text { font-size: 0.75rem; line-height: 1.4rem; }
+.insp-sidechain { color: var(--kind-tool); display: inline-flex; align-items: center; gap: 0.2rem; }
