@@ -173,12 +173,6 @@ button:active {
   transform: scale(0.98);
 }
 
-/* Quiet hover affordance for inline-styled buttons (settings modal etc.). */
-.mc-btn:hover {
-  background-color: var(--bg-tertiary) !important;
-  color: var(--text-primary) !important;
-}
-
 /* Files tab */
 .files-tree-row {
   display: flex;
