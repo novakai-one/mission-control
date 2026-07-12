@@ -294,9 +294,11 @@ button:active {
 .u-pill.kind-result { background: color-mix(in srgb, var(--kind-result) 12%, transparent); color: var(--kind-result); }
 .u-pill.kind-error { background: color-mix(in srgb, var(--kind-error) 12%, transparent); color: var(--kind-error); }
 
-.u-pill.status-success { background: color-mix(in srgb, var(--status-success) 12%, transparent); color: var(--status-success); }
-.u-pill.status-failed { background: color-mix(in srgb, var(--status-failed) 12%, transparent); color: var(--status-failed); }
-.u-pill.status-running { background: color-mix(in srgb, var(--status-running) 12%, transparent); color: var(--status-running); }
+/* --status-* are pale background tints, unreadable as text — pill bg gets the
+   tint straight, foreground stays primary ink. */
+.u-pill.status-success { background: color-mix(in srgb, var(--status-success) 45%, transparent); color: var(--text-primary); }
+.u-pill.status-failed { background: color-mix(in srgb, var(--status-failed) 45%, transparent); color: var(--text-primary); }
+.u-pill.status-running { background: color-mix(in srgb, var(--status-running) 45%, transparent); color: var(--text-primary); }
 
 /* Tab skeleton — header + scrollable body, required shape for panel-like
    tabs (see docs/design.md §5). */

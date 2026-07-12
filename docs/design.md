@@ -151,14 +151,13 @@ Adding a new `--kind-*`/`--status-*` token later means adding its
 
 ## 6. Kind / status taxonomy
 
-Single source of truth (planned): `src/frontend/components/ui/index.tsx`
-(`KIND_META`) for the icon/label/color mapping used across timelines
-(`board`, `agents/calm`, etc.), paired with the `.u-pill.kind-*` /
-`.u-pill.status-*` CSS modifiers in `css/index.css` for the badge styling.
-Until that module exists, per-component `EVENT_COLORS`-style maps (see
-`components/board/index.tsx`) are the interim source — new hue tokens should
-still land in `css/index.css` first, with a pill modifier added in the same
-change.
+Single source of truth: `src/frontend/components/ui/index.tsx` (`KIND_META`)
+for the icon/color mapping consumed across timelines (`board`, `agents/calm`,
+`ruleset`, etc.), paired with the `.u-pill.kind-*` / `.u-pill.status-*` CSS
+modifiers in `css/index.css` for badge styling and the standalone `.kind-*`
+color classes in `ui/index.css` for non-pill text/icons. Do not add
+per-component kind maps — new hue tokens land in `css/index.css` first, with
+the `KIND_META` entry and pill modifier added in the same change.
 
 ## 7. Gates
 
