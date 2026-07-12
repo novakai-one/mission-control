@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;500;600;700&family=Newsreader:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;500;600;700&family=Newsreader:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /*
  * Theme system. Each theme defines four base values (bg / ink / muted /
@@ -21,6 +21,10 @@
   --bg-primary: var(--theme-bg);
   --bg-secondary: color-mix(in srgb, var(--theme-ink) 4%, var(--theme-bg));
   --bg-tertiary: color-mix(in srgb, var(--theme-ink) 9%, var(--theme-bg));
+  /* Darkest app backdrop behind panels (design canvas step). */
+  --bg-canvas: color-mix(in srgb, black 30%, var(--theme-bg));
+  /* Input / path-bar inset surface, one step above the panel. */
+  --bg-inset: color-mix(in srgb, var(--theme-ink) 3%, var(--theme-bg));
   --border-color: color-mix(in srgb, var(--theme-ink) 8%, transparent);
   --border-active: color-mix(in srgb, var(--theme-ink) 18%, transparent);
   --text-primary: color-mix(in srgb, var(--theme-ink) 94%, var(--theme-bg));
@@ -34,6 +38,7 @@
   --status-success: #3e504c;
   --status-failed: #523a3d;
   --status-running: #2b3547;
+  --status-active: #d6a54c;
   --kind-assistant: #7a9ec9;
   --kind-thinking: #9a7ac9;
   --kind-tool: #c9b57a;
@@ -64,12 +69,25 @@
   --shadow: 0 4px 16px color-mix(in srgb, var(--theme-ink) 8%, transparent);
 
   --font-sans: 'Source Serif 4', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
-  --font-mono: 'JetBrains Mono', SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 /* Dark themes */
 :root[data-theme='onyx'] { --theme-bg: #101112; --theme-ink: #eceef0; --theme-muted: #868b90; --theme-accent: #7fa8d8; }
 :root[data-theme='ink'] { --theme-bg: #0f1114; --theme-ink: #e9ebee; --theme-muted: #848a92; --theme-accent: #b8bcc2; }
+
+/* Command (dark, app default): near-black layered surfaces, neutral near-white
+   accent. Two derived surface tokens are overridden with exact hex because the
+   design's fine near-black steps (#0f0f11 / #1b1b1e) are below color-mix's
+   reach from this base — scoped to this block only (see docs/design.md §8). */
+:root[data-theme='command'] {
+  --theme-bg: #0d0d0f;
+  --theme-ink: #ececee;
+  --theme-muted: #8a8a90;
+  --theme-accent: #ededef;
+  --bg-secondary: #0f0f11;
+  --bg-tertiary: #1b1b1e;
+}
 
 /* Light themes */
 :root[data-theme='graphite'] { --theme-bg: #f1f1ef; --theme-ink: #1a1a1a; --theme-muted: #6e6e6c; --theme-accent: #3a3a38; }
@@ -81,6 +99,7 @@
   --status-success: #dfe9e2;
   --status-failed: #f0dedd;
   --status-running: #dfe5f0;
+  --status-active: #9a7325;
   --kind-assistant: #46688f;
   --kind-thinking: #6d4f94;
   --kind-tool: #8a763c;
@@ -299,6 +318,10 @@ button:active {
 .u-pill.status-success { background: color-mix(in srgb, var(--status-success) 45%, transparent); color: var(--text-primary); }
 .u-pill.status-failed { background: color-mix(in srgb, var(--status-failed) 45%, transparent); color: var(--text-primary); }
 .u-pill.status-running { background: color-mix(in srgb, var(--status-running) 45%, transparent); color: var(--text-primary); }
+
+/* --status-active is a saturated amber (the one semantic accent — active repo),
+   readable as text, so it follows the kind-* recipe: tinted bg + colored text. */
+.u-pill.status-active { background: color-mix(in srgb, var(--status-active) 15%, transparent); color: var(--status-active); }
 
 /* Tab skeleton — header + scrollable body, required shape for panel-like
    tabs (see docs/design.md §5). */

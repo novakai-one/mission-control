@@ -13,6 +13,7 @@ export interface ThemeDef {
 
 // KEEP IN SYNC: theme id list also lives in css/index.css (:root[data-theme=...] rules) and index.html (boot script light-theme list).
 export const THEMES: ThemeDef[] = [
+  { id: 'command', name: 'Command', mode: 'dark', bg: '#0d0d0f', accent: '#d6a54c' },
   { id: 'carbon', name: 'Carbon', mode: 'dark', bg: '#161616', accent: '#cfcfcc' },
   { id: 'onyx', name: 'Onyx', mode: 'dark', bg: '#101112', accent: '#7fa8d8' },
   { id: 'ink', name: 'Ink', mode: 'dark', bg: '#0f1114', accent: '#b8bcc2' },
@@ -32,11 +33,11 @@ export const FONTS: { id: string; name: string }[] = [
 export const THEME_CHANGED_EVENT = 'mc-theme-changed';
 
 export function currentTheme(): string {
-  return document.documentElement.dataset.theme || 'carbon';
+  return document.documentElement.dataset.theme || 'command';
 }
 
 export function currentFont(): string {
-  return document.documentElement.dataset.font || 'source-serif';
+  return document.documentElement.dataset.font || 'plex';
 }
 
 export function applyTheme(id: string): void {

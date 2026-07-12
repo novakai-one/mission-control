@@ -41,6 +41,8 @@ taxonomy (§6), not a one-off hex value.
 | `--bg-primary` | `= --theme-bg` |
 | `--bg-secondary` | `color-mix(ink 4%, bg)` |
 | `--bg-tertiary` | `color-mix(ink 9%, bg)` |
+| `--bg-canvas` | `color-mix(black 30%, bg)` — darkest app backdrop behind panels |
+| `--bg-inset` | `color-mix(ink 3%, bg)` — input / path-bar inset surface |
 | `--border-color` | `color-mix(ink 8%, transparent)` |
 | `--border-active` | `color-mix(ink 18%, transparent)` |
 | `--text-primary` | `color-mix(ink 94%, bg)` |
@@ -57,8 +59,11 @@ taxonomy (§6), not a one-off hex value.
 | `--status-success` | `--kind-assistant` |
 | `--status-failed` | `--kind-thinking` |
 | `--status-running` | `--kind-tool` |
-| | `--kind-result` |
+| `--status-active` | `--kind-result` |
 | | `--kind-error` |
+
+`--status-active` (`#d6a54c` dark / `#9a7325` light) is the semantic amber: it
+marks *active-repo* state and nothing else — see §8 for its scarcity rule.
 
 Dark values live in `:root`; light overrides live in `:root[data-mode='light']`.
 
@@ -92,12 +97,17 @@ Dark values live in `:root`; light overrides live in `:root[data-mode='light']`.
 | `--radius-xs` | 4px (new) |
 | `--shadow` | `0 4px 16px color-mix(ink 8%, transparent)` (new) |
 | `--anim` | 240ms ease |
-| `--font-sans` | theme-selectable (see `[data-font=...]`) |
-| `--font-mono` | JetBrains Mono |
+| `--font-sans` | theme-selectable (see `[data-font=...]`); default `plex` (IBM Plex Sans) |
+| `--font-mono` | IBM Plex Mono (JetBrains Mono kept in the fallback stack) |
 
 No `z-index` tokens exist; `z-index` stays local and minimal (e.g. `.col-resize-handle`).
 
 ## 3. Adding a theme or font
+
+Themes (dark): **`command`** (app default), `carbon`, `onyx`, `ink`.
+Themes (light): `graphite`, `fog`, `slate`. The default theme is `command` and
+the default font is `plex` (IBM Plex Sans) — set in the boot script and the
+`currentTheme()`/`currentFont()` fallbacks.
 
 The theme id list is **triple-defined** and must be kept in sync by hand —
 each site carries a `KEEP IN SYNC` comment pointing at the other two:
@@ -128,7 +138,7 @@ All defined in the `Utilities` section at the end of `css/index.css`.
 Pill modifiers, one per hue token currently defined:
 
 - `kind-`: `assistant`, `thinking`, `tool`, `result`, `error`
-- `status-`: `success`, `failed`, `running`
+- `status-`: `success`, `failed`, `running`, `active`
 
 Adding a new `--kind-*`/`--status-*` token later means adding its
 `.u-pill.kind-*`/`.u-pill.status-*` pair alongside it (§6).
@@ -196,3 +206,20 @@ To ratchet the baseline down after a legitimate cleanup:
 - The `u-*` utilities are pixel-calibrated to the pre-migration conventions;
   adopt them bare when values match, add a module modifier class only for
   genuine differences (see `settings/index.css` `.set-btn`).
+- **`command` theme exact-hex surface overrides.** The design's near-black
+  surface steps are finer than `color-mix` can hit from the `command` base
+  (`--theme-bg: #0d0d0f`), so two *derived* tokens are pinned to exact hex
+  **inside the `:root[data-theme='command']` block only** — every other theme
+  keeps the `color-mix` formulas:
+  - `--bg-secondary: #0f0f11` (formula would land ~`#161618`).
+  - `--bg-tertiary: #1b1b1e` (formula would land ~`#212123`).
+  `--bg-canvas` (resolves to ~`#09090b`, design `#08080a`) and `--bg-inset`
+  (resolves to exactly `#141416`) are left on their global `color-mix` formulas
+  — acceptable, no override. Component CSS still references tokens only.
+- **Amber scarcity rule (`--status-active`).** The amber is a *semantic state
+  marker*, not decoration. It appears in exactly two places: the **active-repo**
+  state (tree dot, rail legend, card eyebrow, header meta) and the header `>_`
+  brand glyph. It must **never** be used for selection, hover, CTAs, or focus
+  rings — selection stays greyscale and the primary CTA uses the near-white
+  `--theme-accent`. Its scarcity is what makes its appearance mean "state
+  changed."
