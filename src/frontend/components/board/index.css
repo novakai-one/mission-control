@@ -32,7 +32,7 @@
   justify-content: center;
   color: var(--text-muted);
   gap: 0.8rem;
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   text-align: center;
   padding: 1rem;
 }
@@ -43,7 +43,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.65rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -75,7 +75,7 @@
 }
 
 .tl-label {
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   flex: 1;
 }
@@ -85,14 +85,14 @@
   color: var(--kind-tool);
   background-color: color-mix(in srgb, var(--kind-tool) 10%, transparent);
   padding: 0 0.3rem;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 /* Merged tool-result chip. */
 .tl-chip {
   font-size: 0.55rem;
   padding: 0 0.3rem;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   max-width: 180px;
   flex-shrink: 0;
 }
@@ -113,7 +113,7 @@
 
 /* Compressed context-noise strip. */
 .tl-noise-strip {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   padding: 0.15rem 0.5rem;
   flex-shrink: 0;
@@ -136,7 +136,7 @@
 .tl-caret {
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   width: 12px;
   flex-shrink: 0;
   user-select: none;
@@ -153,11 +153,11 @@
 .tl-turn-tag-claude { color: var(--kind-assistant); }
 
 .tl-turn-text {
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   flex: 1;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 0.05rem 0.2rem;
   border: 1px solid transparent;
 }
@@ -168,13 +168,13 @@
 }
 
 .tl-turn-start {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .tl-turn-count {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 

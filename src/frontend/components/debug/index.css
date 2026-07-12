@@ -27,7 +27,7 @@
 .dbg-ws-warning {
   margin-left: var(--space-3);
   color: var(--kind-error);
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
 }
 
 .dbg-section {

@@ -19,5 +19,5 @@
 
 .u-empty-hint {
   color: var(--text-muted);
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
 }
