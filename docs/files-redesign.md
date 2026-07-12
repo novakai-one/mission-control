@@ -53,7 +53,7 @@ The new design is a different visual language: near-black layered surfaces
 IBM Plex Sans/Mono, one semantic amber, **no glassmorphism**. We adopt it *through* the token
 system, not around it:
 
-### 2.1 New theme `obsidian` (becomes the default)
+### 2.1 New theme `command` (becomes the default)
 
 - Bases: `--theme-bg: #0d0d0f`, `--theme-ink: #ececee`, `--theme-muted: #8a8a90`,
   `--theme-accent: #ededef` (the near-white CTA color — accent stays neutral on purpose).
@@ -64,13 +64,13 @@ system, not around it:
     slightly deeper paper tone; verify visually.
   - `--bg-inset: color-mix(in srgb, var(--theme-ink) 3%, var(--theme-bg))` — input/path-bar
     inset surface (design #141416 relative to panel).
-  - If `color-mix` percentages can't hit the design values acceptably, the `obsidian`
+  - If `color-mix` percentages can't hit the design values acceptably, the `command`
     theme block may override individual *derived* tokens with exact hex — scoped to that
     block only, documented in `design.md` §8. Component CSS still only references tokens.
 - Register in all three KEEP-IN-SYNC sites: `css/index.css`, `lib/theme/index.ts`
   (`THEMES`, swatch `bg #0d0d0f`, `accent #d6a54c`), `index.html` boot script (dark → no
   light-list change, but confirm default handling). Default theme changes
-  `carbon → obsidian` (`currentTheme()` fallback + boot script default).
+  `carbon → command` (`currentTheme()` fallback + boot script default).
 
 ### 2.2 Semantic amber token
 
@@ -105,8 +105,14 @@ system, not around it:
 
 ## 3. Backend — new `GET /api/repo-info?path=`
 
-New file `src/backend/fs/repoInfo.ts` (+ route in `server/index.ts` beside the fs routes,
-same `clampToHome` + error mapping as `/api/fs`). Never shells out for non-git dirs.
+All git-derived logic lives in a new **version-control module**: `src/backend/versionControl/`
+(`index.ts` + colocated test). This is deliberate scoping (owner decision): everything here is
+"version control"-level information, and a proper VersionControl class with real design intent
+will replace it one day — so the module exposes a narrow surface (`getRepoInfo(path): Promise<RepoInfo>`
+plus the exported `RepoInfo` type) and keeps every git invocation inside it. Nothing outside the
+module shells out to git for repo metadata. The route in `server/index.ts` sits beside the fs
+routes, uses the same `clampToHome` + error mapping as `/api/fs`, and is a thin adapter over the
+module. Never shells out for non-git dirs.
 
 Response shape:
 
@@ -135,8 +141,8 @@ Implementation notes:
 - Card render contract: `null` field ⇒ that grid cell is omitted (grid reflows); non-git dir ⇒
   GIT cell reads "not a git repository", BRANCH/LANGUAGE/FILES/LAST COMMIT omitted, CTA still
   enabled (backend allows any dir as active repo — unchanged).
-- Unit tests for the pure parts (extension map, porcelain→dirty, degradation), colocated per
-  gate rules. No test for the route itself (no existing route-test harness).
+- Unit tests for the pure parts (extension map, porcelain→dirty, degradation), colocated in
+  `versionControl/` per gate rules. No test for the route itself (no existing route-test harness).
 
 Existing endpoints untouched. `resolveGitRoot` stays the fast pre-check; `repo-info` is
 fetched only for the selected entry.
@@ -240,7 +246,7 @@ Scoped via the `.glass-panel.dash-header` compound — `.glass-panel` itself is 
   path label; still `toDisplayPath`-derived basename). Event count + Settings + ViewPanel
   buttons keep their slots, restyled to match.
 
-Other tabs are NOT reworked in this pass; they inherit the obsidian tokens and Plex fonts
+Other tabs are NOT reworked in this pass; they inherit the command tokens and Plex fonts
 (acceptable — their layouts are token-driven) and keep their current structure. Full-app
 convergence to the scene 1–5 language is a later project.
 
@@ -249,11 +255,11 @@ convergence to the scene 1–5 language is a later project.
 ## 6. Work order (phases; each is an independent, verifiable commit)
 
 1. **Tokens & theme** — `--bg-canvas`, `--bg-inset`, `--status-active` (+light override,
-   +`.u-pill.status-active`), `obsidian` theme in all 3 sync sites, default theme/font flip,
+   +`.u-pill.status-active`), `command` theme in all 3 sync sites, default theme/font flip,
    IBM Plex Mono import + `--font-mono` swap. Update `docs/design.md` (§2 tables, §3 list,
-   §8 notes). *Verify:* app boots in obsidian, all tabs legible, theme picker round-trips.
-2. **Backend repo-info** — `fs/repoInfo.ts`, route, tests. *Verify:* curl a git repo, a
-   non-git dir, a path outside `$HOME` (403), an empty repo.
+   §8 notes). *Verify:* app boots in command, all tabs legible, theme picker round-trips.
+2. **Backend repo-info** — `versionControl/` module, route, tests. *Verify:* curl a git repo,
+   a non-git dir, a path outside `$HOME` (403), an empty repo.
 3. **Files tab rebuild** — new `files/` structure per §4, shell prop for `onOpenAgents`.
    *Verify:* full flow — browse, expand, select (dimming), card data correct vs `git` CLI,
    set active (header meta + amber dot + legend appear, Transcript/Ruleset reload fires),
@@ -268,15 +274,19 @@ be parallelized only after phase 1 merges into the branch (both depend on the to
 
 ---
 
-## 7. Open questions (owner: Chris)
+## 7. Decisions (resolved by Chris, 2026-07-13)
 
-1. **Default theme flip** — spec makes `obsidian` the app default (all tabs get the new
-   surfaces immediately). Alternative: ship it as a selectable theme, flip default later.
-2. **Exact-hex overrides** inside the `obsidian` block if `color-mix` can't hit the design's
-   surface steps — acceptable? (Spec says yes, scoped + documented.)
-3. **Language stat** — by tracked-file count (spec) vs by bytes (slower, closer to GitHub).
-4. **Description source** — `package.json` only (spec), or also fall back to the first
-   README paragraph?
-5. **Refresh + show-hidden** — kept as quiet controls though absent from the mock (spec: keep).
-6. Scene numbering: the request said "scenes 5–8", but the design thread's Files scenes are
-   6–8 (5 was Transcript). Spec assumes nothing from scene 5 is in scope.
+1. **Default theme flip** — yes, flip now. Theme is named `command` (not "obsidian" — that
+   name belongs to another app).
+2. **Exact-hex overrides** inside the `command` block — approved (scoped + documented).
+3. **Language stat** — by tracked-file count.
+4. **Description source** — `package.json` only for now.
+5. **Refresh + show-hidden** — kept as quiet controls (existing functionality preserved,
+   restyled to near-zero visual weight).
+6. Scene numbering: Files scenes are 6–8; nothing from scene 5 is in scope.
+7. **Version-control scoping** — all git-level info lives in `src/backend/versionControl/`
+   (§3) as the seed for a future, properly designed VersionControl class.
+8. **Reuse mandate** — build with/extend shared primitives (`components/ui/`, `.u-*`
+   utilities, tokens) wherever possible so the theme stays consistent app-wide; adding fonts
+   is fine. New visual patterns with cross-tab potential should land as shared styles, not
+   one-off component CSS.
