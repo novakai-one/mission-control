@@ -1,0 +1,181 @@
+/* Right detail area — flexes to fill; the card anchors to the top, the empty
+   state centres. */
+.fd-detail {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* Scene 6 — nothing selected. Framed glyph tile over a two-tier prompt.
+   Built local rather than reusing ui/EmptyState: the design needs a framed
+   inset tile and a distinct title/hint type scale that .u-empty doesn't carry. */
+.fd-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 380px;
+  padding: 48px;
+}
+
+.fd-empty-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-inset);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 15px 17px;
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: 25px;
+}
+
+.fd-empty-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.fd-empty-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Scenes 7 / 8 — the hero card (highest surface). */
+.fd-card {
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 18px 44px color-mix(in srgb, black 35%, transparent);
+  padding: 28px 30px;
+}
+
+.fd-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+
+.fd-eyebrow-active {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--status-active);
+}
+
+.fd-eyebrow-dot {
+  font-size: 8px;
+}
+
+.fd-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fd-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.fd-branch {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  padding: 4px 9px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.fd-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.fd-divider {
+  height: 1px;
+  border: none;
+  background-color: var(--border-color);
+  margin: 2px 0;
+}
+
+/* Real CSS grid so field columns line up. */
+.fd-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 40px;
+}
+
+.fd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.fd-field-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.fd-field-value {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.fd-mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.fd-action {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* Near-white CTA — the one bright surface; amber is reserved for state only. */
+.fd-cta {
+  align-self: flex-start;
+  background-color: var(--theme-accent);
+  border: 1px solid var(--theme-accent);
+  border-radius: 9px;
+  padding: 11px 20px;
+  color: var(--bg-canvas);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fd-cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fd-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.fd-error {
+  font-size: var(--text-2xs);
+  color: var(--kind-error);
+}

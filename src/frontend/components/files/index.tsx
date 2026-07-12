@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, File as FileIcon, ArrowUp, RefreshCw, Star, GitBranch } from 'lucide-react';
 import { toDisplayPath } from '../index.js';
+import { Rail } from './tree/index.js';
+import { Detail } from './detail/index.js';
 import './index.css';
 
 export interface FsEntry {
@@ -15,10 +16,27 @@ interface FsListing {
   entries: FsEntry[];
 }
 
+/** Repo metadata for the detail card. Mirrors the backend `GET /api/repo-info`
+ * shape (see docs/files-redesign.md §3); intentionally NOT imported from the
+ * backend so the frontend stays decoupled. */
+export interface RepoInfo {
+  name: string;
+  path: string;
+  gitRoot: string | null;
+  isGitRepo: boolean;
+  branch: string | null;
+  dirty: boolean | null;
+  lastCommit: string | null;
+  trackedFiles: number | null;
+  language: { name: string; pct: number } | null;
+  description: string | null;
+}
+
 interface FilesPanelProps {
   homeDir: string | null;
   activeRepo: string | null;
   onActiveRepoChange: (path: string | null) => void;
+  onOpenAgents: () => void;
 }
 
 const STORAGE_KEY = 'mc.files.root';
@@ -31,7 +49,7 @@ async function fetchFs(path: string, showHidden: boolean): Promise<FsListing> {
   return data;
 }
 
-export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPanelProps) {
+export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgents }: FilesPanelProps) {
   const [showHidden, setShowHidden] = useState(false);
 
   const [rootAbs, setRootAbs] = useState<string | null>(null);
@@ -47,6 +65,8 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
 
   const [selected, setSelected] = useState<FsEntry | null>(null);
   const [gitRoot, setGitRoot] = useState<string | null>(null);
+  const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
+  const [repoLoading, setRepoLoading] = useState(false);
   const [settingActive, setSettingActive] = useState(false);
   const [activeError, setActiveError] = useState<string | null>(null);
 
@@ -55,9 +75,9 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
   const rootReqId = useRef(0);
 
   const loadRoot = (rawPath: string, opts?: { isUp?: boolean; showHiddenOverride?: boolean }) => {
-    const sh = opts?.showHiddenOverride ?? showHidden;
+    const showHiddenNow = opts?.showHiddenOverride ?? showHidden;
     const reqId = ++rootReqId.current;
-    fetchFs(rawPath, sh)
+    fetchFs(rawPath, showHiddenNow)
       .then((data) => {
         if (reqId !== rootReqId.current) return;
         setRootAbs(data.path);
@@ -69,9 +89,9 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
         setExpandErrors(new Map());
         localStorage.setItem(STORAGE_KEY, data.path);
       })
-      .catch((e) => {
+      .catch((caught) => {
         if (reqId !== rootReqId.current) return;
-        setRootError(e.message);
+        setRootError(caught.message);
         if (opts?.isUp) setUpDisabled(true);
       });
   };
@@ -90,20 +110,43 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
     if (rootAbs) setPathBarValue(toDisplayPath(rootAbs, homeDir));
   }, [rootAbs, homeDir]);
 
-  // Resolve the git root for the current selection. Clear the previous
-  // value first so a stale gitRoot can't be POSTed for the new selection
-  // while resolve-root is still in flight.
+  // Resolve the git root for the current selection. Clear the previous value
+  // first so a stale gitRoot can't be POSTed for the new selection while
+  // resolve-root is still in flight.
   useEffect(() => {
     setGitRoot(null);
     if (!selected) return;
     let cancelled = false;
     fetch(`/api/fs/resolve-root?path=${encodeURIComponent(selected.path)}`)
-      .then((res) => res.json())
+      .then((response) => response.json())
       .then((data) => {
         if (!cancelled) setGitRoot(data.gitRoot ?? null);
       })
       .catch(() => {
         if (!cancelled) setGitRoot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
+
+  // Fetch repo metadata for the selected entry, cancelling on change so a slow
+  // earlier response can't paint under a newer selection.
+  useEffect(() => {
+    setRepoInfo(null);
+    if (!selected) return;
+    let cancelled = false;
+    setRepoLoading(true);
+    fetch(`/api/repo-info?path=${encodeURIComponent(selected.path)}`)
+      .then((response) => response.json())
+      .then((data: RepoInfo) => {
+        if (!cancelled) setRepoInfo(data);
+      })
+      .catch(() => {
+        if (!cancelled) setRepoInfo(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRepoLoading(false);
       });
     return () => {
       cancelled = true;
@@ -148,8 +191,8 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
             return next;
           });
         })
-        .catch((e) => {
-          setExpandErrors((prev) => new Map(prev).set(entry.path, e.message));
+        .catch((caught) => {
+          setExpandErrors((prev) => new Map(prev).set(entry.path, caught.message));
         })
         .finally(() => {
           setLoadingPaths((prev) => {
@@ -162,6 +205,8 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
   };
 
   const canSetActive = gitRoot != null || selected?.type === 'dir';
+  const activeTarget = gitRoot ?? selected?.path ?? null;
+  const isActive = activeRepo != null && activeTarget === activeRepo;
 
   const handleSetActive = () => {
     if (!canSetActive) return;
@@ -173,12 +218,12 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: target }),
     })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
         onActiveRepoChange(data.activeRepo ?? null);
       })
-      .catch((e) => setActiveError(e.message))
+      .catch((caught) => setActiveError(caught.message))
       .finally(() => setSettingActive(false));
   };
 
@@ -188,153 +233,41 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
     || (homeDir != null && rootAbs === homeDir);
 
   return (
-    <div className="files-panel">
-      {/* Left panel */}
-      <div className="files-sidebar">
-        {/* Path bar */}
-        <div className="files-pathbar">
-          <input
-            type="text"
-            value={pathBarValue}
-            onChange={(e) => setPathBarValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handlePathBarSubmit(); }}
-            className="u-input files-input"
-            placeholder="~/path/to/dir"
-          />
-          {rootError && (
-            <div className="files-error files-pathbar-error">
-              {rootError}
-            </div>
-          )}
-        </div>
-
-        {/* Buttons row */}
-        <div className="files-toolbar">
-          <button onClick={handleUp} disabled={upBtnDisabled} className="u-btn files-btn" title="Up">
-            <ArrowUp size={12} />
-          </button>
-          <button onClick={handleRefresh} className="u-btn files-btn" title="Refresh">
-            <RefreshCw size={12} />
-          </button>
-        </div>
-
-        {/* Tree */}
-        <div className="files-tree">
-          {rootAbs && (cache.get(rootAbs) || []).map((entry) => (
-            <TreeNode
-              key={entry.path}
-              entry={entry}
-              cache={cache}
-              expanded={expanded}
-              expandErrors={expandErrors}
-              loadingPaths={loadingPaths}
-              selectedPath={selected?.path ?? null}
-              onToggle={toggleExpand}
-              onSelect={setSelected}
-            />
-          ))}
-        </div>
-
-        {/* Sticky footer */}
-        <div className="files-footer">
-          <span className="files-footer-path u-truncate">
-            selected: {selected ? toDisplayPath(selected.path, homeDir) : '—'}
-          </span>
-          <span className="files-git-status">
-            <GitBranch size={10} />
-            {selected ? (gitRoot ? `repo: ${toDisplayPath(gitRoot, homeDir)}` : 'no git root') : 'no selection'}
-          </span>
-          <button
-            onClick={handleSetActive}
-            disabled={!canSetActive || settingActive}
-            className="u-btn files-btn files-btn-wide"
-          >
-            <Star size={12} /> Set as Active Repo
-          </button>
-          {activeError && (
-            <div className="files-error">
-              {activeError}
-            </div>
-          )}
-        </div>
-
-        {/* Show hidden */}
-        <label className="files-hidden-toggle">
-          <input
-            type="checkbox"
-            checked={showHidden}
-            onChange={(e) => handleShowHiddenToggle(e.target.checked)}
-          />
-          show hidden
-        </label>
+    <div className="u-panel fd-panel">
+      <div className="fd-body">
+        <Rail
+          pathBarValue={pathBarValue}
+          onPathChange={setPathBarValue}
+          onPathSubmit={handlePathBarSubmit}
+          onUp={handleUp}
+          upDisabled={upBtnDisabled}
+          onRefresh={handleRefresh}
+          rootError={rootError}
+          entries={rootAbs ? cache.get(rootAbs) ?? [] : []}
+          cache={cache}
+          expanded={expanded}
+          expandErrors={expandErrors}
+          loadingPaths={loadingPaths}
+          selectedPath={selected?.path ?? null}
+          activeRepo={activeRepo}
+          onToggle={toggleExpand}
+          onSelect={setSelected}
+          showHidden={showHidden}
+          onShowHiddenToggle={handleShowHiddenToggle}
+        />
+        <Detail
+          selected={selected}
+          homeDir={homeDir}
+          repoInfo={repoInfo}
+          repoLoading={repoLoading}
+          isActive={isActive}
+          canSetActive={canSetActive}
+          settingActive={settingActive}
+          activeError={activeError}
+          onSetActive={handleSetActive}
+          onOpenAgents={onOpenAgents}
+        />
       </div>
-
-      {/* Primary area */}
-      <div className="files-primary">
-        <span className="files-primary-label">
-          {selected ? toDisplayPath(selected.path, homeDir) : 'select a file or folder'}
-        </span>
-        <span className="files-primary-hint">primary view TBD</span>
-      </div>
-    </div>
-  );
-}
-
-interface TreeNodeProps {
-  entry: FsEntry;
-  cache: Map<string, FsEntry[]>;
-  expanded: Set<string>;
-  expandErrors: Map<string, string>;
-  loadingPaths: Set<string>;
-  selectedPath: string | null;
-  onToggle: (entry: FsEntry) => void;
-  onSelect: (entry: FsEntry) => void;
-}
-
-function TreeNode({ entry, cache, expanded, expandErrors, loadingPaths, selectedPath, onToggle, onSelect }: TreeNodeProps) {
-  const isDir = entry.type === 'dir';
-  const isExpanded = expanded.has(entry.path);
-  const isSelected = selectedPath === entry.path;
-  const children = cache.get(entry.path);
-  const error = expandErrors.get(entry.path);
-  const loading = loadingPaths.has(entry.path);
-
-  return (
-    <div>
-      <div className={`files-tree-row${isSelected ? ' files-tree-row-selected' : ''}`}>
-        {isDir ? (
-          <span className="files-chevron" onClick={() => onToggle(entry)}>
-            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </span>
-        ) : (
-          <span className="files-tree-spacer" />
-        )}
-        {isDir ? <Folder size={13} color="var(--kind-tool)" /> : <FileIcon size={13} color="var(--text-secondary)" />}
-        <span className="files-name u-truncate" onClick={() => onSelect(entry)}>{entry.name}</span>
-      </div>
-      {isDir && isExpanded && (
-        <div className="files-tree-children">
-          {error ? (
-            <div className="files-tree-note files-tree-note-error">{error}</div>
-          ) : loading ? (
-            <div className="files-tree-note files-tree-note-loading">loading…</div>
-          ) : (
-            (children || []).map((child) => (
-              <TreeNode
-                key={child.path}
-                entry={child}
-                cache={cache}
-                expanded={expanded}
-                expandErrors={expandErrors}
-                loadingPaths={loadingPaths}
-                selectedPath={selectedPath}
-                onToggle={onToggle}
-                onSelect={onSelect}
-              />
-            ))
-          )}
-        </div>
-      )}
     </div>
   );
 }

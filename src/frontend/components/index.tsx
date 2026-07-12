@@ -351,6 +351,7 @@ export function DashboardShell() {
             homeDir={homeDir}
             activeRepo={activeRepo}
             onActiveRepoChange={setActiveRepo}
+            onOpenAgents={() => setViewMode('agents')}
           />
         ) : viewMode === 'transcript' ? (
           <div className="shell-transcript-col">
