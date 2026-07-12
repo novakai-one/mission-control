@@ -9,8 +9,8 @@
     // KEEP IN SYNC: theme id list also lives in css/index.css (:root[data-theme=...] rules) and lib/theme/index.ts (THEMES).
     try {
       var root = document.documentElement;
-      root.dataset.theme = localStorage.getItem('mc-theme') || 'carbon';
-      root.dataset.font = localStorage.getItem('mc-font') || 'source-serif';
+      root.dataset.theme = localStorage.getItem('mc-theme') || 'command';
+      root.dataset.font = localStorage.getItem('mc-font') || 'plex';
       root.dataset.mode = ['graphite', 'fog', 'slate'].indexOf(root.dataset.theme) >= 0 ? 'light' : 'dark';
     } catch (e) {}
   </script>

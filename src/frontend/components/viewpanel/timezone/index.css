@@ -33,7 +33,7 @@
   padding: 0.3rem 0;
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border-color);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--theme-ink) 12%, transparent), 0 0 0 1px var(--border-color);
   animation: vp-tz-in 0.16s ease;
 }
 

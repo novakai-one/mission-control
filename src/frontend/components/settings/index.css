@@ -2,7 +2,7 @@
 .set-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: color-mix(in srgb, black 55%, transparent);
   z-index: 1000;
   backdrop-filter: blur(2px);
 }
@@ -19,7 +19,8 @@
   border: 1px solid var(--border-active);
   border-radius: var(--radius);
   z-index: 1001;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--theme-ink) 14%, transparent),
+    0 0 0 1px var(--border-color);
 }
 
 .set-header {

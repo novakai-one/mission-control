@@ -60,7 +60,7 @@
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px color-mix(in srgb, black 40%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--theme-ink) 12%, transparent);
   padding: 0.3rem;
   display: flex;
   flex-direction: column;
