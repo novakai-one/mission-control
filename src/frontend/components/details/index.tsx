@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Terminal, Brain, Wrench, FileText, AlertTriangle, Radio, GitBranch } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
 import { getChipLabel, selKey } from '../board/timelineModel.js';
+import { explainCommand } from '../../lib/explainCommand/index.js';
 import { currentTimeZone } from '../../lib/timezone/index.js';
 import './index.css';
 
@@ -31,6 +32,7 @@ export function EventDetailBody({ event }: { event: TranscriptEvent }) {
     if (event.isAgentSpawn) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <div className="insp-spawn-hint">↳ Opened in the Sub Timeline →</div>
           <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.agentDescription}</span>
@@ -48,12 +50,23 @@ export function EventDetailBody({ event }: { event: TranscriptEvent }) {
         </div>
       );
     }
+    const bashCommand = event.tool === 'Bash' && typeof event.input?.command === 'string' ? event.input.command : '';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
         <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tool</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{event.tool}</span>
         </div>
+        {bashCommand && (
+          <div className="glass-panel insp-field">
+            <span className="insp-field-label">Explanation</span>
+            <div className="insp-explain">
+              {explainCommand(bashCommand).map((line) => (
+                <div key={line} className="insp-explain-line">• {line}</div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Input Arguments</span>
           <pre style={{ fontSize: '0.7rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.3rem', margin: 0 }}>
@@ -101,13 +114,51 @@ export function EventDetailBody({ event }: { event: TranscriptEvent }) {
       </div>
     );
   }
+  if (event.kind === 'session_meta') {
+    if (!event.summary && !event.mode && !event.permissionMode) {
+      return (
+        <div className="glass-panel insp-field">
+          <span className="insp-field-label">Session Meta</span>
+          <span className="insp-field-value">session metadata</span>
+        </div>
+      );
+    }
+    return (
+      <div className="insp-fields">
+        {event.summary && (
+          <div className="glass-panel insp-field">
+            <span className="insp-field-label">Summary</span>
+            <span className="insp-field-value">{event.summary}</span>
+          </div>
+        )}
+        {event.mode && (
+          <div className="glass-panel insp-field">
+            <span className="insp-field-label">Mode</span>
+            <span className="insp-field-value">{event.mode}</span>
+          </div>
+        )}
+        {event.permissionMode && (
+          <div className="glass-panel insp-field">
+            <span className="insp-field-label">Permission Mode</span>
+            <span className="insp-field-value">{event.permissionMode}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
   // Text-based events (user_text, assistant_text, assistant_thinking, system)
   return (
     <div className="glass-panel" style={{ padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
       <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Content</span>
-      <pre style={{ fontSize: '0.75rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.4rem', margin: 0 }}>
-        {truncate(event.text || '', 50000)}
-      </pre>
+      {event.text ? (
+        <pre style={{ fontSize: '0.75rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', lineHeight: '1.4rem', margin: 0 }}>
+          {truncate(event.text, 50000)}
+        </pre>
+      ) : (
+        <span className="insp-empty">
+          {event.kind === 'assistant_thinking' ? 'thinking not recorded (encrypted)' : '(no content)'}
+        </span>
+      )}
     </div>
   );
 }
@@ -164,6 +215,7 @@ export function SelectedInspector({ event, events, onNavigate }: SelectedInspect
         <span className="insp-title">Agent Inspector</span>
         {event && (
           <span className="insp-subtitle">
+            <span className="insp-author">main agent</span>
             {KIND_ICONS[event.kind] || <FileText size={14} color="var(--text-muted)" />}
             {getChipLabel(event)} · {formatClock(event.ts)}
             {event.isSidechain && (

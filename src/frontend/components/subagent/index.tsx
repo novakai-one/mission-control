@@ -241,7 +241,7 @@ export function SubagentInspector({ meta, subEvents, event, onNavigate, mainEven
         <span className="insp-title">Subagent Inspector</span>
         <span className="insp-subtitle" title={meta.description}>
           <GitBranch size={12} color="var(--kind-tool)" />
-          {meta.description || 'subagent'}
+          from: {meta.description || 'subagent'}
           {event && <> › {getChipLabel(event)} · {formatClock(event.ts)}</>}
           {meta.agentType && <> · {meta.agentType}</>}
         </span>
