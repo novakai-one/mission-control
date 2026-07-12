@@ -26,9 +26,17 @@ function xtermTheme(): ITheme {
   };
 }
 
-// --font-mono value, literal because canvas font strings can't resolve var().
-const XTERM_FONT_FAMILY =
+// xterm's canvas font string can't resolve var(), so read --font-mono to a
+// concrete stack at creation time; the literal is the fallback if it's empty.
+// (--font-mono is fixed per :root, not theme-selectable, so no re-theme needed.)
+const XTERM_FONT_FALLBACK =
   'JetBrains Mono, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace';
+
+function xtermFontFamily(): string {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue('--font-mono').trim();
+  return value || XTERM_FONT_FALLBACK;
+}
 
 export interface AgentTerminalProps {
   agent: AgentInfo;
@@ -51,7 +59,7 @@ export function AgentTerminal({ agent, visible }: AgentTerminalProps) {
 
     const term = new Terminal({
       theme: xtermTheme(),
-      fontFamily: XTERM_FONT_FAMILY,
+      fontFamily: xtermFontFamily(),
       fontSize: 13,
       cursorBlink: true,
     });
