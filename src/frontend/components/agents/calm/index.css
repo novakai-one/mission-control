@@ -19,20 +19,6 @@
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.75rem;
-  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-
-.calm-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  font-size: 0.75rem;
 }
 
 .calm-row {
@@ -44,7 +30,7 @@
 }
 
 .calm-row:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--hover-bg);
 }
 
 .calm-row-time {
@@ -66,9 +52,6 @@
   flex: 1;
   min-width: 0;
   font-size: 0.7rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .calm-row-text {
@@ -87,21 +70,11 @@
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.65rem 0.75rem;
-  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
   overflow: hidden;
 }
 
 .calm-subagents-heading {
   flex-shrink: 0;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
 }
 
 .calm-subagents-list {
@@ -133,9 +106,6 @@
   font-size: 0.7rem;
   font-weight: 500;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .calm-subagent-type {
@@ -149,9 +119,6 @@
 .calm-subagent-activity {
   font-size: 0.65rem;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .calm-subagent-footer {

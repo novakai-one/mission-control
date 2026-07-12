@@ -62,9 +62,6 @@
 .vp-tz-name {
   font-size: 0.68rem;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   transition: color var(--anim);
 }
 

@@ -79,7 +79,7 @@ export function RulesetInspector({ data }: RulesetInspectorProps) {
             <div className="rs-cmd-wrap">
               <div className="rs-cmd-header">
                 <BookOpen size={12} color="var(--text-secondary)" />
-                <span className="rs-cmd-title">CLAUDE.md</span>
+                <span className="u-section-title">CLAUDE.md</span>
               </div>
               {hasClaudeMd ? (
                 <div className="glass-panel rs-cmd-path">
@@ -141,7 +141,7 @@ function HookList({ hooks }: { hooks: HookConfig[] }) {
         <div key={event}>
           <div className="rs-hook-group-head">
             <div className={`rs-event-dot kind-${eventKind(event)}`} />
-            <span className="rs-event-label">{event}</span>
+            <span className="u-section-title">{event}</span>
           </div>
           {eventHooks.map((hook, i) => (
             <div key={i} className="glass-panel rs-hook-item">
@@ -274,7 +274,7 @@ function GateDetail({ gates, selectedGate }: {
         <div className="rs-gate-body-wrap">
           <div className="rs-source-head">
             <ChevronRight size={12} color="var(--text-muted)" />
-            <span className="rs-source-title">Source</span>
+            <span className="u-section-title">Source</span>
           </div>
           <pre className="rs-gate-body-pre">{body.trim()}</pre>
         </div>

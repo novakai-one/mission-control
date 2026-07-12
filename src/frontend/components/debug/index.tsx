@@ -143,7 +143,7 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="dbg-section">
-      <div className="dbg-section-title">{title}</div>
+      <div className="u-section-title dbg-section-title">{title}</div>
       {children}
     </div>
   );

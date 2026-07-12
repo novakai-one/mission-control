@@ -179,7 +179,7 @@ function AgentRow({ agent, active, collapsed, onSelect, onRename, onKill, onArch
       {renaming ? (
         <RenameInput title={agent.title} onCommit={handleRenameCommit} onCancel={() => setRenaming(false)} />
       ) : (
-        <span className="sidepanel-agent-title" onDoubleClick={startRenaming}>
+        <span className="sidepanel-agent-title u-truncate" onDoubleClick={startRenaming}>
           {agent.title}
         </span>
       )}
@@ -199,7 +199,7 @@ export function SidePanel(props: SidePanelProps) {
         <button type="button" className="sidepanel-toggle" onClick={onToggle} aria-label={toggleLabel}>
           {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>
-        {!collapsed && <span className="sidepanel-heading">Agents</span>}
+        {!collapsed && <span className="u-section-title sidepanel-heading">Agents</span>}
       </div>
 
       <button

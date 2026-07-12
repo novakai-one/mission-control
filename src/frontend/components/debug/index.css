@@ -1,7 +1,7 @@
-/* Debug tab (build diagnostics). Local, single-use classes — the shared
-   .u-panel/.u-section-title/.u-empty recipes don't pixel-match this
-   component's existing spacing/color choices, so this phase only lifts
-   inline styles into classes without normalizing values. */
+/* Debug tab (build diagnostics). Local, single-use classes — section
+   headings use the shared .u-section-title recipe; other spacing/color
+   choices stay local since they don't pixel-match the shared .u-panel/
+   .u-empty recipes. */
 
 .dbg-panel {
   flex: 1;
@@ -35,11 +35,6 @@
 }
 
 .dbg-section-title {
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.05rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
   margin-bottom: 0.4rem;
 }
 

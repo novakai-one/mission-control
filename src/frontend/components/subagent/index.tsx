@@ -147,7 +147,7 @@ interface SubTimelineProps extends SubagentState {
 export function SubTimeline({ subagents, selected, selectAgent, subEvents, onSelectSubEvent, selectedSubKey }: SubTimelineProps) {
   return (
     <div className="tl-col">
-      <div className="tl-col-title">Sub Timeline</div>
+      <div className="u-section-title tl-col-title">Sub Timeline</div>
       {subagents.length > 0 && (
         <select
           className="sub-picker"
@@ -220,7 +220,7 @@ export function SubagentInspector({ meta, subEvents, event, onNavigate, mainEven
   if (!meta) {
     return (
       <div className="insp-col insp-col-last">
-        <div className="insp-header"><span className="insp-title">Subagent Inspector</span></div>
+        <div className="insp-header"><span className="u-section-title">Subagent Inspector</span></div>
         <div className="tl-col-hint">
           <GitBranch size={24} strokeWidth={1.5} />
           <span>Select a subagent</span>
@@ -238,7 +238,7 @@ export function SubagentInspector({ meta, subEvents, event, onNavigate, mainEven
   return (
     <div className="insp-col insp-col-last">
       <div className="insp-header">
-        <span className="insp-title">Subagent Inspector</span>
+        <span className="u-section-title">Subagent Inspector</span>
         <span className="insp-subtitle" title={meta.description}>
           <GitBranch size={12} color="var(--kind-tool)" />
           from: {meta.description || 'subagent'}
@@ -260,7 +260,7 @@ export function SubagentInspector({ meta, subEvents, event, onNavigate, mainEven
         </div>
       )}
       <div className="sub-return">
-        <div className="sub-return-heading">
+        <div className="u-section-title sub-return-heading">
           <CornerDownLeft size={11} color="var(--text-secondary)" />
           <span>Return</span>
         </div>

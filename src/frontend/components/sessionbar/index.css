@@ -30,9 +30,6 @@
 .sbar-title {
   font-size: 0.75rem;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex: 1;
   min-width: 0;
 }
@@ -110,9 +107,6 @@
   color: var(--text-primary);
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sbar-menu-meta {

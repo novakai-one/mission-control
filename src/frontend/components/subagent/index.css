@@ -8,10 +8,6 @@
   align-items: center;
   gap: 0.4rem;
   margin-bottom: 0.3rem;
-  font-size: 0.6rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
 }
 
 .sub-return-body { color: var(--text-primary); }

@@ -66,7 +66,7 @@ export function TimezonePicker() {
         <div className="vp-tz-list" ref={listRef}>
           {matches.map((entry) => (
             <button key={entry.id} type="button" className="vp-tz-item" onClick={() => select(entry)}>
-              <span className="vp-tz-name">{entry.name}</span>
+              <span className="vp-tz-name u-truncate">{entry.name}</span>
               <span className="vp-tz-offset">{entry.offset}</span>
             </button>
           ))}

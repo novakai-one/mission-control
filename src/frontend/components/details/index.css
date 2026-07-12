@@ -17,14 +17,6 @@
   flex-shrink: 0;
 }
 
-.insp-title {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .insp-subtitle {
   display: flex;
   align-items: center;

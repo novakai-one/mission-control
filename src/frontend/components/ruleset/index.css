@@ -106,13 +106,6 @@
   margin-bottom: 0.6rem;
 }
 
-.rs-cmd-title {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-
 .rs-cmd-path {
   padding: var(--space-3) 0.8rem;
   font-size: 0.65rem;
@@ -161,13 +154,6 @@
 .rs-event-dot.kind-result { background-color: var(--kind-result); }
 .rs-event-dot.kind-error { background-color: var(--kind-error); }
 .rs-event-dot.kind-muted { background-color: var(--text-muted); }
-
-.rs-event-label {
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
 
 .rs-hook-item {
   padding: 0.4rem 0.6rem;
@@ -350,13 +336,6 @@
   align-items: center;
   gap: 0.4rem;
   margin-bottom: 0.6rem;
-}
-
-.rs-source-title {
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
 }
 
 .rs-gate-body-pre {

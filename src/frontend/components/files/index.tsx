@@ -310,7 +310,7 @@ function TreeNode({ entry, cache, expanded, expandErrors, loadingPaths, selected
           <span className="files-tree-spacer" />
         )}
         {isDir ? <Folder size={13} color="var(--kind-tool)" /> : <FileIcon size={13} color="var(--text-secondary)" />}
-        <span className="files-name" onClick={() => onSelect(entry)}>{entry.name}</span>
+        <span className="files-name u-truncate" onClick={() => onSelect(entry)}>{entry.name}</span>
       </div>
       {isDir && isExpanded && (
         <div className="files-tree-children">

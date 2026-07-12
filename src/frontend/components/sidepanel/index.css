@@ -42,11 +42,6 @@
 }
 
 .sidepanel-heading {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -101,12 +96,12 @@
 }
 
 .sidepanel-agent:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--hover-bg);
   color: var(--text-primary);
 }
 
 .sidepanel-agent-active {
-  background-color: var(--status-running);
+  background-color: var(--bg-tertiary);
   border-color: var(--border-active);
   color: var(--text-primary);
 }
@@ -119,9 +114,6 @@
 .sidepanel-agent-title {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sidepanel-rename-input {

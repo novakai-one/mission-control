@@ -43,11 +43,6 @@
 }
 
 .vp-section-title {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   transition: color var(--anim);
 }
 
@@ -262,9 +257,6 @@
 
 .vp-label {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .vp-count {

@@ -31,9 +31,6 @@
 
 .files-name {
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ---- Component-specific classes (formerly inline styles) ---- */

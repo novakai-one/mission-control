@@ -204,7 +204,7 @@ export function SelectedInspector({ event, events, onNavigate }: SelectedInspect
   return (
     <div className="insp-col">
       <div className="insp-header">
-        <span className="insp-title">Agent Inspector</span>
+        <span className="u-section-title">Agent Inspector</span>
         {event && (
           <span className="insp-subtitle">
             <span className="insp-author">main agent</span>

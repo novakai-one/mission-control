@@ -5,7 +5,7 @@ import type { SubagentSummary } from '../../../lib/agentSocket/index.js';
 import { upsertEvent } from '../../../lib/upsertEvents.js';
 import { currentTimeZone } from '../../../lib/timezone/index.js';
 import { getEventLabel } from '../../board/index.js';
-import { KIND_META } from '../../ui/index.js';
+import { EmptyState, KIND_META } from '../../ui/index.js';
 import './index.css';
 
 // Mirrors src/frontend/components/index.tsx TranscriptEvent — duplicated locally
@@ -109,7 +109,7 @@ function EventRow({ event }: { event: CalmEvent }): React.JSX.Element {
       {isAssistantText ? (
         <p className={`calm-row-text ${kindClass}`}>{event.text}</p>
       ) : (
-        <span className={`calm-row-label ${kindClass}`}>{getEventLabel(event)}</span>
+        <span className={`calm-row-label u-truncate ${kindClass}`}>{getEventLabel(event)}</span>
       )}
     </div>
   );
@@ -123,10 +123,10 @@ function SubagentRow({ entry, done }: { entry: SubagentEntry; done: boolean }): 
     <div className="calm-subagent-row">
       <div className="calm-subagent-head">
         <GitBranch size={11} color="var(--kind-tool)" />
-        <span className="calm-subagent-desc">{summary.description || 'subagent'}</span>
+        <span className="calm-subagent-desc u-truncate">{summary.description || 'subagent'}</span>
         <span className="calm-subagent-type">{summary.agentType || 'default'}</span>
       </div>
-      <div className="calm-subagent-activity">{preview}</div>
+      <div className="calm-subagent-activity u-truncate">{preview}</div>
       <div className="calm-subagent-footer">
         <span className={done ? 'calm-status-done' : 'calm-status-running'}>{done ? '✓ done' : '● running'}</span>
         <span className="calm-subagent-count">{count} events</span>
@@ -198,16 +198,16 @@ export function CalmView({ agent, visible }: CalmViewProps): React.JSX.Element {
 
   return (
     <div className={rootClass}>
-      <div className="calm-feed" ref={feedRef} onScroll={handleFeedScroll}>
+      <div className="calm-feed glass-panel" ref={feedRef} onScroll={handleFeedScroll}>
         {events.length === 0 ? (
-          <div className="calm-empty">waiting for activity…</div>
+          <EmptyState title="waiting for activity…" />
         ) : (
           events.map(event => <EventRow key={event.eventKey ?? event.uuid} event={event} />)
         )}
       </div>
       {subagentList.length > 0 && (
-        <div className="calm-subagents">
-          <div className="calm-subagents-heading">subagents</div>
+        <div className="calm-subagents glass-panel">
+          <div className="u-section-title calm-subagents-heading">subagents</div>
           <div className="calm-subagents-list">
             {subagentList.map(entry => (
               <SubagentRow
