@@ -1,0 +1,17 @@
+/* Fallback kind colors for taxonomy entries with no dedicated --kind-* token
+   (see KIND_META in index.tsx). Everything else (.u-pill, .u-empty,
+   .u-panel-header, .u-section-title) lives in the shared UTILITIES section
+   of css/index.css — no need to duplicate it here. */
+.kind-secondary { color: var(--text-secondary); }
+.kind-muted { color: var(--text-muted); }
+
+.u-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.u-empty-hint {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
