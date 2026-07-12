@@ -181,3 +181,19 @@ Run the gate: `node tools/gates/standards.mjs` (from repo root). It prints
 
 To ratchet the baseline down after a legitimate cleanup:
 `npm run lint -- --update`.
+
+## 8. Migration notes (2026-07 unification)
+
+- Five `style={{}}` remain by design: three drag-resizable column widths in
+  the shell (`components/index.tsx`) and two theme-swatch preview colors in
+  `viewpanel` — genuinely dynamic values with no class/token representation.
+- A `0.55rem` micro-label tier survives (`.vp-group-title`, chip labels,
+  etc.): it is a deliberate sub-heading level below `--text-2xs`, kept to
+  preserve two-tier hierarchies. Do not fold it into `.u-section-title`.
+- When a module class must override a co-imported global class
+  (`.glass-panel`, `.u-btn`), use a compound selector
+  (`.glass-panel.dash-header`, `.files-btn.u-btn:disabled`) instead of
+  relying on stylesheet import order.
+- The `u-*` utilities are pixel-calibrated to the pre-migration conventions;
+  adopt them bare when values match, add a module modifier class only for
+  genuine differences (see `settings/index.css` `.set-btn`).
