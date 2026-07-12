@@ -110,6 +110,17 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
     if (rootAbs) setPathBarValue(toDisplayPath(rootAbs, homeDir));
   }, [rootAbs, homeDir]);
 
+  // Escape deselects the current entry. Only bound while something is selected
+  // so we don't hold a global listener for the common no-selection case.
+  useEffect(() => {
+    if (!selected) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selected]);
+
   // Resolve the git root for the current selection. Clear the previous value
   // first so a stale gitRoot can't be POSTed for the new selection while
   // resolve-root is still in flight.
@@ -266,6 +277,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
           activeError={activeError}
           onSetActive={handleSetActive}
           onOpenAgents={onOpenAgents}
+          onDeselect={() => setSelected(null)}
         />
       </div>
     </div>

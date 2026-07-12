@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import { toDisplayPath } from '../../index.js';
 import type { FsEntry, RepoInfo } from '../index.js';
 import './index.css';
@@ -13,6 +14,7 @@ interface DetailProps {
   activeError: string | null;
   onSetActive: () => void;
   onOpenAgents: () => void;
+  onDeselect: () => void;
 }
 
 interface Field {
@@ -57,8 +59,15 @@ export function Detail(props: DetailProps) {
   const pathDisplay = toDisplayPath(repoInfo?.path ?? selected.path, props.homeDir);
   const fields = buildFields(repoInfo, pathDisplay);
 
+  // Clicking the central workspace background (anywhere in the detail column
+  // outside the card) deselects. The card itself — including its controls —
+  // is preserved so interacting with the selection doesn't clear it.
+  const handleBackdropClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!(event.target as HTMLElement).closest('.fd-card')) props.onDeselect();
+  };
+
   return (
-    <div className="fd-detail">
+    <div className="fd-detail" onClick={handleBackdropClick}>
       <div className="fd-card">
         {props.isActive ? (
           <div className="fd-eyebrow fd-eyebrow-active">
