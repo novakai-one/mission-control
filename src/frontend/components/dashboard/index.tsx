@@ -26,22 +26,15 @@ const TABS: { mode: ViewMode; label: string }[] = [
 
 export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir, viewPanelOpen, onToggleViewPanel }: AppHeaderProps) {
   return (
-    <header className="glass-panel" style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0.8rem 1.5rem', borderBottom: '1px solid var(--border-color)',
-      backgroundColor: 'var(--bg-secondary)', height: '64px', borderRadius: 0
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+    <header className="glass-panel dash-header">
+      <div className="dash-header-group">
         <Terminal size={18} color="var(--text-secondary)" />
-        <span style={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.05rem', color: 'var(--text-primary)' }}>
+        <span className="dash-title">
           MISSION CONTROL
         </span>
-        <span style={{
-          display: 'flex', alignItems: 'center', gap: '0.3rem', marginLeft: '0.5rem',
-          fontSize: '0.7rem', color: activeRepo ? 'var(--text-secondary)' : 'var(--text-muted)',
-        }}>
+        <span className={activeRepo ? 'dash-repo-label dash-repo-label-active' : 'dash-repo-label'}>
           {activeRepo ? (
-            <>active repo: <Star size={11} color="var(--kind-tool)" style={{ display: 'inline' }} /> {toDisplayPath(activeRepo, homeDir)}</>
+            <>active repo: <Star size={11} color="var(--kind-tool)" className="dash-repo-icon" /> {toDisplayPath(activeRepo, homeDir)}</>
           ) : (
             'active repo: — none —'
           )}
@@ -49,7 +42,7 @@ export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettin
       </div>
 
       {/* View mode toggle — quiet buttons, active marked by a dot */}
-      <div style={{ display: 'flex', gap: '0.2rem' }}>
+      <div className="dash-tabs">
         {TABS.map(({ mode, label }) => (
           <button
             key={mode}
@@ -61,8 +54,8 @@ export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettin
         ))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{eventCount} events</span>
+      <div className="dash-header-group">
+        <span className="dash-event-count">{eventCount} events</span>
         <button
           onClick={onOpenSettings}
           className="viewpanel-toggle"

@@ -37,3 +37,60 @@
 .dash-tab-active::before {
   background-color: var(--text-primary);
 }
+
+/* Header shell — .glass-panel supplies border + backdrop-blur; the compound
+   selector wins the cascade regardless of CSS import order, to override its
+   background/radius. */
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  height: 64px;
+}
+
+.glass-panel.dash-header {
+  background-color: var(--bg-secondary);
+  border-radius: 0;
+}
+
+.dash-header-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dash-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.05rem;
+  color: var(--text-primary);
+}
+
+.dash-repo-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.dash-repo-label-active {
+  color: var(--text-secondary);
+}
+
+.dash-repo-icon {
+  display: inline;
+}
+
+.dash-tabs {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.dash-event-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}

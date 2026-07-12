@@ -1,0 +1,30 @@
+/* App shell layout — top-level flex frame + full-height content row. */
+.shell-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--bg-primary);
+}
+
+.shell-row {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.shell-transcript-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Resizable transcript columns (details / sub timeline / subagent inspector).
+   Width is drag-set state, so it stays an inline style; everything else lives here. */
+.shell-col-resizable {
+  min-width: 280px; /* mirrors COL_MIN in index.tsx */
+  flex-shrink: 1;
+  display: flex;
+  overflow: hidden;
+}
