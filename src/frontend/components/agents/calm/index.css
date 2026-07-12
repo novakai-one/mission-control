@@ -19,20 +19,6 @@
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.75rem;
-  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-
-.calm-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  font-size: 0.75rem;
 }
 
 .calm-row {
@@ -40,11 +26,11 @@
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.3rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .calm-row:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--hover-bg);
 }
 
 .calm-row-time {
@@ -65,31 +51,17 @@
 .calm-row-label {
   flex: 1;
   min-width: 0;
-  font-size: 0.7rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--text-xs);
 }
 
 .calm-row-text {
   flex: 1;
   min-width: 0;
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
 }
-
-/* Kind coloring mirrors board/index.tsx EVENT_COLORS — kept in CSS since this
-   dir's inline style= attributes are gate-forbidden. */
-.calm-kind-user_text { color: var(--text-secondary); }
-.calm-kind-assistant_text { color: var(--kind-assistant); }
-.calm-kind-assistant_thinking { color: var(--kind-thinking); }
-.calm-kind-tool_use { color: var(--kind-tool); }
-.calm-kind-tool_result { color: var(--kind-result); }
-.calm-kind-hook_event { color: var(--kind-error); }
-.calm-kind-system { color: var(--text-muted); }
-.calm-kind-session_meta { color: var(--text-muted); }
 
 .calm-subagents {
   flex-shrink: 0;
@@ -98,21 +70,11 @@
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.65rem 0.75rem;
-  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
   overflow: hidden;
 }
 
 .calm-subagents-heading {
   flex-shrink: 0;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
 }
 
 .calm-subagents-list {
@@ -129,7 +91,7 @@
   padding: 0.45rem 0.55rem;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .calm-subagent-head {
@@ -141,12 +103,9 @@
 .calm-subagent-desc {
   flex: 1;
   min-width: 0;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .calm-subagent-type {
@@ -158,11 +117,8 @@
 }
 
 .calm-subagent-activity {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .calm-subagent-footer {
@@ -172,18 +128,18 @@
 }
 
 .calm-status-running {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--kind-tool);
 }
 
 .calm-status-done {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--kind-result);
 }
 
 .calm-subagent-count {
-  font-size: 0.58rem;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }

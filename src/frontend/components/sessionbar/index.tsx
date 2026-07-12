@@ -44,7 +44,7 @@ export function SessionBar({ sessions, selectedSession, onSelectSession, eventCo
         {selected ? selected.sessionId.substring(0, 8) : 'sessions'}
         <ChevronDown size={12} />
       </button>
-      <span className="sbar-title">{selected?.title || ''}</span>
+      <span className="sbar-title u-truncate">{selected?.title || ''}</span>
       <span className="sbar-stats">
         {eventCount} events · {subagentCount} subagent{subagentCount === 1 ? '' : 's'}
         {sessionUsage && (
@@ -68,7 +68,7 @@ export function SessionBar({ sessions, selectedSession, onSelectSession, eventCo
                   onClick={() => pick(session.sessionId)}
                 >
                   <span className="sbar-menu-id">{session.sessionId.substring(0, 8)}</span>
-                  <span className="sbar-menu-title">{session.title || 'untitled'}</span>
+                  <span className="sbar-menu-title u-truncate">{session.title || 'untitled'}</span>
                   <span className="sbar-menu-meta">{formatWhen(session.modified)}</span>
                   <span className="sbar-menu-meta">{(session.size / 1024).toFixed(0)}KB</span>
                 </div>

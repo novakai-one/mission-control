@@ -32,7 +32,7 @@ function ModelRows({ usage, settings }: { usage: AgentUsage; settings: CostSetti
     <>
       {Object.entries(usage.perModel).map(([model, totals]) => (
         <div key={model} className="vp-row vp-row-child">
-          <span className="vp-label" title={`in ${totals.input.toLocaleString()} · cache-write ${(totals.cacheWrite5m + totals.cacheWrite1h).toLocaleString()} · cache-read ${totals.cacheRead.toLocaleString()} · out ${totals.output.toLocaleString()} · ${totals.requests} msgs`}>
+          <span className="vp-label u-truncate" title={`in ${totals.input.toLocaleString()} · cache-write ${(totals.cacheWrite5m + totals.cacheWrite1h).toLocaleString()} · cache-read ${totals.cacheRead.toLocaleString()} · out ${totals.output.toLocaleString()} · ${totals.requests} msgs`}>
             {model || 'unknown model'}
           </span>
           <span className="vp-count">{formatTokens(tokensOf({ perModel: { [model]: totals } }))} · {formatCost(costOfModel(model, totals, settings), settings.currency)}</span>
@@ -65,7 +65,7 @@ export function CostSection({ usage, settings, onSettingsChange }: CostSectionPr
       {usage ? (
         <div className="vp-group">
           <div className="vp-row">
-            <span className="vp-label vp-cost-total">Session total</span>
+            <span className="vp-label u-truncate vp-cost-total">Session total</span>
             <span className="vp-count">{formatTokens(sessionTokens(usage))} · {formatCost(sessionCost(usage, settings), settings.currency)}</span>
           </div>
           <div className="vp-group-title">Main agent</div>
@@ -73,7 +73,7 @@ export function CostSection({ usage, settings, onSettingsChange }: CostSectionPr
           {usage.subagents.length > 0 && <div className="vp-group-title">Subagents</div>}
           {usage.subagents.map((subagent) => (
             <div key={subagent.agentId} className="vp-row vp-row-child">
-              <span className="vp-label" title={`${subagent.agentType || 'agent'} · ${subagent.agentId}`}>{subagent.description || subagent.agentId}</span>
+              <span className="vp-label u-truncate" title={`${subagent.agentType || 'agent'} · ${subagent.agentId}`}>{subagent.description || subagent.agentId}</span>
               <span className="vp-count">{formatTokens(tokensOf(subagent))} · {formatCost(costOf(subagent, settings), settings.currency)}</span>
             </div>
           ))}
@@ -85,7 +85,7 @@ export function CostSection({ usage, settings, onSettingsChange }: CostSectionPr
       <div className="vp-group">
         <div className="vp-group-title">Settings</div>
         <div className="vp-row">
-          <span className="vp-label">Currency</span>
+          <span className="vp-label u-truncate">Currency</span>
           <select
             value={settings.currency}
             className="vp-cost-select"
@@ -96,13 +96,13 @@ export function CostSection({ usage, settings, onSettingsChange }: CostSectionPr
           </select>
         </div>
         <div className="vp-row">
-          <span className="vp-label">USD→AUD rate</span>
+          <span className="vp-label u-truncate">USD→AUD rate</span>
           {numberInput(settings.usdToAud, (parsed) => onSettingsChange({ ...settings, usdToAud: parsed }))}
         </div>
         <div className="vp-group-title">Prices (USD / MTok, in · out)</div>
         {Object.entries(settings.prices).map(([prefix, price]) => (
           <div key={prefix} className="vp-row vp-row-child">
-            <span className="vp-label">{prefix}</span>
+            <span className="vp-label u-truncate">{prefix}</span>
             <span className="vp-cost-pair">
               {numberInput(price.inputPerMTok, (parsed) => onSettingsChange({ ...settings, prices: { ...settings.prices, [prefix]: { ...price, inputPerMTok: parsed } } }))}
               {numberInput(price.outputPerMTok, (parsed) => onSettingsChange({ ...settings, prices: { ...settings.prices, [prefix]: { ...price, outputPerMTok: parsed } } }))}

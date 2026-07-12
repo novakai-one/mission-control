@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, FileCode, BookOpen, ChevronRight, Terminal, Webhook } from 'lucide-react';
+import { Pill, KIND_META } from '../ui/index.js';
+import './index.css';
 
 export interface HookConfig {
   event: string;
@@ -32,14 +34,10 @@ interface RulesetInspectorProps {
 
 type Tab = 'hooks' | 'gates' | 'claude-md';
 
-const EVENT_COLORS: Record<string, string> = {
-  PreToolUse: 'var(--kind-tool)',
-  PostToolUse: 'var(--kind-result)',
-  SessionStart: 'var(--kind-assistant)',
-  Stop: 'var(--kind-error)',
-  SubagentStop: 'var(--kind-thinking)',
-  Notification: 'var(--text-muted)',
-};
+// Strip the `kind-` prefix off a KIND_META className so it can be passed to <Pill kind=.../>.
+function eventKind(name: string): string {
+  return (KIND_META[name]?.className ?? 'kind-muted').slice(5);
+}
 
 export function RulesetInspector({ data }: RulesetInspectorProps) {
   const [tab, setTab] = useState<Tab>('hooks');
@@ -47,13 +45,9 @@ export function RulesetInspector({ data }: RulesetInspectorProps) {
 
   if (!data) {
     return (
-      <div style={{
-        display: 'flex', flex: 1, backgroundColor: 'var(--bg-primary)',
-        alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)',
-        flexDirection: 'column', gap: '0.8rem'
-      }}>
+      <div className="rs-loading">
         <Shield size={28} strokeWidth={1.5} />
-        <span style={{ fontSize: '0.75rem' }}>Loading ruleset...</span>
+        <span className="rs-msg-sm">Loading ruleset...</span>
       </div>
     );
   }
@@ -63,21 +57,18 @@ export function RulesetInspector({ data }: RulesetInspectorProps) {
   const hasClaudeMd = data.claudeMd !== null;
 
   return (
-    <div style={{ display: 'flex', flex: 1, backgroundColor: 'var(--bg-primary)', overflow: 'hidden' }}>
+    <div className="rs-root">
       {/* Left sidebar: tab nav + list */}
-      <div style={{
-        width: '280px', backgroundColor: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column'
-      }}>
+      <div className="rs-sidebar">
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
+        <div className="rs-tabs">
           <TabButton active={tab === 'hooks'} onClick={() => setTab('hooks')} icon={<Webhook size={12} />} label="Hooks" count={hookCount} />
           <TabButton active={tab === 'gates'} onClick={() => setTab('gates')} icon={<Shield size={12} />} label="Gates" count={gateCount} />
           <TabButton active={tab === 'claude-md'} onClick={() => setTab('claude-md')} icon={<BookOpen size={12} />} label="Rules" count={hasClaudeMd ? 1 : 0} />
         </div>
 
         {/* List content based on tab */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0.8rem' }}>
+        <div className="rs-list">
           {tab === 'hooks' && (
             <HookList hooks={data.hooks} />
           )}
@@ -85,20 +76,20 @@ export function RulesetInspector({ data }: RulesetInspectorProps) {
             <GateList gates={data.gates} selectedGate={selectedGate} onSelect={setSelectedGate} />
           )}
           {tab === 'claude-md' && (
-            <div style={{ padding: '0.4rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.6rem' }}>
+            <div className="rs-cmd-wrap">
+              <div className="rs-cmd-header">
                 <BookOpen size={12} color="var(--text-secondary)" />
-                <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>CLAUDE.md</span>
+                <span className="u-section-title">CLAUDE.md</span>
               </div>
               {hasClaudeMd ? (
-                <div className="glass-panel" style={{ padding: '0.5rem 0.8rem', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                <div className="glass-panel rs-cmd-path">
                   {data.claudeMdPath?.replace(data.projectPath + '/', '')}
                 </div>
               ) : (
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No CLAUDE.md found</span>
+                <span className="rs-cmd-empty">No CLAUDE.md found</span>
               )}
-              <div style={{ marginTop: '1rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                <div style={{ marginBottom: '0.3rem' }}>Project: {data.projectPath}</div>
+              <div className="rs-cmd-meta">
+                <div className="rs-cmd-meta-row">Project: {data.projectPath}</div>
                 {data.toolsPath && <div>Tools: {data.toolsPath.replace(data.projectPath + '/', '')}</div>}
               </div>
             </div>
@@ -107,7 +98,7 @@ export function RulesetInspector({ data }: RulesetInspectorProps) {
       </div>
 
       {/* Right panel: detail viewer */}
-      <div style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-primary)' }}>
+      <div className="rs-detail-pane">
         {tab === 'hooks' && <HookDetail hooks={data.hooks} />}
         {tab === 'gates' && <GateDetail gates={data.gates} selectedGate={selectedGate} />}
         {tab === 'claude-md' && <ClaudeMdDetail content={data.claudeMd} />}
@@ -121,25 +112,11 @@ function TabButton({ active, onClick, icon, label, count }: {
   active: boolean; onClick: () => void; icon: React.ReactNode; label: string; count: number;
 }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem',
-        padding: '0.7rem 0.4rem', backgroundColor: active ? 'var(--bg-tertiary)' : 'transparent',
-        border: 'none', borderBottom: active ? '2px solid var(--accent-active)' : '2px solid transparent',
-        color: active ? 'var(--text-primary)' : 'var(--text-muted)',
-        cursor: 'pointer', fontSize: '0.7rem', fontWeight: active ? 600 : 400,
-      }}
-    >
+    <button onClick={onClick} className={`rs-tab-btn${active ? ' active' : ''}`}>
       {icon}
       <span>{label}</span>
       {count > 0 && (
-        <span style={{
-          fontSize: '0.55rem', backgroundColor: active ? 'var(--accent-color)' : 'var(--bg-tertiary)',
-          color: 'var(--text-secondary)', padding: '0.05rem 0.35rem', borderRadius: '8px', fontWeight: 600,
-        }}>
-          {count}
-        </span>
+        <span className={`rs-tab-count${active ? ' active' : ''}`}>{count}</span>
       )}
     </button>
   );
@@ -148,7 +125,7 @@ function TabButton({ active, onClick, icon, label, count }: {
 // ===== Hooks List =====
 function HookList({ hooks }: { hooks: HookConfig[] }) {
   if (hooks.length === 0) {
-    return <div style={{ padding: '0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No hooks configured</div>;
+    return <div className="rs-list-empty">No hooks configured</div>;
   }
 
   // Group by event type
@@ -159,31 +136,19 @@ function HookList({ hooks }: { hooks: HookConfig[] }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+    <div className="rs-hook-groups">
       {Object.entries(grouped).map(([event, eventHooks]) => (
         <div key={event}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.4rem' }}>
-            <div style={{
-              width: '6px', height: '6px', borderRadius: '50%',
-              backgroundColor: EVENT_COLORS[event] || 'var(--text-muted)',
-            }} />
-            <span style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              {event}
-            </span>
+          <div className="rs-hook-group-head">
+            <div className={`rs-event-dot kind-${eventKind(event)}`} />
+            <span className="u-section-title">{event}</span>
           </div>
           {eventHooks.map((hook, i) => (
-            <div key={i} className="glass-panel" style={{
-              padding: '0.4rem 0.6rem', marginBottom: '0.2rem',
-              display: 'flex', flexDirection: 'column', gap: '0.2rem',
-            }}>
+            <div key={i} className="glass-panel rs-hook-item">
               {hook.matcher && (
-                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                  matcher: {hook.matcher}
-                </span>
+                <span className="rs-note">matcher: {hook.matcher}</span>
               )}
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
-                {hook.command}
-              </span>
+              <span className="rs-hook-command">{hook.command}</span>
             </div>
           ))}
         </div>
@@ -201,42 +166,27 @@ function HookDetail({ hooks }: { hooks: HookConfig[] }) {
   }
 
   return (
-    <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+    <div className="rs-detail">
+      <div className="rs-row-sm">
         <Webhook size={14} color="var(--text-secondary)" />
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>Hook Configuration</span>
-        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>— .claude/settings.json</span>
+        <span className="rs-detail-title">Hook Configuration</span>
+        <span className="rs-detail-sub">— .claude/settings.json</span>
       </div>
 
       {hooks.map((hook, i) => (
-        <div key={i} className="glass-panel" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{
-              fontSize: '0.6rem', fontWeight: 600, padding: '0.1rem 0.5rem', borderRadius: '4px',
-              backgroundColor: `${EVENT_COLORS[hook.event] || 'var(--text-muted)'}22`,
-              color: EVENT_COLORS[hook.event] || 'var(--text-muted)',
-            }}>
-              {hook.event}
-            </span>
+        <div key={i} className="glass-panel rs-hook-card">
+          <div className="rs-row-sm">
+            <Pill kind={eventKind(hook.event)}>{hook.event}</Pill>
             {hook.matcher && (
-              <span style={{
-                fontSize: '0.6rem', color: 'var(--text-secondary)',
-                backgroundColor: 'var(--bg-tertiary)', padding: '0.1rem 0.5rem', borderRadius: '4px',
-              }}>
-                {hook.matcher}
-              </span>
+              <span className="rs-hook-matcher-badge">{hook.matcher}</span>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div className="rs-row-xs">
             <Terminal size={11} color="var(--text-muted)" />
-            <code style={{ fontSize: '0.7rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
-              {hook.command}
-            </code>
+            <code className="rs-hook-cmd-code">{hook.command}</code>
           </div>
           {hook.scriptPath && (
-            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-              → {hook.scriptPath.split('/').slice(-3).join('/')}
-            </div>
+            <div className="rs-note">→ {hook.scriptPath.split('/').slice(-3).join('/')}</div>
           )}
         </div>
       ))}
@@ -249,46 +199,27 @@ function GateList({ gates, selectedGate, onSelect }: {
   gates: GateScript[]; selectedGate: string | null; onSelect: (name: string) => void;
 }) {
   if (gates.length === 0) {
-    return <div style={{ padding: '0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No gate scripts found</div>;
+    return <div className="rs-list-empty">No gate scripts found</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+    <div className="rs-gate-list">
       {gates.map((gate) => (
         <div
           key={gate.fileName}
           onClick={() => onSelect(gate.fileName)}
-          className="glass-panel"
-          style={{
-            padding: '0.5rem 0.6rem', cursor: 'pointer',
-            backgroundColor: selectedGate === gate.fileName ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-            borderColor: selectedGate === gate.fileName ? 'var(--border-active)' : 'var(--border-color)',
-            display: 'flex', flexDirection: 'column', gap: '0.2rem',
-          }}
+          className={`glass-panel rs-gate-row${selectedGate === gate.fileName ? ' selected' : ''}`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div className="rs-row-xs">
             <Shield size={11} color={selectedGate === gate.fileName ? 'var(--accent-active)' : 'var(--text-muted)'} />
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-              {gate.fileName}
-            </span>
+            <span className="rs-gate-name">{gate.fileName}</span>
           </div>
-          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+          <div className="rs-gate-tags">
             {gate.hookEvents.map(ev => (
-              <span key={ev} style={{
-                fontSize: '0.5rem', padding: '0.05rem 0.3rem', borderRadius: '3px',
-                backgroundColor: `${EVENT_COLORS[ev] || 'var(--text-muted)'}22`,
-                color: EVENT_COLORS[ev] || 'var(--text-muted)',
-              }}>
-                {ev}
-              </span>
+              <Pill key={ev} kind={eventKind(ev)}>{ev}</Pill>
             ))}
             {gate.matchers.map(m => (
-              <span key={m} style={{
-                fontSize: '0.5rem', padding: '0.05rem 0.3rem', borderRadius: '3px',
-                backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)',
-              }}>
-                {m}
-              </span>
+              <span key={m} className="rs-gate-matcher-pill">{m}</span>
             ))}
           </div>
         </div>
@@ -315,59 +246,37 @@ function GateDetail({ gates, selectedGate }: {
   const body = headerMatch ? gate.source.slice(headerMatch[0].length) : gate.source;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="rs-gate-detail">
       {/* Header */}
-      <div style={{
-        padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)',
-        backgroundColor: 'var(--bg-secondary)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+      <div className="rs-gate-detail-head">
+        <div className="rs-gate-detail-title-row">
           <FileCode size={14} color="var(--text-secondary)" />
-          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-            {gate.fileName}
-          </span>
+          <span className="rs-gate-detail-title">{gate.fileName}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+        <div className="rs-gate-detail-meta">
           <span>{gate.relativePath}</span>
           <span>{(gate.size / 1024).toFixed(1)}KB</span>
           {gate.hookEvents.map(ev => (
-            <span key={ev} style={{
-              padding: '0.05rem 0.35rem', borderRadius: '3px',
-              backgroundColor: `${EVENT_COLORS[ev] || 'var(--text-muted)'}22`,
-              color: EVENT_COLORS[ev] || 'var(--text-muted)', fontWeight: 600,
-            }}>
-              {ev}
-            </span>
+            <Pill key={ev} kind={eventKind(ev)}>{ev}</Pill>
           ))}
         </div>
       </div>
 
       {/* Source code */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
+      <div className="rs-gate-source-wrap">
         {header && (
-          <div style={{
-            padding: '1rem 1.5rem', backgroundColor: 'var(--bg-tertiary)',
-            borderBottom: '1px solid var(--border-color)', maxHeight: '300px', overflowY: 'auto',
-          }}>
-            <pre style={{
-              fontSize: '0.65rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)',
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.5rem', margin: 0,
-            }}>
+          <div className="rs-gate-header-block">
+            <pre className="rs-gate-header-pre">
               {header.replace(/^\/\*\s*/, '').replace(/\s*\*\/$/, '').replace(/^\s*\*\s?/gm, '')}
             </pre>
           </div>
         )}
-        <div style={{ padding: '1rem 1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.6rem' }}>
+        <div className="rs-gate-body-wrap">
+          <div className="rs-source-head">
             <ChevronRight size={12} color="var(--text-muted)" />
-            <span style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Source</span>
+            <span className="u-section-title">Source</span>
           </div>
-          <pre style={{
-            fontSize: '0.65rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)',
-            whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.4rem', margin: 0,
-          }}>
-            {body.trim()}
-          </pre>
+          <pre className="rs-gate-body-pre">{body.trim()}</pre>
         </div>
       </div>
     </div>
@@ -383,17 +292,12 @@ function ClaudeMdDetail({ content }: { content: string | null }) {
   }
 
   return (
-    <div style={{ padding: '1.5rem', overflowY: 'auto', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+    <div className="rs-md-detail">
+      <div className="rs-md-head">
         <BookOpen size={14} color="var(--text-secondary)" />
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>CLAUDE.md</span>
+        <span className="rs-detail-title">CLAUDE.md</span>
       </div>
-      <pre style={{
-        fontSize: '0.72rem', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)',
-        whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.6rem', margin: 0,
-      }}>
-        {content}
-      </pre>
+      <pre className="rs-md-pre">{content}</pre>
     </div>
   );
 }
@@ -401,12 +305,9 @@ function ClaudeMdDetail({ content }: { content: string | null }) {
 // ===== Empty State =====
 function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
   return (
-    <div style={{
-      display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center',
-      flexDirection: 'column', gap: '0.8rem', color: 'var(--text-muted)',
-    }}>
+    <div className="rs-empty">
       {icon}
-      <span style={{ fontSize: '0.75rem' }}>{message}</span>
+      <span className="rs-msg-sm">{message}</span>
     </div>
   );
 }

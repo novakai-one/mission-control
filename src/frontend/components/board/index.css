@@ -11,11 +11,6 @@
 }
 
 .tl-col-title {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin-bottom: 0.7rem;
   flex-shrink: 0;
 }
@@ -37,7 +32,7 @@
   justify-content: center;
   color: var(--text-muted);
   gap: 0.8rem;
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   text-align: center;
   padding: 1rem;
 }
@@ -48,7 +43,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.65rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -80,41 +75,25 @@
 }
 
 .tl-label {
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-
-/* Per-kind label colors, mirroring EVENT_COLORS. */
-.tl-kind-user_text { color: var(--text-secondary); }
-.tl-kind-assistant_text { color: var(--kind-assistant); }
-.tl-kind-assistant_thinking { color: var(--kind-thinking); }
-.tl-kind-tool_use { color: var(--kind-tool); }
-.tl-kind-tool_result { color: var(--kind-result); }
-.tl-kind-hook_event { color: var(--kind-error); }
-.tl-kind-system { color: var(--text-muted); }
-.tl-kind-session_meta { color: var(--text-muted); }
 
 .tl-sc {
   font-size: 0.55rem;
   color: var(--kind-tool);
   background-color: color-mix(in srgb, var(--kind-tool) 10%, transparent);
   padding: 0 0.3rem;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 /* Merged tool-result chip. */
 .tl-chip {
   font-size: 0.55rem;
   padding: 0 0.3rem;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex-shrink: 0;
 }
 
@@ -132,24 +111,11 @@
   box-shadow: 0 0 0 1px var(--border-active);
 }
 
-/* Centered muted hint when view filters hide every event. */
-.tl-empty {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
 /* Compressed context-noise strip. */
 .tl-noise-strip {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   padding: 0.15rem 0.5rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   flex-shrink: 0;
 }
 
@@ -170,7 +136,7 @@
 .tl-caret {
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   width: 12px;
   flex-shrink: 0;
   user-select: none;
@@ -187,14 +153,11 @@
 .tl-turn-tag-claude { color: var(--kind-assistant); }
 
 .tl-turn-text {
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 0.05rem 0.2rem;
   border: 1px solid transparent;
 }
@@ -205,13 +168,13 @@
 }
 
 .tl-turn-start {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .tl-turn-count {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 

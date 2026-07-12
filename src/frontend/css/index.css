@@ -9,6 +9,7 @@
  * [data-mode]. The boot script in index.html applies data-theme/data-font/
  * data-mode from localStorage before first paint.
  */
+/* KEEP IN SYNC: theme id list also lives in lib/theme/index.ts (THEMES) and index.html (boot script light-theme list). */
 :root {
   /* Carbon (dark default) */
   --theme-bg: #161616;
@@ -42,7 +43,25 @@
   /* Shape & motion */
   --radius: 9px;
   --radius-sm: 6px;
+  --radius-xs: 4px;
   --anim: 240ms ease;
+
+  /* Spacing scale */
+  --space-1: 0.15rem;
+  --space-2: 0.3rem;
+  --space-3: 0.5rem;
+  --space-4: 0.75rem;
+  --space-5: 1rem;
+  --space-6: 1.5rem;
+
+  /* Type scale */
+  --text-2xs: 0.6rem;
+  --text-xs: 0.68rem;
+  --text-sm: 0.72rem;
+  --text-md: 0.78rem;
+  --text-lg: 0.85rem;
+
+  --shadow: 0 4px 16px color-mix(in srgb, var(--theme-ink) 8%, transparent);
 
   --font-sans: 'Source Serif 4', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
   --font-mono: 'JetBrains Mono', SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
@@ -154,50 +173,6 @@ button:active {
   transform: scale(0.98);
 }
 
-/* Quiet hover affordance for inline-styled buttons (settings modal etc.). */
-.mc-btn:hover {
-  background-color: var(--bg-tertiary) !important;
-  color: var(--text-primary) !important;
-}
-
-/* Files tab */
-.files-tree-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.15rem 0.3rem;
-  border-radius: 4px;
-  font-size: 0.72rem;
-  color: var(--text-primary);
-  transition: background-color var(--anim);
-}
-
-.files-tree-row:hover {
-  background-color: var(--hover-bg);
-}
-
-.files-tree-row-selected {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-active);
-}
-
-.files-chevron {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  flex-shrink: 0;
-  cursor: pointer;
-  color: var(--text-secondary);
-}
-
-.files-name {
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Column resize handles (transcript view) — invisible until hovered or dragged.
    Takes its own 5px gutter (no negative-margin overlap) so it never sits on
    top of the left column's scrollbar and steals its clicks. */
@@ -212,4 +187,152 @@ button:active {
 .col-resize-handle:hover,
 .col-resize-dragging {
   background: color-mix(in srgb, var(--theme-ink) 20%, transparent);
+}
+
+/* ==========================================================================
+   Utilities — shared single-purpose classes. See docs/design.md for the
+   full catalog. Additive, additive only: existing component CSS is
+   untouched, so adopting a .u-* class in a component is opt-in.
+   ========================================================================== */
+
+/* Text truncation. */
+.u-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one canonical uppercase section heading (tl-col-title / insp-title
+   pattern, generalized). */
+.u-section-title {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+/* Selectable list row (tl-row pattern, generalized). */
+.u-row {
+  cursor: pointer;
+  transition: background-color var(--anim);
+}
+
+.u-row:hover {
+  background-color: var(--hover-bg);
+}
+
+.u-row-selected,
+.u-row-selected:hover {
+  background-color: var(--bg-tertiary);
+  box-shadow: 0 0 0 1px var(--border-active);
+}
+
+/* Buttons (settings-panel btnStyle pattern, generalized). */
+.u-btn {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+
+.u-btn:hover:not(:disabled) {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.u-btn:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.u-btn-primary {
+  background-color: var(--accent-color);
+  color: var(--text-primary);
+  border-color: var(--accent-active);
+}
+
+.u-btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-active);
+}
+
+/* Text input (settings-panel inputStyle pattern, generalized). */
+.u-input {
+  width: 100%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.u-input:focus {
+  border-color: var(--border-active);
+}
+
+/* Pill / badge — the one recipe. Pair with a `kind-*` or `status-*`
+   modifier below to pick up a hue. */
+.u-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.u-pill.kind-assistant { background: color-mix(in srgb, var(--kind-assistant) 12%, transparent); color: var(--kind-assistant); }
+.u-pill.kind-thinking { background: color-mix(in srgb, var(--kind-thinking) 12%, transparent); color: var(--kind-thinking); }
+.u-pill.kind-tool { background: color-mix(in srgb, var(--kind-tool) 12%, transparent); color: var(--kind-tool); }
+.u-pill.kind-result { background: color-mix(in srgb, var(--kind-result) 12%, transparent); color: var(--kind-result); }
+.u-pill.kind-error { background: color-mix(in srgb, var(--kind-error) 12%, transparent); color: var(--kind-error); }
+
+/* --status-* are pale background tints, unreadable as text — pill bg gets the
+   tint straight, foreground stays primary ink. */
+.u-pill.status-success { background: color-mix(in srgb, var(--status-success) 45%, transparent); color: var(--text-primary); }
+.u-pill.status-failed { background: color-mix(in srgb, var(--status-failed) 45%, transparent); color: var(--text-primary); }
+.u-pill.status-running { background: color-mix(in srgb, var(--status-running) 45%, transparent); color: var(--text-primary); }
+
+/* Tab skeleton — header + scrollable body, required shape for panel-like
+   tabs (see docs/design.md §5). */
+.u-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.u-panel-header {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.u-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Empty-state container (tl-empty / calm-empty pattern, generalized). */
+.u-empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding: var(--space-5);
 }

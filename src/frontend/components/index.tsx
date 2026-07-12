@@ -15,6 +15,7 @@ import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 import { useTimeZone } from '../lib/timezone/index.js';
+import './index.css';
 
 /** Display-only '~' conversion for an absolute path. Never used for anything sent to the backend. */
 export function toDisplayPath(absPath: string | null, homeDir: string | null): string {
@@ -315,7 +316,7 @@ export function DashboardShell() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+    <div className="shell-root">
       <AppHeader
         eventCount={events.length}
         viewMode={viewMode}
@@ -326,7 +327,7 @@ export function DashboardShell() {
         viewPanelOpen={viewPanel.open}
         onToggleViewPanel={viewPanel.toggleOpen}
       />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="shell-row">
         <SidePanel
           agents={agentsState.agents}
           activeAgentId={agentsState.activeAgentId}
@@ -352,7 +353,7 @@ export function DashboardShell() {
             onActiveRepoChange={setActiveRepo}
           />
         ) : viewMode === 'transcript' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <div className="shell-transcript-col">
             <SessionBar
               sessions={sessions}
               selectedSession={selectedSession}
@@ -362,7 +363,7 @@ export function DashboardShell() {
               sessionUsage={sessionUsage}
               costSettings={costSettings}
             />
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <div className="shell-row">
               <AgentBoard
                 events={events}
                 visibleEvents={visibleEvents}
@@ -372,7 +373,7 @@ export function DashboardShell() {
                 variant={viewPanel.variant}
               />
               <ResizeHandle width={detailsWidth} onWidthChange={setDetailsWidth} />
-              <div style={{ width: detailsWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+              <div className="shell-col-resizable" style={{ width: detailsWidth }}>
                 <SelectedInspector
                   event={selectedEvent}
                   events={visibleEvents}
@@ -380,7 +381,7 @@ export function DashboardShell() {
                 />
               </div>
               <ResizeHandle width={subTimelineWidth} onWidthChange={setSubTimelineWidth} />
-              <div style={{ width: subTimelineWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+              <div className="shell-col-resizable" style={{ width: subTimelineWidth }}>
                 <SubTimeline
                   {...subagentState}
                   onSelectSubEvent={selectSubEvent}
@@ -388,7 +389,7 @@ export function DashboardShell() {
                 />
               </div>
               <ResizeHandle width={subagentWidth} onWidthChange={setSubagentWidth} />
-              <div style={{ width: subagentWidth, minWidth: COL_MIN, flexShrink: 1, display: 'flex', overflow: 'hidden' }}>
+              <div className="shell-col-resizable" style={{ width: subagentWidth }}>
                 <SubagentInspector
                   meta={subagentState.selected}
                   subEvents={subagentState.subEvents}

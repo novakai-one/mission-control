@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Network, Brain, FileText, Wrench, AlertTriangle, Radio } from 'lucide-react';
+import { Network, FileText } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
 import type { SpawnRun, TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
 import { compressNoiseRuns, getChipLabel, getToolLabel, groupIntoTurns, groupSpawnRuns, noiseSummary, selKey } from './timelineModel.js';
 import { currentTimeZone } from '../../lib/timezone/index.js';
+import { EmptyState, KIND_META } from '../ui/index.js';
 import './index.css';
 
 interface TimelineProps {
@@ -17,17 +18,6 @@ interface AgentBoardProps extends TimelineProps {
   pairs: ToolPairs;
   variant: TimelineVariant;
 }
-
-export const EVENT_ICONS: Record<string, React.ReactNode> = {
-  user_text: <FileText size={11} color="var(--text-secondary)" />,
-  assistant_text: <FileText size={11} color="var(--kind-assistant)" />,
-  assistant_thinking: <Brain size={11} color="var(--kind-thinking)" />,
-  tool_use: <Wrench size={11} color="var(--kind-tool)" />,
-  tool_result: <Wrench size={11} color="var(--kind-result)" />,
-  hook_event: <AlertTriangle size={11} color="var(--kind-error)" />,
-  system: <Radio size={11} color="var(--text-muted)" />,
-  session_meta: <Radio size={11} color="var(--text-muted)" />,
-};
 
 /** Content preview — used for row tooltips and turn headers; chips themselves show the kind. */
 export function getEventLabel(ev: TranscriptEvent): string {
@@ -61,12 +51,12 @@ interface EventRowProps {
 
 /** Compact chip row: time + kind label; the content preview lives in the tooltip. */
 export function EventRow({ event, selected, onSelect, countSuffix, resultChip, onSelectChip, chipSelected }: EventRowProps) {
-  const chipTone = resultChip?.isError ? 'tl-chip tl-chip-err' : 'tl-chip tl-chip-ok';
+  const chipTone = resultChip?.isError ? 'tl-chip tl-chip-err u-truncate' : 'tl-chip tl-chip-ok u-truncate';
   return (
     <div className={selected ? 'tl-row tl-row-selected' : 'tl-row'} onClick={onSelect} title={getEventLabel(event)}>
       <span className="tl-time">{formatTime(event.ts)}</span>
-      <span className="tl-icon">{EVENT_ICONS[event.kind] || <FileText size={11} color="var(--text-muted)" />}</span>
-      <span className={`tl-label tl-kind-${event.kind}`}>
+      <span className="tl-icon">{KIND_META[event.kind]?.icon ?? <FileText size={11} color="var(--text-muted)" />}</span>
+      <span className={`tl-label u-truncate ${KIND_META[event.kind]?.className ?? ''}`}>
         {getChipLabel(event)}{countSuffix && countSuffix > 1 ? ` ×${countSuffix}` : ''}
       </span>
       {resultChip && (
@@ -139,7 +129,7 @@ function MergedList({ events, pairs, compressNoise, onSelectEvent, selectedKey }
     <>
       {items.map((item, index) => {
         if ('noiseRun' in item) {
-          return <div key={`noise-${index}`} className="tl-noise-strip">····&ensp;{noiseSummary(item.noiseRun)}</div>;
+          return <div key={`noise-${index}`} className="tl-noise-strip u-truncate">····&ensp;{noiseSummary(item.noiseRun)}</div>;
         }
         const props = rowProps(item, selectedKey);
         return (
@@ -194,7 +184,7 @@ function TurnHeader({ turn, collapsed, onToggle, onSelect, selectedKey }: TurnHe
             {header.kind === 'user_text' ? 'YOU' : 'CLAUDE'}
           </span>
           <span
-            className={selectedKey === selKey(header) ? 'tl-turn-text tl-turn-text-selected' : 'tl-turn-text'}
+            className={selectedKey === selKey(header) ? 'tl-turn-text tl-turn-text-selected u-truncate' : 'tl-turn-text u-truncate'}
             onClick={() => onSelect(header)}
           >
             {(header.text || '').substring(0, 80)}
@@ -282,14 +272,14 @@ function TimelineBody({ variant, events, pairs, onSelectEvent, selectedKey }: Ti
 export function AgentBoard({ events, visibleEvents, pairs, onSelectEvent, selectedKey, variant }: AgentBoardProps) {
   return (
     <div className="tl-col">
-      <div className="tl-col-title">Agent Timeline</div>
+      <div className="u-section-title tl-col-title">Agent Timeline</div>
       {events.length === 0 ? (
         <div className="tl-col-hint">
           <Network size={28} strokeWidth={1.5} />
           <span>Select a session to view transcript</span>
         </div>
       ) : visibleEvents.length === 0 ? (
-        <div className="tl-empty">All events hidden by view filters</div>
+        <EmptyState title="All events hidden by view filters" />
       ) : (
         <div className="tl-col-scroll">
           <TimelineBody variant={variant} events={visibleEvents} pairs={pairs} onSelectEvent={onSelectEvent} selectedKey={selectedKey} />

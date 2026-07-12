@@ -143,7 +143,7 @@ function ChildRow({ entry, hidden, onClick }: ChildRowProps) {
   return (
     <div className="vp-row vp-row-child" onClick={onClick}>
       <span className="vp-check">{hidden ? '' : '✓'}</span>
-      <span className="vp-label">{entry.child}</span>
+      <span className="vp-label u-truncate">{entry.child}</span>
       <span className="vp-count">{entry.count}</span>
     </div>
   );
@@ -171,7 +171,7 @@ function CategoryRow({ entry, hiddenEvents, onToggle, expanded, onExpand }: Cate
         </span>
         <span className="vp-toggle" onClick={() => onToggle(masterToggleUpdate(entry.category, filterKeys, state))}>
           <span className="vp-check">{stateGlyph(state)}</span>
-          <span className="vp-label">{entry.category}</span>
+          <span className="vp-label u-truncate">{entry.category}</span>
           <span className="vp-count">{entry.total}</span>
         </span>
       </div>
@@ -193,7 +193,7 @@ function VpSection({ title, defaultOpen = false, children }: { title: string; de
   return (
     <div className="vp-section">
       <button type="button" className="vp-section-toggle" onClick={() => setOpen(!open)}>
-        <span className="vp-section-title">{title}</span>
+        <span className="u-section-title vp-section-title">{title}</span>
         <span className={open ? 'vp-section-caret vp-section-caret-open' : 'vp-section-caret'}>▸</span>
       </button>
       <div className={open ? 'vp-section-body vp-section-body-open' : 'vp-section-body'}>

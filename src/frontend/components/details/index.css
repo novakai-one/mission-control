@@ -17,19 +17,11 @@
   flex-shrink: 0;
 }
 
-.insp-title {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .insp-subtitle {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   min-width: 0;
 }
@@ -47,7 +39,7 @@
   padding: 0.6rem 1rem;
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -58,10 +50,10 @@
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   cursor: pointer;
   padding: 0.2rem 0.3rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .insp-nav-btn:hover:not(:disabled) {
@@ -90,8 +82,8 @@
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.7rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   padding: 0.45rem 0.5rem;
   margin-bottom: 0.7rem;
   cursor: pointer;
@@ -113,7 +105,7 @@
 }
 
 .sub-return pre {
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-mono);
@@ -126,10 +118,16 @@
 /* Inspector detail-panel fields (explainCommand fixes: class-based, not inline). */
 .insp-fields { display: flex; flex-direction: column; gap: 0.6rem; }
 .insp-field { padding: 0.6rem; display: flex; flex-direction: column; gap: 0.3rem; }
-.insp-field-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
-.insp-field-value { font-size: 0.75rem; color: var(--text-primary); }
-.insp-empty { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+.insp-field-label { font-size: var(--text-2xs); color: var(--text-muted); text-transform: uppercase; }
+.insp-field-value { font-size: var(--text-sm); color: var(--text-primary); }
+.insp-empty { font-size: var(--text-sm); color: var(--text-muted); font-style: italic; }
 .insp-explain { display: flex; flex-direction: column; }
 .insp-explain-line { font-size: 0.7rem; color: var(--text-primary); }
 .insp-spawn-hint { font-size: 0.65rem; color: var(--text-secondary); }
-.insp-author { font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; }
+.insp-author { font-size: var(--text-2xs); color: var(--text-secondary); text-transform: uppercase; }
+.insp-field-label-error { color: var(--kind-error); }
+.insp-field-value-sm { font-size: 0.7rem; color: var(--text-secondary); }
+.insp-pre { font-size: 0.7rem; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); line-height: 1.3rem; margin: 0; }
+.insp-pre-error { color: var(--kind-error); }
+.insp-pre-text { font-size: var(--text-sm); line-height: 1.4rem; }
+.insp-sidechain { color: var(--kind-tool); display: inline-flex; align-items: center; gap: 0.2rem; }

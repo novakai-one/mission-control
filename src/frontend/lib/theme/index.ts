@@ -11,6 +11,7 @@ export interface ThemeDef {
   accent: string;
 }
 
+// KEEP IN SYNC: theme id list also lives in css/index.css (:root[data-theme=...] rules) and index.html (boot script light-theme list).
 export const THEMES: ThemeDef[] = [
   { id: 'carbon', name: 'Carbon', mode: 'dark', bg: '#161616', accent: '#cfcfcc' },
   { id: 'onyx', name: 'Onyx', mode: 'dark', bg: '#101112', accent: '#7fa8d8' },
