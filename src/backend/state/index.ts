@@ -36,7 +36,7 @@ export class StateManager {
   private readonly buildDirectory: string;
 
   constructor(private readonly workspacePath: string) {
-    this.buildDirectory = path.join(workspacePath, '.mission-control', 'builds');
+    this.buildDirectory = path.join(workspacePath, '.novakai-command', 'builds');
     if (!fs.existsSync(this.buildDirectory)) {
       fs.mkdirSync(this.buildDirectory, { recursive: true });
     }

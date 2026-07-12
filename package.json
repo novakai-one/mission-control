@@ -1,5 +1,5 @@
 {
-  "name": "mission-control",
+  "name": "novakai-command",
   "version": "1.0.0",
   "description": "Local AI Multi-Agent Operations Command Center",
   "main": "src/index.ts",

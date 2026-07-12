@@ -11,7 +11,7 @@ export interface AppConfig {
 
 export class ConfigManager {
   private static readonly configFilename = 'config.json';
-  private static readonly configDirectory = '.mission-control';
+  private static readonly configDirectory = '.novakai-command';
 
   private static getConfigPath(): string {
     const currentDirectory = process.cwd();

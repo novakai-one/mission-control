@@ -71,7 +71,7 @@ export class TerminalManager {
   private dataCallback: ((agentId: string, data: string) => void) | null = null;
   private exitCallback: ((agentId: string, exitCode: number | null) => void) | null = null;
 
-  constructor(private readonly registryPath = path.join(process.cwd(), '.mission-control', 'agents.json')) {
+  constructor(private readonly registryPath = path.join(process.cwd(), '.novakai-command', 'agents.json')) {
     this.loadRegistry();
   }
 

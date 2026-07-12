@@ -14,14 +14,14 @@ export async function bootstrapBackend(): Promise<ServerController> {
   const server = new ServerController(configuration.serverPort, coordinator, stateManager);
   
   await server.start();
-  console.log(`[Mission Control Backend] Server listening on port ${configuration.serverPort}`);
+  console.log(`[Novakai Command Backend] Server listening on port ${configuration.serverPort}`);
   return server;
 }
 
 // Check if run directly
 if (process.argv[1]?.endsWith('backend/index.ts') || process.argv[1]?.endsWith('backend/index.js')) {
   bootstrapBackend().catch((error) => {
-    console.error('Failed to start Mission Control backend:', error);
+    console.error('Failed to start Novakai Command backend:', error);
     process.exit(1);
   });
 }

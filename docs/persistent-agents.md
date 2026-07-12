@@ -65,7 +65,7 @@ POST /api/agents ──▶ mint agentId + sessionId(uuid)
                                         kept in registry file; a RUNNING agent
                                         is killed first)
 ```
-Registry file `.mission-control/agents.json` (JSON array of `AgentInfo &
+Registry file `.novakai-command/agents.json` (JSON array of `AgentInfo &
 {archived?: boolean}`) lives at `process.cwd()`, rewritten synchronously on every
 create/rename/exit/archive (kill saves via its pty onExit, not synchronously).
 On backend restart every entry is reloaded as
@@ -150,7 +150,7 @@ DELETE /api/agents/:agentId    → 204 (archive: hide from list, keep registry+t
 `src/backend/terminal/manager.ts` (+ `buffer.ts`; tests in `terminal/tests/`):
 ```
 class TerminalManager {
-  constructor(registryPath?: string)                       // default .mission-control/agents.json
+  constructor(registryPath?: string)                       // default .novakai-command/agents.json
   create(opts: {title?: string; cwd: string}): AgentInfo   // mints ids, spawns pty
   write(agentId: string, data: string): boolean             // false if pty absent (restored agent)
   resize(agentId: string, cols: number, rows: number): boolean // false if pty absent
