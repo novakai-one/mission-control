@@ -173,44 +173,6 @@ button:active {
   transform: scale(0.98);
 }
 
-/* Files tab */
-.files-tree-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.15rem 0.3rem;
-  border-radius: 4px;
-  font-size: 0.72rem;
-  color: var(--text-primary);
-  transition: background-color var(--anim);
-}
-
-.files-tree-row:hover {
-  background-color: var(--hover-bg);
-}
-
-.files-tree-row-selected {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-active);
-}
-
-.files-chevron {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  flex-shrink: 0;
-  cursor: pointer;
-  color: var(--text-secondary);
-}
-
-.files-name {
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Column resize handles (transcript view) — invisible until hovered or dragged.
    Takes its own 5px gutter (no negative-margin overlap) so it never sits on
    top of the left column's scrollbar and steals its clicks. */
@@ -250,7 +212,7 @@ button:active {
   color: var(--text-secondary);
 }
 
-/* Selectable list row (tl-row / files-tree-row pattern, generalized). */
+/* Selectable list row (tl-row pattern, generalized). */
 .u-row {
   cursor: pointer;
   transition: background-color var(--anim);

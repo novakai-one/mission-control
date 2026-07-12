@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ChevronDown, Folder, File as FileIcon, ArrowUp, RefreshCw, Star, GitBranch } from 'lucide-react';
 import { toDisplayPath } from '../index.js';
+import './index.css';
 
 export interface FsEntry {
   name: string;
@@ -187,47 +188,42 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
     || (homeDir != null && rootAbs === homeDir);
 
   return (
-    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+    <div className="files-panel">
       {/* Left panel */}
-      <div style={{
-        display: 'flex', flexDirection: 'column', width: '320px', flexShrink: 0,
-        borderRight: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)',
-        overflow: 'hidden',
-      }}>
+      <div className="files-sidebar">
         {/* Path bar */}
-        <div style={{ padding: '0.7rem 0.7rem 0.4rem' }}>
+        <div className="files-pathbar">
           <input
             type="text"
             value={pathBarValue}
             onChange={(e) => setPathBarValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handlePathBarSubmit(); }}
-            style={inputStyle}
+            className="u-input files-input"
             placeholder="~/path/to/dir"
           />
           {rootError && (
-            <div style={{ fontSize: '0.6rem', color: 'var(--kind-error)', marginTop: '0.3rem' }}>
+            <div className="files-error files-pathbar-error">
               {rootError}
             </div>
           )}
         </div>
 
         {/* Buttons row */}
-        <div style={{ display: 'flex', gap: '0.4rem', padding: '0 0.7rem 0.6rem' }}>
-          <button onClick={handleUp} disabled={upBtnDisabled} style={{ ...btnStyle, opacity: upBtnDisabled ? 0.4 : 1, cursor: upBtnDisabled ? 'not-allowed' : 'pointer' }} title="Up">
+        <div className="files-toolbar">
+          <button onClick={handleUp} disabled={upBtnDisabled} className="u-btn files-btn" title="Up">
             <ArrowUp size={12} />
           </button>
-          <button onClick={handleRefresh} style={btnStyle} title="Refresh">
+          <button onClick={handleRefresh} className="u-btn files-btn" title="Refresh">
             <RefreshCw size={12} />
           </button>
         </div>
 
         {/* Tree */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 0.5rem' }}>
+        <div className="files-tree">
           {rootAbs && (cache.get(rootAbs) || []).map((entry) => (
             <TreeNode
               key={entry.path}
               entry={entry}
-              depth={0}
               cache={cache}
               expanded={expanded}
               expandErrors={expandErrors}
@@ -240,41 +236,30 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
         </div>
 
         {/* Sticky footer */}
-        <div style={{
-          position: 'sticky', bottom: 0, borderTop: '1px solid var(--border-color)',
-          backgroundColor: 'var(--bg-secondary)', padding: '0.6rem 0.7rem',
-          display: 'flex', flexDirection: 'column', gap: '0.35rem',
-        }}>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className="files-footer">
+          <span className="files-footer-path u-truncate">
             selected: {selected ? toDisplayPath(selected.path, homeDir) : '—'}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+          <span className="files-git-status">
             <GitBranch size={10} />
             {selected ? (gitRoot ? `repo: ${toDisplayPath(gitRoot, homeDir)}` : 'no git root') : 'no selection'}
           </span>
           <button
             onClick={handleSetActive}
             disabled={!canSetActive || settingActive}
-            style={{
-              ...btnStyle, justifyContent: 'center', gap: '0.35rem', padding: '0.4rem 0.6rem',
-              opacity: !canSetActive || settingActive ? 0.4 : 1,
-              cursor: !canSetActive || settingActive ? 'not-allowed' : 'pointer',
-            }}
+            className="u-btn files-btn files-btn-wide"
           >
             <Star size={12} /> Set as Active Repo
           </button>
           {activeError && (
-            <div style={{ fontSize: '0.6rem', color: 'var(--kind-error)' }}>
+            <div className="files-error">
               {activeError}
             </div>
           )}
         </div>
 
         {/* Show hidden */}
-        <label style={{
-          display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.7rem',
-          fontSize: '0.6rem', color: 'var(--text-muted)', cursor: 'pointer',
-        }}>
+        <label className="files-hidden-toggle">
           <input
             type="checkbox"
             checked={showHidden}
@@ -285,14 +270,11 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
       </div>
 
       {/* Primary area */}
-      <div style={{
-        display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        gap: '0.5rem', backgroundColor: 'var(--bg-primary)',
-      }}>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>
+      <div className="files-primary">
+        <span className="files-primary-label">
           {selected ? toDisplayPath(selected.path, homeDir) : 'select a file or folder'}
         </span>
-        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>primary view TBD</span>
+        <span className="files-primary-hint">primary view TBD</span>
       </div>
     </div>
   );
@@ -300,7 +282,6 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange }: FilesPan
 
 interface TreeNodeProps {
   entry: FsEntry;
-  depth: number;
   cache: Map<string, FsEntry[]>;
   expanded: Set<string>;
   expandErrors: Map<string, string>;
@@ -310,7 +291,7 @@ interface TreeNodeProps {
   onSelect: (entry: FsEntry) => void;
 }
 
-function TreeNode({ entry, depth, cache, expanded, expandErrors, loadingPaths, selectedPath, onToggle, onSelect }: TreeNodeProps) {
+function TreeNode({ entry, cache, expanded, expandErrors, loadingPaths, selectedPath, onToggle, onSelect }: TreeNodeProps) {
   const isDir = entry.type === 'dir';
   const isExpanded = expanded.has(entry.path);
   const isSelected = selectedPath === entry.path;
@@ -320,32 +301,28 @@ function TreeNode({ entry, depth, cache, expanded, expandErrors, loadingPaths, s
 
   return (
     <div>
-      <div
-        className={`files-tree-row${isSelected ? ' files-tree-row-selected' : ''}`}
-        style={{ paddingLeft: `${depth * 14 + 4}px` }}
-      >
+      <div className={`files-tree-row${isSelected ? ' files-tree-row-selected' : ''}`}>
         {isDir ? (
           <span className="files-chevron" onClick={() => onToggle(entry)}>
             {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </span>
         ) : (
-          <span style={{ width: '14px', flexShrink: 0 }} />
+          <span className="files-tree-spacer" />
         )}
         {isDir ? <Folder size={13} color="var(--kind-tool)" /> : <FileIcon size={13} color="var(--text-secondary)" />}
         <span className="files-name" onClick={() => onSelect(entry)}>{entry.name}</span>
       </div>
       {isDir && isExpanded && (
-        <div>
+        <div className="files-tree-children">
           {error ? (
-            <div style={{ paddingLeft: `${(depth + 1) * 14 + 4}px`, fontSize: '0.6rem', color: 'var(--kind-error)' }}>{error}</div>
+            <div className="files-tree-note files-tree-note-error">{error}</div>
           ) : loading ? (
-            <div style={{ paddingLeft: `${(depth + 1) * 14 + 4}px`, fontSize: '0.6rem', color: 'var(--text-muted)' }}>loading…</div>
+            <div className="files-tree-note files-tree-note-loading">loading…</div>
           ) : (
             (children || []).map((child) => (
               <TreeNode
                 key={child.path}
                 entry={child}
-                depth={depth + 1}
                 cache={cache}
                 expanded={expanded}
                 expandErrors={expandErrors}
@@ -361,15 +338,3 @@ function TreeNode({ entry, depth, cache, expanded, expandErrors, loadingPaths, s
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
-  border: '1px solid var(--border-color)', borderRadius: '6px',
-  padding: '0.4rem 0.6rem', fontSize: '0.68rem', outline: 'none',
-};
-
-const btnStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-secondary)',
-  color: 'var(--text-secondary)', border: '1px solid var(--border-color)',
-  borderRadius: '6px', fontSize: '0.68rem', padding: '0.35rem 0.5rem', cursor: 'pointer',
-};
