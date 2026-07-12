@@ -45,6 +45,7 @@
 
 /* Scenes 7 / 8 — the hero card (highest surface). */
 .fd-card {
+  container-type: inline-size;
   align-self: flex-start;
   display: flex;
   flex-direction: column;
@@ -114,11 +115,20 @@
   margin: 2px 0;
 }
 
-/* Real CSS grid so field columns line up. */
+/* Real CSS grid so field columns line up; collapses with the card so cells
+   never crush to one character per line at narrow widths. */
 .fd-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px 40px;
+}
+
+@container (max-width: 560px) {
+  .fd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (max-width: 360px) {
+  .fd-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .fd-field {

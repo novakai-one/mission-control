@@ -173,3 +173,9 @@
   color: var(--text-muted);
   cursor: pointer;
 }
+
+/* Keep the checkbox greyscale — browser-default blue is the only saturated
+   non-amber color in the tab otherwise. */
+.fd-hidden input {
+  accent-color: var(--theme-muted);
+}
