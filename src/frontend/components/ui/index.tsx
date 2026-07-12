@@ -13,8 +13,8 @@ interface KindMeta {
  * (assistant, thinking, tool, result, error); kinds with no dedicated token
  * fall back to `kind-secondary` / `kind-muted` (styled in ui/index.css).
  *
- * Keys 1-8 are transcript event kinds (board/index.tsx EVENT_ICONS — icons
- * preserved as-is). Keys 9-14 are ruleset hook-event names mapped onto the
+ * Keys 1-8 are transcript event kinds (icons match board/calm's prior
+ * per-kind icon maps, now consolidated here). Keys 9-14 are ruleset hook-event names mapped onto the
  * same canonical taxonomy: PreToolUse->tool, PostToolUse->result,
  * SessionStart->assistant, Stop->error, SubagentStop->thinking,
  * Notification->muted (mirrors ruleset/index.tsx EVENT_COLORS).

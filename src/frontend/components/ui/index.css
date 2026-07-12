@@ -1,7 +1,13 @@
-/* Fallback kind colors for taxonomy entries with no dedicated --kind-* token
-   (see KIND_META in index.tsx). Everything else (.u-pill, .u-empty,
-   .u-panel-header, .u-section-title) lives in the shared UTILITIES section
-   of css/index.css — no need to duplicate it here. */
+/* Standalone kind text colors — one per --kind-* token in css/index.css, for
+   use outside pills (see KIND_META in index.tsx). Color only: background is
+   the consumer's business (pills handle bg via .u-pill.kind-* instead). */
+.kind-assistant { color: var(--kind-assistant); }
+.kind-thinking { color: var(--kind-thinking); }
+.kind-tool { color: var(--kind-tool); }
+.kind-result { color: var(--kind-result); }
+.kind-error { color: var(--kind-error); }
+
+/* Fallback kind colors for taxonomy entries with no dedicated --kind-* token. */
 .kind-secondary { color: var(--text-secondary); }
 .kind-muted { color: var(--text-muted); }
 

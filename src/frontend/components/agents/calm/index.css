@@ -80,17 +80,6 @@
   word-break: break-word;
 }
 
-/* Kind coloring mirrors board/index.tsx EVENT_COLORS — kept in CSS since this
-   dir's inline style= attributes are gate-forbidden. */
-.calm-kind-user_text { color: var(--text-secondary); }
-.calm-kind-assistant_text { color: var(--kind-assistant); }
-.calm-kind-assistant_thinking { color: var(--kind-thinking); }
-.calm-kind-tool_use { color: var(--kind-tool); }
-.calm-kind-tool_result { color: var(--kind-result); }
-.calm-kind-hook_event { color: var(--kind-error); }
-.calm-kind-system { color: var(--text-muted); }
-.calm-kind-session_meta { color: var(--text-muted); }
-
 .calm-subagents {
   flex-shrink: 0;
   max-height: 40%;

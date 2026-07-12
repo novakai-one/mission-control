@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Network, Brain, FileText, Wrench, AlertTriangle, Radio } from 'lucide-react';
+import { Network, FileText } from 'lucide-react';
 import { TranscriptEvent } from '../index.js';
 import type { SpawnRun, TimelineVariant, ToolPairs, Turn } from './timelineModel.js';
 import { compressNoiseRuns, getChipLabel, getToolLabel, groupIntoTurns, groupSpawnRuns, noiseSummary, selKey } from './timelineModel.js';
 import { currentTimeZone } from '../../lib/timezone/index.js';
+import { KIND_META } from '../ui/index.js';
 import './index.css';
 
 interface TimelineProps {
@@ -17,17 +18,6 @@ interface AgentBoardProps extends TimelineProps {
   pairs: ToolPairs;
   variant: TimelineVariant;
 }
-
-export const EVENT_ICONS: Record<string, React.ReactNode> = {
-  user_text: <FileText size={11} color="var(--text-secondary)" />,
-  assistant_text: <FileText size={11} color="var(--kind-assistant)" />,
-  assistant_thinking: <Brain size={11} color="var(--kind-thinking)" />,
-  tool_use: <Wrench size={11} color="var(--kind-tool)" />,
-  tool_result: <Wrench size={11} color="var(--kind-result)" />,
-  hook_event: <AlertTriangle size={11} color="var(--kind-error)" />,
-  system: <Radio size={11} color="var(--text-muted)" />,
-  session_meta: <Radio size={11} color="var(--text-muted)" />,
-};
 
 /** Content preview — used for row tooltips and turn headers; chips themselves show the kind. */
 export function getEventLabel(ev: TranscriptEvent): string {
@@ -65,8 +55,8 @@ export function EventRow({ event, selected, onSelect, countSuffix, resultChip, o
   return (
     <div className={selected ? 'tl-row tl-row-selected' : 'tl-row'} onClick={onSelect} title={getEventLabel(event)}>
       <span className="tl-time">{formatTime(event.ts)}</span>
-      <span className="tl-icon">{EVENT_ICONS[event.kind] || <FileText size={11} color="var(--text-muted)" />}</span>
-      <span className={`tl-label tl-kind-${event.kind}`}>
+      <span className="tl-icon">{KIND_META[event.kind]?.icon ?? <FileText size={11} color="var(--text-muted)" />}</span>
+      <span className={`tl-label ${KIND_META[event.kind]?.className ?? ''}`}>
         {getChipLabel(event)}{countSuffix && countSuffix > 1 ? ` ×${countSuffix}` : ''}
       </span>
       {resultChip && (
