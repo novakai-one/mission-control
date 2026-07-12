@@ -13,6 +13,7 @@ import { matchSessions } from '../transcript/repoIndex.js';
 import { sessionUsage } from '../transcript/usage/index.js';
 import { readRuleset } from '../ruleset/reader.js';
 import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } from '../fs/explorer.js';
+import { getRepoInfo } from '../versionControl/index.js';
 import { AgentsHub } from './agents.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
@@ -290,6 +291,18 @@ export class ServerController {
         res.json(resolveGitRoot(targetPath));
       } catch (e) {
         sendFsError(res, e);
+      }
+    });
+
+    // Thin adapter over the version-control module. clampToHome + error
+    // mapping happen inside getRepoInfo → resolveGitRoot (outside-$HOME → 403);
+    // a valid in-sandbox dir degrades to nulls rather than 500.
+    this.app.get('/api/repo-info', async (request, response) => {
+      const targetPath = request.query.path as string;
+      try {
+        response.json(await getRepoInfo(targetPath));
+      } catch (error) {
+        sendFsError(response, error);
       }
     });
 
