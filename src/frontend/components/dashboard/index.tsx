@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Settings, Star, PanelRight } from 'lucide-react';
+import { Settings, PanelRight } from 'lucide-react';
 import { toDisplayPath } from '../index.js';
 import './index.css';
 
@@ -25,23 +25,15 @@ const TABS: { mode: ViewMode; label: string }[] = [
 ];
 
 export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir, viewPanelOpen, onToggleViewPanel }: AppHeaderProps) {
+  const repoName = activeRepo ? toDisplayPath(activeRepo, homeDir).split('/').pop() : null;
   return (
     <header className="glass-panel dash-header">
       <div className="dash-header-group">
-        <Terminal size={18} color="var(--text-secondary)" />
-        <span className="dash-title">
-          NOVAKAI COMMAND
-        </span>
-        <span className={activeRepo ? 'dash-repo-label dash-repo-label-active' : 'dash-repo-label'}>
-          {activeRepo ? (
-            <>active repo: <Star size={11} color="var(--kind-tool)" className="dash-repo-icon" /> {toDisplayPath(activeRepo, homeDir)}</>
-          ) : (
-            'active repo: — none —'
-          )}
-        </span>
+        <span className="dash-glyph">&gt;_</span>
+        <span className="dash-title">NOVAKAI COMMAND</span>
       </div>
 
-      {/* View mode toggle — quiet buttons, active marked by a dot */}
+      {/* View mode toggle — pill tabs, active is a filled hairline pill */}
       <div className="dash-tabs">
         {TABS.map(({ mode, label }) => (
           <button
@@ -49,12 +41,15 @@ export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettin
             onClick={() => onViewModeChange(mode)}
             className={viewMode === mode ? 'dash-tab dash-tab-active' : 'dash-tab'}
           >
-            <span>{label}</span>
+            {label}
           </button>
         ))}
       </div>
 
       <div className="dash-header-group">
+        {repoName && (
+          <span className="dash-repo-meta">active repo · {repoName}</span>
+        )}
         <span className="dash-event-count">{eventCount} events</span>
         <button
           onClick={onOpenSettings}
