@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Bug } from 'lucide-react';
+import './index.css';
+
 export interface BuildMessage {
   event: string;
   payload: any;
@@ -9,6 +11,8 @@ interface DebugPanelProps {
   buildMessages: BuildMessage[];
   wsReady: boolean;
 }
+
+type Tone = 'result' | 'error' | 'tool' | 'assistant';
 
 const AUTH_MARKER = /Not logged in|Please run \/login|command not found/i;
 
@@ -62,12 +66,12 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
     : buildMessages;
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+    <div className="dbg-panel">
+      <div className="dbg-header">
         <Bug size={16} color="var(--kind-tool)" />
-        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>BUILD DEBUG</span>
+        <span className="dbg-title">BUILD DEBUG</span>
         {!wsReady && (
-          <span style={{ marginLeft: '0.5rem', color: 'var(--kind-error)', fontSize: '0.7rem' }}>● WebSocket disconnected — no live events</span>
+          <span className="dbg-ws-warning">● WebSocket disconnected — no live events</span>
         )}
       </div>
 
@@ -83,22 +87,22 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
       {/* Per-build diagnostics */}
       <Section title="Last build">
         <Row k="Build ID" v={build.id || started?.payload?.build?.id || '—'} />
-        <Row k="Status" v={status} color={status === 'success' ? 'var(--kind-result)' : status === 'failed' ? 'var(--kind-error)' : status === 'stopped' ? 'var(--kind-tool)' : 'var(--kind-assistant)'} />
+        <Row k="Status" v={status} color={status === 'success' ? 'result' : status === 'failed' ? 'error' : status === 'stopped' ? 'tool' : 'assistant'} />
         <Row k="Exit code" v={exitCode === undefined ? '—' : String(exitCode)} />
         <Row k="Duration" v={durationMs !== undefined ? `${durationMs} ms` : '—'} />
-        {errorMessage && <Row k="Error" v={errorMessage} color="var(--kind-error)" mono />}
+        {errorMessage && <Row k="Error" v={errorMessage} color="error" mono />}
       </Section>
 
       {/* Checks */}
       <Section title="Checks (expected vs actual)">
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '0.25rem 0.75rem', alignItems: 'baseline' }}>
+        <div className="dbg-checks-grid">
           {checks.map((c, i) => (
             <React.Fragment key={i}>
-              <span style={{ color: c.ok === null ? 'var(--text-muted)' : c.ok ? 'var(--kind-result)' : 'var(--kind-error)' }}>
+              <span className={`dbg-tone-${c.ok === null ? 'muted' : c.ok ? 'result' : 'error'}`}>
                 {c.ok === null ? '·' : c.ok ? '✓' : '✗'}
               </span>
-              <span style={{ color: 'var(--text-secondary)' }}>{c.label}</span>
-              <span style={{ color: 'var(--text-muted)' }}>{c.actual} <span style={{ opacity: 0.5 }}>(want {c.expected})</span></span>
+              <span className="dbg-tone-secondary">{c.label}</span>
+              <span className="dbg-tone-muted">{c.actual} <span className="dbg-opacity-half">(want {c.expected})</span></span>
             </React.Fragment>
           ))}
         </div>
@@ -107,7 +111,7 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
       {/* stderr */}
       {stderrText && (
         <Section title="stderr">
-          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--kind-error)', backgroundColor: 'var(--bg-primary)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+          <pre className="dbg-stderr">
             {stderrText}
           </pre>
         </Section>
@@ -119,15 +123,15 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
           value={filter}
           onChange={e => setFilter(e.target.value)}
           placeholder="filter events…"
-          style={{ width: '100%', marginBottom: '0.5rem', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.68rem', outline: 'none' }}
+          className="dbg-filter-input"
         />
-        <div style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.5rem', maxHeight: '40vh', overflowY: 'auto' }}>
+        <div className="dbg-log-container">
           {visible.length === 0 ? (
-            <span style={{ color: 'var(--text-muted)' }}>No events.</span>
+            <span className="dbg-tone-muted">No events.</span>
           ) : visible.map((m, i) => (
-            <div key={i} style={{ marginBottom: '0.3rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              <span style={{ color: 'var(--kind-assistant)' }}>{m.event}</span>{' '}
-              <span style={{ color: 'var(--text-muted)' }}>{JSON.stringify(m.payload)}</span>
+            <div key={i} className="dbg-log-row">
+              <span className="dbg-tone-assistant">{m.event}</span>{' '}
+              <span className="dbg-tone-muted">{JSON.stringify(m.payload)}</span>
             </div>
           ))}
         </div>
@@ -138,18 +142,19 @@ export function DebugPanel({ buildMessages, wsReady }: DebugPanelProps) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: '1.25rem' }}>
-      <div style={{ fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.4rem' }}>{title}</div>
+    <div className="dbg-section">
+      <div className="dbg-section-title">{title}</div>
       {children}
     </div>
   );
 }
 
-function Row({ k, v, mono, color }: { k: string; v: string; mono?: boolean; color?: string }) {
+function Row({ k, v, mono, color }: { k: string; v: string; mono?: boolean; color?: Tone }) {
+  const valueClasses = [mono ? 'dbg-row-value-mono' : '', color ? `dbg-tone-${color}` : ''].filter(Boolean).join(' ');
   return (
-    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.2rem' }}>
-      <span style={{ color: 'var(--text-muted)', minWidth: '130px', flexShrink: 0 }}>{k}</span>
-      <span style={{ color: color || 'var(--text-secondary)', wordBreak: mono ? 'break-all' : 'normal' }}>{v}</span>
+    <div className="dbg-row">
+      <span className="dbg-row-key">{k}</span>
+      <span className={valueClasses || undefined}>{v}</span>
     </div>
   );
 }
