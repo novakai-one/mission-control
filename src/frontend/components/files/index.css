@@ -1,17 +1,7 @@
-/* Files tab — layout shell. The tab has no in-tab header (the app tab bar is
-   the chrome), so it deliberately omits .u-panel-header (docs/design.md §8). */
+/* Files tab — the wrapper contributes no box of its own: display:contents
+   promotes the rail and detail workspace to shell-row flex items, so each is
+   its own floating card and the shell's gap/padding rhythm applies between
+   them (docs/design.md §8). */
 .fd-panel {
-  flex: 1;
-  background-color: var(--bg-primary);
-  overflow: hidden;
-}
-
-/* Two-column body: 264px rail + flexible detail, on the design's 24px pad /
-   22px gap rhythm. Each column owns its own scroll. */
-.fd-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: 22px;
-  padding: 24px;
+  display: contents;
 }

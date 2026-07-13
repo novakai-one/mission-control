@@ -307,35 +307,39 @@ function EventVisibility({ events, hiddenEvents, onToggle }: { events: Transcrip
   );
 }
 
-/** Right-hand collapsible settings panel; fully unmounts its body when closed (width 0). */
+/** Right-hand collapsible settings panel. Stays mounted so open/close is a
+ * smooth width ease (the drawer mask clips the fixed-width body). */
 export function ViewPanel({ open, viewMode, events, hiddenEvents, onToggle, variant, onVariantChange, sessionUsage, costSettings, onCostSettingsChange, activeAgent }: ViewPanelProps) {
-  if (!open) return null;
   return (
-    <div className="vp-panel">
-      {viewMode === 'transcript' && (
-        <>
-          <VpSection title="Layout" defaultOpen>
-            <OptionList options={VARIANT_OPTIONS} active={variant} onSelect={onVariantChange} />
+    <div className={`shell-drawer-right vp-drawer${open ? ' shell-drawer-right-open' : ''}`}>
+      <div className="shell-drawer-body" aria-hidden={!open}>
+        <div className="vp-panel">
+          {viewMode === 'transcript' && (
+            <>
+              <VpSection title="Layout" defaultOpen>
+                <OptionList options={VARIANT_OPTIONS} active={variant} onSelect={onVariantChange} />
+              </VpSection>
+              <VpSection title="Events">
+                <EventVisibility events={events} hiddenEvents={hiddenEvents} onToggle={onToggle} />
+              </VpSection>
+              <VpSection title="Cost">
+                <CostSection usage={sessionUsage} settings={costSettings} onSettingsChange={onCostSettingsChange} />
+              </VpSection>
+            </>
+          )}
+          {viewMode === 'agents' && (
+            <VpSection title="Cost" defaultOpen>
+              <AgentCostSection agent={activeAgent} settings={costSettings} onSettingsChange={onCostSettingsChange} />
+            </VpSection>
+          )}
+          <VpSection title="User Settings">
+            <TimezonePicker />
           </VpSection>
-          <VpSection title="Events">
-            <EventVisibility events={events} hiddenEvents={hiddenEvents} onToggle={onToggle} />
+          <VpSection title="Appearance" defaultOpen={viewMode !== 'transcript' && viewMode !== 'agents'}>
+            <AppearanceSection />
           </VpSection>
-          <VpSection title="Cost">
-            <CostSection usage={sessionUsage} settings={costSettings} onSettingsChange={onCostSettingsChange} />
-          </VpSection>
-        </>
-      )}
-      {viewMode === 'agents' && (
-        <VpSection title="Cost" defaultOpen>
-          <AgentCostSection agent={activeAgent} settings={costSettings} onSettingsChange={onCostSettingsChange} />
-        </VpSection>
-      )}
-      <VpSection title="User Settings">
-        <TimezonePicker />
-      </VpSection>
-      <VpSection title="Appearance" defaultOpen={viewMode !== 'transcript' && viewMode !== 'agents'}>
-        <AppearanceSection />
-      </VpSection>
+        </div>
+      </div>
     </div>
   );
 }

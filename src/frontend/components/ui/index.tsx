@@ -79,3 +79,64 @@ export function PanelHeader({ title, actions }: PanelHeaderProps) {
     </header>
   );
 }
+
+interface PanelGlyphProps {
+  /** Divider position tells the state: near the middle = drawer open, hugging
+   * the left edge = drawer tucked away. */
+  open: boolean;
+  size?: number;
+}
+
+export function PanelGlyph({ open, size = 16 }: PanelGlyphProps) {
+  const dividerX = open ? 10.5 : 6.5;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <line x1={dividerX} y1="4" x2={dividerX} y2="20" />
+    </svg>
+  );
+}
+
+interface DrawerProps {
+  open: boolean;
+  /** Modifier class whose owning stylesheet sets --drawer-width. The body
+   * keeps that fixed width while the mask animates, so content slides behind
+   * the clip edge instead of squishing. */
+  widthClass: string;
+  onOpen: () => void;
+  /** Accessible label for the reopen glyph shown while closed. */
+  label: string;
+  children: React.ReactNode;
+}
+
+/** Collapsible left drawer. Stays mounted in both states (panel state
+ * survives collapse); closed, it narrows to a bare reopen glyph. */
+export function Drawer({ open, widthClass, onOpen, label, children }: DrawerProps) {
+  return (
+    <div className={`shell-drawer ${widthClass}${open ? ' shell-drawer-open' : ''}`}>
+      <div className="shell-drawer-body" aria-hidden={!open}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="shell-reopen shell-drawer-reopen"
+        onClick={onOpen}
+        aria-label={label}
+        title={label}
+        tabIndex={open ? -1 : 0}
+      >
+        <PanelGlyph open={false} />
+      </button>
+    </div>
+  );
+}

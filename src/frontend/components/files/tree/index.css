@@ -1,4 +1,9 @@
-/* Left rail: elevated panel holding the path bar, tree and active legend. */
+/* Drawer width for the files rail (consumed by the shared .shell-drawer mask). */
+.fd-drawer {
+  --drawer-width: 264px;
+}
+
+/* Left rail: elevated panel holding the collapse toggle, path bar and tree. */
 .fd-rail {
   width: 264px;
   flex-shrink: 0;
@@ -9,6 +14,12 @@
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 12px;
+}
+
+/* Collapse toggle row — glyph pinned to the rail's top-right (mock: scene 9). */
+.fd-rail-top {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Path bar — inset surface with a transparent mono input and near-zero-weight
@@ -81,11 +92,17 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 6px 9px;
-  border-radius: 7px;
+  padding: 10px 12px;
+  border-radius: 8px;
   font-size: 13px;
   color: var(--text-secondary);
-  transition: background-color var(--anim), opacity var(--anim);
+  transition: background-color var(--anim), opacity var(--anim), color var(--anim);
+}
+
+/* Plain rows brighten under the pointer; selection/active keep their own bg. */
+.fd-row:not(.fd-row-selected):not(.fd-row-active):hover {
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
 }
 
 /* Dim cue: once something is selected, sibling rows fade so the selection (and
@@ -101,7 +118,7 @@
 .fd-row-selected {
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-active);
-  padding: 5px 8px;
+  padding: 9px 11px;
   color: var(--text-primary);
   font-weight: 500;
 }
@@ -110,7 +127,7 @@
 .fd-row-active {
   background-color: color-mix(in srgb, var(--status-active) 6%, var(--bg-tertiary));
   border: 1px solid color-mix(in srgb, var(--status-active) 22%, var(--border-color));
-  padding: 5px 8px;
+  padding: 9px 11px;
   color: var(--text-primary);
   font-weight: 500;
 }
@@ -146,37 +163,53 @@
   color: var(--kind-error);
 }
 
-/* Active-repo legend — only rendered when a repo is active. */
-.fd-legend {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border-top: 1px solid var(--border-color);
-  padding-top: 10px;
-}
-
-.fd-legend-dot {
-  color: var(--status-active);
-  font-size: 8px;
-}
-
-.fd-legend-label {
-  font-size: 10.5px;
-  color: var(--text-muted);
-}
-
-/* Show-hidden — a quiet muted control at the rail bottom. */
+/* Show-hidden — a quiet muted control at the rail bottom. Left padding lines
+   the checkbox up with the tree rows' expand glyphs. */
 .fd-hidden {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 9px;
+  padding: 2px 0 2px 12px;
   font-size: var(--text-2xs);
   color: var(--text-muted);
   cursor: pointer;
 }
 
-/* Keep the checkbox greyscale — browser-default blue is the only saturated
-   non-amber color in the tab otherwise. */
+.fd-hidden:hover {
+  color: var(--text-secondary);
+}
+
+/* Soft custom checkbox: panel-colored fill, hairline-tier 2px border, rounded.
+   Checked adds only a tick in the border color — no background flip. */
 .fd-hidden input {
-  accent-color: var(--theme-muted);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 2px solid var(--border-active);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: border-color var(--anim);
+}
+
+.fd-hidden input::after {
+  content: '';
+  width: 7px;
+  height: 4px;
+  margin-top: -2px;
+  border-left: 2px solid var(--border-active);
+  border-bottom: 2px solid var(--border-active);
+  transform: rotate(-45deg) scale(0.4);
+  opacity: 0;
+  transition: opacity var(--anim-slow), transform var(--anim-slow);
+}
+
+.fd-hidden input:checked::after {
+  opacity: 1;
+  transform: rotate(-45deg) scale(1);
 }

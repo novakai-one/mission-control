@@ -1,11 +1,18 @@
-/* Right-hand collapsible view panel. Fully absent from the flex row when closed. */
+/* Drawer width for the view panel (consumed by the shared right-drawer mask). */
+.vp-drawer {
+  --drawer-width: 260px;
+}
+
+/* Right-hand collapsible view panel — a floating card in the content row,
+   slid in and out by the shared right-drawer mask. */
 .vp-panel {
   width: 260px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-secondary);
-  border-left: 1px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
   overflow-y: auto;
   padding: 0.4rem 0.8rem;
 }
@@ -266,28 +273,25 @@
   flex-shrink: 0;
 }
 
-/* Header button that toggles the panel (sits right of the settings gear). */
+/* Header icon buttons (settings gear, view-panel toggle) — bare glyphs, no
+   container box. */
 .viewpanel-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  border: none;
   color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-  padding: 0.4rem;
+  padding: 0.25rem;
   cursor: pointer;
 }
 
 .viewpanel-toggle:hover {
   color: var(--text-primary);
-  background-color: var(--bg-tertiary);
 }
 
 .viewpanel-toggle-active {
   color: var(--text-primary);
-  border-color: var(--border-active);
-  background-color: var(--bg-tertiary);
 }
 
 /* Cost section */

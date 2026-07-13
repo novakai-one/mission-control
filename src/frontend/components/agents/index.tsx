@@ -173,7 +173,7 @@ export function AgentsView({ agents, activeAgentId, onCreate, visible }: AgentsV
   }
 
   return (
-    <div className={visible ? 'agents-view' : 'agents-view agents-view-hidden'}>
+    <div className={visible ? 'agents-view shell-main' : 'agents-view shell-main agents-view-hidden'}>
       {agents.length === 0 ? (
         <AgentsEmpty onCreate={onCreate} />
       ) : (

@@ -1,12 +1,9 @@
 import type { MouseEvent } from 'react';
-import { toDisplayPath } from '../../index.js';
-import type { FsEntry, RepoInfo } from '../index.js';
+import type { DisplayedEntry, RepoInfo } from '../index.js';
 import './index.css';
 
 interface DetailProps {
-  selected: FsEntry | null;
-  homeDir: string | null;
-  repoInfo: RepoInfo | null;
+  displayed: DisplayedEntry | null;
   repoLoading: boolean;
   isActive: boolean;
   canSetActive: boolean;
@@ -23,18 +20,10 @@ interface Field {
   mono: boolean;
 }
 
-function gitLine(info: RepoInfo): string {
-  if (!info.isGitRepo) return 'not a git repository';
-  if (info.dirty == null) return 'git repository';
-  return `git repository · ${info.dirty ? 'dirty' : 'clean'}`;
-}
-
 /** Field grid rows in design order; null-valued cells are dropped so the grid
  * reflows (docs/files-redesign.md §3 render contract). */
-function buildFields(info: RepoInfo | null, pathDisplay: string): Field[] {
+function buildFields(info: RepoInfo | null): Field[] {
   const rows: (Field | null)[] = [
-    { label: 'PATH', value: pathDisplay, mono: true },
-    info ? { label: 'GIT', value: gitLine(info), mono: false } : null,
     info?.branch ? { label: 'BRANCH', value: info.branch, mono: true } : null,
     info?.language ? { label: 'LANGUAGE', value: `${info.language.name} · ${info.language.pct}%`, mono: true } : null,
     info?.trackedFiles != null ? { label: 'FILES', value: `${info.trackedFiles} tracked`, mono: true } : null,
@@ -44,8 +33,8 @@ function buildFields(info: RepoInfo | null, pathDisplay: string): Field[] {
 }
 
 export function Detail(props: DetailProps) {
-  const { selected, repoInfo } = props;
-  if (!selected) {
+  const { displayed } = props;
+  if (!displayed) {
     return (
       <div className="fd-detail fd-detail-empty">
         <div className="fd-empty-tile">◈</div>
@@ -55,9 +44,9 @@ export function Detail(props: DetailProps) {
     );
   }
 
-  const name = repoInfo?.name ?? selected.name;
-  const pathDisplay = toDisplayPath(repoInfo?.path ?? selected.path, props.homeDir);
-  const fields = buildFields(repoInfo, pathDisplay);
+  const { entry, info } = displayed;
+  const name = info?.name ?? entry.name;
+  const fields = buildFields(info);
 
   // Clicking the central workspace background (anywhere in the detail column
   // outside the card) deselects. The card itself — including its controls —
@@ -68,51 +57,48 @@ export function Detail(props: DetailProps) {
 
   return (
     <div className="fd-detail" onClick={handleBackdropClick}>
-      <div className="fd-card">
-        {props.isActive ? (
-          <div className="fd-eyebrow fd-eyebrow-active">
-            <span className="fd-eyebrow-dot">●</span>ACTIVE REPOSITORY
-          </div>
-        ) : (
-          <div className="fd-eyebrow">REPOSITORY</div>
-        )}
-
-        <div className="fd-hero">
-          <h2 className="fd-title">{name}</h2>
-          {repoInfo?.branch && <span className="fd-branch">⎇ {repoInfo.branch}</span>}
-        </div>
-
-        {repoInfo?.description && <p className="fd-desc">{repoInfo.description}</p>}
-
-        <hr className="fd-divider" />
-
-        <div className="fd-grid">
-          {fields.map((field) => (
-            <div className="fd-field" key={field.label}>
-              <span className="fd-field-label">{field.label}</span>
-              <span className={field.mono ? 'fd-field-value fd-mono' : 'fd-field-value'}>{field.value}</span>
+      <div className={props.repoLoading ? 'fd-card fd-card-loading' : 'fd-card'}>
+        {/* Keyed by path: switching selection remounts the content, replaying
+            the fade-up — one smooth swap while the card frame stays put. */}
+        <div className="fd-card-content" key={entry.path}>
+          {props.isActive && (
+            <div className="fd-eyebrow fd-eyebrow-active">
+              <span className="fd-eyebrow-dot">●</span>ACTIVE REPOSITORY
             </div>
-          ))}
-        </div>
-
-        <div className="fd-action">
-          {props.isActive ? (
-            <button className="fd-cta" onClick={props.onOpenAgents}>Open Agents Tab →</button>
-          ) : (
-            <button
-              className="fd-cta"
-              onClick={props.onSetActive}
-              disabled={!props.canSetActive || props.settingActive}
-            >
-              {props.settingActive ? 'Setting…' : '★ Set as Active Repo'}
-            </button>
           )}
-          <span className="fd-hint">
-            {props.isActive
-              ? `${name} is now the active repo for all agents.`
-              : 'Sets the repo your agents will run in.'}
-          </span>
-          {props.activeError && <span className="fd-error">{props.activeError}</span>}
+
+          <h2 className="fd-title">{name}</h2>
+
+          {info?.description && <p className="fd-desc">{info.description}</p>}
+
+          {fields.length > 0 && (
+            <>
+              <hr className="fd-divider" />
+              <div className="fd-grid">
+                {fields.map((field) => (
+                  <div className="fd-field" key={field.label}>
+                    <span className="fd-field-label">{field.label}</span>
+                    <span className={field.mono ? 'fd-field-value fd-mono' : 'fd-field-value'}>{field.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="fd-action">
+            {props.isActive ? (
+              <button className="fd-cta" onClick={props.onOpenAgents}>Open Agents Tab →</button>
+            ) : (
+              <button
+                className="fd-cta"
+                onClick={props.onSetActive}
+                disabled={!props.canSetActive || props.settingActive}
+              >
+                {props.settingActive ? 'Setting…' : '★ Set as Active Repo'}
+              </button>
+            )}
+            {props.activeError && <span className="fd-error">{props.activeError}</span>}
+          </div>
         </div>
       </div>
     </div>
