@@ -1,10 +1,40 @@
-/* Settings modal — backdrop + centered panel. */
+/* Settings modal — backdrop + centered panel. Enters with the drawers' slow
+   settle; leaves at the quick speed so dismissal feels immediate. The panel's
+   centering translate must ride along in every keyframe. The component stays
+   mounted with .set-leave until set-pop-out's animationend unmounts it. */
+@keyframes set-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes set-pop-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 14px)) scale(0.985);
+  }
+}
+
+@keyframes set-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes set-pop-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.985);
+  }
+}
+
 .set-backdrop {
   position: fixed;
   inset: 0;
   background-color: color-mix(in srgb, black 55%, transparent);
   z-index: 1000;
   backdrop-filter: blur(2px);
+  animation: set-fade-in var(--anim-slow) backwards;
+}
+
+.set-backdrop.set-leave {
+  animation: set-fade-out var(--anim) forwards;
 }
 
 .set-panel {
@@ -21,6 +51,11 @@
   z-index: 1001;
   box-shadow: 0 20px 60px color-mix(in srgb, var(--theme-ink) 14%, transparent),
     0 0 0 1px var(--border-color);
+  animation: set-pop-in var(--anim-slow) backwards;
+}
+
+.set-panel.set-leave {
+  animation: set-pop-out var(--anim) forwards;
 }
 
 .set-header {
