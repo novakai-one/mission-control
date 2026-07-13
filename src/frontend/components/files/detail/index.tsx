@@ -57,17 +57,14 @@ export function Detail(props: DetailProps) {
 
   return (
     <div className="fd-detail" onClick={handleBackdropClick}>
-      <div className="fd-card">
+      <div className={props.repoLoading ? 'fd-card fd-card-loading' : 'fd-card'}>
         {props.isActive && (
           <div className="fd-eyebrow fd-eyebrow-active">
             <span className="fd-eyebrow-dot">●</span>ACTIVE REPOSITORY
           </div>
         )}
 
-        <div className="fd-hero">
-          <h2 className="fd-title">{name}</h2>
-          {repoInfo?.branch && <span className="fd-branch">⎇ {repoInfo.branch}</span>}
-        </div>
+        <h2 className="fd-title">{name}</h2>
 
         {repoInfo?.description && <p className="fd-desc">{repoInfo.description}</p>}
 
@@ -96,9 +93,6 @@ export function Detail(props: DetailProps) {
             >
               {props.settingActive ? 'Setting…' : '★ Set as Active Repo'}
             </button>
-          )}
-          {props.isActive && (
-            <span className="fd-hint">{name} is now the active repo for all agents.</span>
           )}
           {props.activeError && <span className="fd-error">{props.activeError}</span>}
         </div>

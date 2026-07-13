@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toDisplayPath } from '../index.js';
-import { PanelGlyph } from '../ui/index.js';
+import { Drawer } from '../ui/index.js';
 import { Rail } from './tree/index.js';
 import { Detail } from './detail/index.js';
 import './index.css';
@@ -152,10 +152,15 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
   }, [selected]);
 
   // Fetch repo metadata for the selected entry, cancelling on change so a slow
-  // earlier response can't paint under a newer selection.
+  // earlier response can't paint under a newer selection. The previous info is
+  // deliberately NOT cleared first — it stays up (dimmed via repoLoading) until
+  // the new payload lands, so folder-to-folder clicks crossfade instead of
+  // flashing an empty card.
   useEffect(() => {
-    setRepoInfo(null);
-    if (!selected) return;
+    if (!selected) {
+      setRepoInfo(null);
+      return;
+    }
     let cancelled = false;
     setRepoLoading(true);
     fetch(`/api/repo-info?path=${encodeURIComponent(selected.path)}`)
@@ -257,7 +262,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
     // display:contents wrapper — the rail and detail become siblings in the
     // shell content row, so they float as separate cards with the shell gap.
     <div className="fd-panel">
-      {railOpen ? (
+      <Drawer open={railOpen} widthClass="fd-drawer" onOpen={toggleRail} label="Open file tree">
         <Rail
           onCollapse={toggleRail}
           pathBarValue={pathBarValue}
@@ -279,11 +284,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
           showHidden={showHidden}
           onShowHiddenToggle={handleShowHiddenToggle}
         />
-      ) : (
-        <button type="button" className="shell-reopen" onClick={toggleRail} aria-label="Open file tree" title="Open file tree">
-          <PanelGlyph open={false} />
-        </button>
-      )}
+      </Drawer>
       <Detail
         selected={selected}
         repoInfo={repoInfo}

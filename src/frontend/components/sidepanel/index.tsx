@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Archive, Plus, Square } from 'lucide-react';
-import { PanelGlyph } from '../ui/index.js';
+import { Drawer, PanelGlyph } from '../ui/index.js';
 import './index.css';
 
 export interface SidePanelAgent {
@@ -176,43 +176,35 @@ function AgentRow({ agent, active, onSelect, onRename, onKill, onArchive }: Agen
 export function SidePanel(props: SidePanelProps) {
   const { agents, activeAgentId, collapsed, onToggle, onSelect, onCreate, onRename, onKill, onArchive } = props;
 
-  // Closed: the drawer leaves the row entirely; only a bare reopen glyph
-  // remains on the canvas.
-  if (collapsed) {
-    return (
-      <button type="button" className="shell-reopen" onClick={onToggle} aria-label="Expand agent panel" title="Expand agent panel">
-        <PanelGlyph open={false} />
-      </button>
-    );
-  }
-
   return (
-    <div className="sidepanel">
-      <div className="sidepanel-header">
-        <span className="u-section-title sidepanel-heading">Agents</span>
-        <button type="button" className="shell-panel-toggle" onClick={onToggle} aria-label="Collapse agent panel" title="Collapse agent panel">
-          <PanelGlyph open />
+    <Drawer open={!collapsed} widthClass="sidepanel-drawer" onOpen={onToggle} label="Expand agent panel">
+      <div className="sidepanel">
+        <div className="sidepanel-header">
+          <span className="u-section-title sidepanel-heading">Agents</span>
+          <button type="button" className="shell-panel-toggle" onClick={onToggle} aria-label="Collapse agent panel" title="Collapse agent panel">
+            <PanelGlyph open />
+          </button>
+        </div>
+
+        <button type="button" className="sidepanel-new" onClick={onCreate} aria-label="New agent">
+          <Plus size={14} />
+          <span>New agent</span>
         </button>
-      </div>
 
-      <button type="button" className="sidepanel-new" onClick={onCreate} aria-label="New agent">
-        <Plus size={14} />
-        <span>New agent</span>
-      </button>
-
-      <div className="sidepanel-list">
-        {agents.map((agent) => (
-          <AgentRow
-            key={agent.agentId}
-            agent={agent}
-            active={agent.agentId === activeAgentId}
-            onSelect={onSelect}
-            onRename={onRename}
-            onKill={onKill}
-            onArchive={onArchive}
-          />
-        ))}
+        <div className="sidepanel-list">
+          {agents.map((agent) => (
+            <AgentRow
+              key={agent.agentId}
+              agent={agent}
+              active={agent.agentId === activeAgentId}
+              onSelect={onSelect}
+              onRename={onRename}
+              onKill={onKill}
+              onArchive={onArchive}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </Drawer>
   );
 }

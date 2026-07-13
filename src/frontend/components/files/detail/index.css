@@ -48,10 +48,11 @@
   color: var(--text-muted);
 }
 
-/* Scenes 7 / 8 — the hero card (highest surface). */
+/* Scenes 7 / 8 — the hero card (highest surface). Fills the workspace height
+   so it reads as a full panel, like the rail beside it. */
 .fd-card {
   container-type: inline-size;
-  align-self: flex-start;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -60,6 +61,13 @@
   border-radius: 14px;
   box-shadow: 0 18px 44px color-mix(in srgb, black 35%, transparent);
   padding: 28px 30px;
+  transition: opacity var(--anim);
+}
+
+/* Repo metadata in flight — the previous card stays up, gently dimmed, and
+   crossfades into the new selection instead of flashing empty. */
+.fd-card-loading {
+  opacity: 0.55;
 }
 
 .fd-eyebrow {
@@ -81,30 +89,12 @@
   font-size: 8px;
 }
 
-.fd-hero {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 .fd-title {
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;
   color: var(--text-primary);
-}
-
-.fd-branch {
-  display: inline-flex;
-  align-items: center;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  padding: 4px 9px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 .fd-desc {
@@ -183,11 +173,6 @@
 .fd-cta:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.fd-hint {
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 .fd-error {

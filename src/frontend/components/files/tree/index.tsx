@@ -64,20 +64,13 @@ export function Rail(props: RailProps) {
         ))}
       </div>
 
-      {props.activeRepo && (
-        <div className="fd-legend">
-          <span className="fd-legend-dot">●</span>
-          <span className="fd-legend-label">active repo</span>
-        </div>
-      )}
-
       <label className="fd-hidden">
         <input
           type="checkbox"
           checked={props.showHidden}
           onChange={(event) => props.onShowHiddenToggle(event.target.checked)}
         />
-        show hidden
+        Show Hidden Files
       </label>
     </div>
   );

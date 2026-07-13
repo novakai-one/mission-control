@@ -1,3 +1,8 @@
+/* Drawer width for the agents panel (consumed by the shared .shell-drawer mask). */
+.sidepanel-drawer {
+  --drawer-width: 240px;
+}
+
 /* Agents drawer — floating card on the canvas (matches .fd-rail / .shell-main). */
 .sidepanel {
   display: flex;

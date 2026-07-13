@@ -1,5 +1,10 @@
-/* Right-hand collapsible view panel — a floating card in the content row.
-   Fully absent from the flex row when closed. */
+/* Drawer width for the view panel (consumed by the shared right-drawer mask). */
+.vp-drawer {
+  --drawer-width: 260px;
+}
+
+/* Right-hand collapsible view panel — a floating card in the content row,
+   slid in and out by the shared right-drawer mask. */
 .vp-panel {
   width: 260px;
   flex-shrink: 0;

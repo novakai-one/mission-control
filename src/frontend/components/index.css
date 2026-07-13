@@ -16,9 +16,81 @@
    panels float on the canvas — detached from the header, gapped from each
    other. */
 .shell-content {
-  gap: 14px;
+  --shell-gap: 14px;
+  gap: var(--shell-gap);
   padding: 12px 16px 16px;
   min-height: 0;
+}
+
+/* Collapsible left drawer — a clipping mask that eases between the panel
+   width and a bare glyph column. The body keeps the panel's fixed width so
+   content slides behind the clip edge rather than reflowing. */
+.shell-drawer {
+  position: relative;
+  flex-shrink: 0;
+  width: 28px;
+  overflow: hidden;
+  transition: width var(--anim-slow);
+}
+
+.shell-drawer-open {
+  width: var(--drawer-width);
+}
+
+.shell-drawer-body {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--drawer-width);
+  display: flex;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--anim-slow);
+}
+
+.shell-drawer-open .shell-drawer-body {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.shell-drawer-reopen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 1;
+  transition: opacity var(--anim-slow);
+}
+
+.shell-drawer-open .shell-drawer-reopen {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Right-hand drawer (view panel): no reopen glyph — the header button owns
+   the toggle — so closed collapses to nothing, pulling back the row gap too. */
+.shell-drawer-right {
+  position: relative;
+  flex-shrink: 0;
+  width: 0;
+  margin-left: calc(var(--shell-gap) * -1);
+  overflow: hidden;
+  transition: width var(--anim-slow), margin-left var(--anim-slow);
+}
+
+.shell-drawer-right-open {
+  width: var(--drawer-width);
+  margin-left: 0;
+}
+
+.shell-drawer-right .shell-drawer-body {
+  left: auto;
+  right: 0;
+}
+
+.shell-drawer-right-open .shell-drawer-body {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Floating main panel — the middle card every tab's primary surface sits in. */

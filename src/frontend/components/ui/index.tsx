@@ -106,3 +106,37 @@ export function PanelGlyph({ open, size = 16 }: PanelGlyphProps) {
     </svg>
   );
 }
+
+interface DrawerProps {
+  open: boolean;
+  /** Modifier class whose owning stylesheet sets --drawer-width. The body
+   * keeps that fixed width while the mask animates, so content slides behind
+   * the clip edge instead of squishing. */
+  widthClass: string;
+  onOpen: () => void;
+  /** Accessible label for the reopen glyph shown while closed. */
+  label: string;
+  children: React.ReactNode;
+}
+
+/** Collapsible left drawer. Stays mounted in both states (panel state
+ * survives collapse); closed, it narrows to a bare reopen glyph. */
+export function Drawer({ open, widthClass, onOpen, label, children }: DrawerProps) {
+  return (
+    <div className={`shell-drawer ${widthClass}${open ? ' shell-drawer-open' : ''}`}>
+      <div className="shell-drawer-body" aria-hidden={!open}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="shell-reopen shell-drawer-reopen"
+        onClick={onOpen}
+        aria-label={label}
+        title={label}
+        tabIndex={open ? -1 : 0}
+      >
+        <PanelGlyph open={false} />
+      </button>
+    </div>
+  );
+}
