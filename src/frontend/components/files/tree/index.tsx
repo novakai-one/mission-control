@@ -1,7 +1,9 @@
+import { PanelGlyph } from '../../ui/index.js';
 import type { FsEntry } from '../index.js';
 import './index.css';
 
 interface RailProps {
+  onCollapse: () => void;
   pathBarValue: string;
   onPathChange: (value: string) => void;
   onPathSubmit: () => void;
@@ -26,6 +28,11 @@ export function Rail(props: RailProps) {
   const hasSelection = props.selectedPath != null;
   return (
     <div className="fd-rail">
+      <div className="fd-rail-top">
+        <button type="button" className="shell-panel-toggle" onClick={props.onCollapse} aria-label="Collapse file tree" title="Collapse file tree">
+          <PanelGlyph open />
+        </button>
+      </div>
       <div className="fd-pathbar">
         <input
           type="text"
@@ -57,20 +64,13 @@ export function Rail(props: RailProps) {
         ))}
       </div>
 
-      {props.activeRepo && (
-        <div className="fd-legend">
-          <span className="fd-legend-dot">●</span>
-          <span className="fd-legend-label">active repo</span>
-        </div>
-      )}
-
       <label className="fd-hidden">
         <input
           type="checkbox"
           checked={props.showHidden}
           onChange={(event) => props.onShowHiddenToggle(event.target.checked)}
         />
-        show hidden
+        Show Hidden Files
       </label>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toDisplayPath } from '../index.js';
+import { Drawer } from '../ui/index.js';
 import { Rail } from './tree/index.js';
 import { Detail } from './detail/index.js';
 import './index.css';
@@ -39,7 +40,16 @@ interface FilesPanelProps {
   onOpenAgents: () => void;
 }
 
+/** The settled selection the detail card renders from. The entry and its repo
+ * info are committed together — only once the info fetch lands — so the card
+ * swaps exactly once per click instead of tearing (new title over old fields). */
+export interface DisplayedEntry {
+  entry: FsEntry;
+  info: RepoInfo | null;
+}
+
 const STORAGE_KEY = 'mc.files.root';
+const RAIL_STORAGE_KEY = 'mc.files.railOpen';
 const DEFAULT_ROOT = '~/Programming';
 
 async function fetchFs(path: string, showHidden: boolean): Promise<FsListing> {
@@ -51,6 +61,14 @@ async function fetchFs(path: string, showHidden: boolean): Promise<FsListing> {
 
 export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgents }: FilesPanelProps) {
   const [showHidden, setShowHidden] = useState(false);
+  const [railOpen, setRailOpen] = useState(() => localStorage.getItem(RAIL_STORAGE_KEY) !== 'false');
+
+  const toggleRail = () => {
+    setRailOpen((prev) => {
+      localStorage.setItem(RAIL_STORAGE_KEY, String(!prev));
+      return !prev;
+    });
+  };
 
   const [rootAbs, setRootAbs] = useState<string | null>(null);
   const [rootParent, setRootParent] = useState<string | null>(null);
@@ -65,7 +83,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
 
   const [selected, setSelected] = useState<FsEntry | null>(null);
   const [gitRoot, setGitRoot] = useState<string | null>(null);
-  const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
+  const [displayed, setDisplayed] = useState<DisplayedEntry | null>(null);
   const [repoLoading, setRepoLoading] = useState(false);
   const [settingActive, setSettingActive] = useState(false);
   const [activeError, setActiveError] = useState<string | null>(null);
@@ -142,19 +160,24 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
   }, [selected]);
 
   // Fetch repo metadata for the selected entry, cancelling on change so a slow
-  // earlier response can't paint under a newer selection.
+  // earlier response can't paint under a newer selection. The displayed card is
+  // deliberately NOT touched until the payload lands — the old card stays up
+  // (dimmed via repoLoading), then entry+info commit together, so each click
+  // produces exactly one content swap instead of a title/fields tear.
   useEffect(() => {
-    setRepoInfo(null);
-    if (!selected) return;
+    if (!selected) {
+      setDisplayed(null);
+      return;
+    }
     let cancelled = false;
     setRepoLoading(true);
     fetch(`/api/repo-info?path=${encodeURIComponent(selected.path)}`)
       .then((response) => response.json())
       .then((data: RepoInfo) => {
-        if (!cancelled) setRepoInfo(data);
+        if (!cancelled) setDisplayed({ entry: selected, info: data });
       })
       .catch(() => {
-        if (!cancelled) setRepoInfo(null);
+        if (!cancelled) setDisplayed({ entry: selected, info: null });
       })
       .finally(() => {
         if (!cancelled) setRepoLoading(false);
@@ -244,9 +267,12 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
     || (homeDir != null && rootAbs === homeDir);
 
   return (
-    <div className="u-panel fd-panel">
-      <div className="fd-body">
+    // display:contents wrapper — the rail and detail become siblings in the
+    // shell content row, so they float as separate cards with the shell gap.
+    <div className="fd-panel">
+      <Drawer open={railOpen} widthClass="fd-drawer" onOpen={toggleRail} label="Open file tree">
         <Rail
+          onCollapse={toggleRail}
           pathBarValue={pathBarValue}
           onPathChange={setPathBarValue}
           onPathSubmit={handlePathBarSubmit}
@@ -266,20 +292,18 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
           showHidden={showHidden}
           onShowHiddenToggle={handleShowHiddenToggle}
         />
-        <Detail
-          selected={selected}
-          homeDir={homeDir}
-          repoInfo={repoInfo}
-          repoLoading={repoLoading}
-          isActive={isActive}
-          canSetActive={canSetActive}
-          settingActive={settingActive}
-          activeError={activeError}
-          onSetActive={handleSetActive}
-          onOpenAgents={onOpenAgents}
-          onDeselect={() => setSelected(null)}
-        />
-      </div>
+      </Drawer>
+      <Detail
+        displayed={displayed}
+        repoLoading={repoLoading}
+        isActive={isActive}
+        canSetActive={canSetActive}
+        settingActive={settingActive}
+        activeError={activeError}
+        onSetActive={handleSetActive}
+        onOpenAgents={onOpenAgents}
+        onDeselect={() => setSelected(null)}
+      />
     </div>
   );
 }

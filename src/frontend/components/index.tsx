@@ -318,27 +318,28 @@ export function DashboardShell() {
   return (
     <div className="shell-root">
       <AppHeader
-        eventCount={events.length}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onOpenSettings={() => setSettingsOpen(true)}
-        activeRepo={activeRepo}
-        homeDir={homeDir}
         viewPanelOpen={viewPanel.open}
         onToggleViewPanel={viewPanel.toggleOpen}
       />
-      <div className="shell-row">
-        <SidePanel
-          agents={agentsState.agents}
-          activeAgentId={agentsState.activeAgentId}
-          collapsed={agentsState.collapsed}
-          onToggle={agentsState.toggleCollapsed}
-          onSelect={(agentId) => { agentsState.setActiveAgentId(agentId); setViewMode('agents'); }}
-          onCreate={agentsState.createAgent}
-          onRename={agentsState.renameAgent}
-          onKill={agentsState.killAgent}
-          onArchive={agentsState.archiveAgent}
-        />
+      <div className="shell-row shell-content">
+        {/* Left drawer is page-owned: the agents list only exists on the Agents
+            tab (Files brings its own tree rail; other tabs have no drawer). */}
+        {viewMode === 'agents' && (
+          <SidePanel
+            agents={agentsState.agents}
+            activeAgentId={agentsState.activeAgentId}
+            collapsed={agentsState.collapsed}
+            onToggle={agentsState.toggleCollapsed}
+            onSelect={(agentId) => agentsState.setActiveAgentId(agentId)}
+            onCreate={agentsState.createAgent}
+            onRename={agentsState.renameAgent}
+            onKill={agentsState.killAgent}
+            onArchive={agentsState.archiveAgent}
+          />
+        )}
         {/* Always mounted so agent terminals survive tab switches; hides itself via CSS. */}
         <AgentsView
           agents={agentsState.agents}
@@ -354,7 +355,7 @@ export function DashboardShell() {
             onOpenAgents={() => setViewMode('agents')}
           />
         ) : viewMode === 'transcript' ? (
-          <div className="shell-transcript-col">
+          <div className="shell-transcript-col shell-main">
             <SessionBar
               sessions={sessions}
               selectedSession={selectedSession}
@@ -404,12 +405,16 @@ export function DashboardShell() {
             </div>
           </div>
         ) : viewMode === 'ruleset' ? (
-          <RulesetInspector data={rulesetData} />
+          <div className="shell-main">
+            <RulesetInspector data={rulesetData} />
+          </div>
         ) : viewMode === 'debug' ? (
-          <DebugPanel
-            buildMessages={buildMessages}
-            wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
-          />
+          <div className="shell-main">
+            <DebugPanel
+              buildMessages={buildMessages}
+              wsReady={webSocketRef.current?.readyState === WebSocket.OPEN}
+            />
+          </div>
         ) : null}
         {/* Panel enumerates from the FULL event array; the board filters its own slice. */}
         <ViewPanel
