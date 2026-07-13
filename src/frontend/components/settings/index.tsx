@@ -22,6 +22,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Stays mounted through the leave animation; unmounts on its animationend.
+  const [rendered, setRendered] = useState(open);
+  useEffect(() => {
+    if (open) setRendered(true);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,14 +75,18 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     }
   };
 
-  if (!open) return null;
+  if (!rendered) return null;
+  const leave = open ? '' : ' set-leave';
 
   return (
     <>
       {/* Backdrop */}
-      <div onClick={onClose} className="set-backdrop" />
+      <div onClick={onClose} className={'set-backdrop' + leave} />
       {/* Panel */}
-      <div className="set-panel">
+      <div
+        className={'set-panel' + leave}
+        onAnimationEnd={(event) => { if (!open && event.animationName === 'set-pop-out') setRendered(false); }}
+      >
         {/* Header */}
         <div className="set-header">
           <div className="set-header-left">

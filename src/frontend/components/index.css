@@ -105,6 +105,25 @@
   overflow: hidden;
 }
 
+/* Tab-switch entrance — every view's cards settle in with the same slow
+   fade-up as the drawers. Conditional views replay it by remounting; the
+   always-mounted agents view replays it because leaving display:none
+   restarts CSS animations. .fd-panel is display:contents, so the files
+   tab's rail and detail card are targeted as its children; the agents
+   drawer is a direct shell-content child. */
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.shell-main,
+.shell-content > .shell-drawer,
+.fd-panel > * {
+  animation: view-enter var(--anim-slow) backwards;
+}
+
 /* Drawer toggle glyphs — bare icons, no container box. .shell-panel-toggle
    lives inside an open drawer; .shell-reopen sits on the canvas when the
    drawer is closed. */

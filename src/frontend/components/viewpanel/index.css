@@ -284,6 +284,7 @@
   color: var(--text-secondary);
   padding: 0.25rem;
   cursor: pointer;
+  transition: color var(--anim);
 }
 
 .viewpanel-toggle:hover {
