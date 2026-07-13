@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#141a26"/>
+      <stop offset="1" stop-color="#0b0e14"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS-style rounded squircle-ish plate -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="none" stroke="#2a3446" stroke-width="6"/>
+  <!-- command prompt chevron -->
+  <path d="M 330 380 L 470 512 L 330 644" fill="none" stroke="url(#beam)"
+        stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- cursor bar -->
+  <rect x="530" y="596" width="170" height="52" rx="26" fill="#e6e9f0"/>
+  <!-- agent constellation dots -->
+  <circle cx="668" cy="392" r="26" fill="#38bdf8"/>
+  <circle cx="756" cy="470" r="18" fill="#8b93a7"/>
+  <circle cx="700" cy="310" r="14" fill="#8b93a7"/>
+</svg>

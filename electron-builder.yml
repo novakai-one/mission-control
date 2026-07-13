@@ -1,0 +1,10 @@
+appId: com.novakai.command
+productName: Novakai Command
+directories:
+  app: desktop
+  output: release
+mac:
+  target: dir
+  identity: null
+  category: public.app-category.developer-tools
+  icon: desktop/icon.icns

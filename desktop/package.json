@@ -1,0 +1,7 @@
+{
+  "name": "novakai-command-desktop",
+  "productName": "Novakai Command",
+  "version": "1.0.0",
+  "description": "Desktop shell for Novakai Command",
+  "main": "main.cjs"
+}
