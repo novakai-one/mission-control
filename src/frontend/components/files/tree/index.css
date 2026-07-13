@@ -66,14 +66,15 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 14px;
 }
 
 .fd-children {
   padding-left: 14px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 14px;
+  margin-top: 14px;
 }
 
 .fd-row {
