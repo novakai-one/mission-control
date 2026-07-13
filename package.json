@@ -11,6 +11,8 @@
     "dev": "concurrently -k \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "vite build",
     "lint": "node tools/gates/standards.mjs",
+    "app": "electron desktop",
+    "app:build": "electron-builder --mac --config electron-builder.yml",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
     "start": "node dist/index.js"
   },
@@ -34,6 +36,8 @@
     "@types/ws": "^8.5.10",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^10.6.0",
     "eslint-plugin-sonarjs": "^4.1.0",
     "tsx": "^4.15.7",
