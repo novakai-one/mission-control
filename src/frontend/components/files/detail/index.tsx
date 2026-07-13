@@ -1,10 +1,9 @@
 import type { MouseEvent } from 'react';
-import type { FsEntry, RepoInfo } from '../index.js';
+import type { DisplayedEntry, RepoInfo } from '../index.js';
 import './index.css';
 
 interface DetailProps {
-  selected: FsEntry | null;
-  repoInfo: RepoInfo | null;
+  displayed: DisplayedEntry | null;
   repoLoading: boolean;
   isActive: boolean;
   canSetActive: boolean;
@@ -34,8 +33,8 @@ function buildFields(info: RepoInfo | null): Field[] {
 }
 
 export function Detail(props: DetailProps) {
-  const { selected, repoInfo } = props;
-  if (!selected) {
+  const { displayed } = props;
+  if (!displayed) {
     return (
       <div className="fd-detail fd-detail-empty">
         <div className="fd-empty-tile">◈</div>
@@ -45,8 +44,9 @@ export function Detail(props: DetailProps) {
     );
   }
 
-  const name = repoInfo?.name ?? selected.name;
-  const fields = buildFields(repoInfo);
+  const { entry, info } = displayed;
+  const name = info?.name ?? entry.name;
+  const fields = buildFields(info);
 
   // Clicking the central workspace background (anywhere in the detail column
   // outside the card) deselects. The card itself — including its controls —
@@ -58,43 +58,47 @@ export function Detail(props: DetailProps) {
   return (
     <div className="fd-detail" onClick={handleBackdropClick}>
       <div className={props.repoLoading ? 'fd-card fd-card-loading' : 'fd-card'}>
-        {props.isActive && (
-          <div className="fd-eyebrow fd-eyebrow-active">
-            <span className="fd-eyebrow-dot">●</span>ACTIVE REPOSITORY
-          </div>
-        )}
-
-        <h2 className="fd-title">{name}</h2>
-
-        {repoInfo?.description && <p className="fd-desc">{repoInfo.description}</p>}
-
-        {fields.length > 0 && (
-          <>
-            <hr className="fd-divider" />
-            <div className="fd-grid">
-              {fields.map((field) => (
-                <div className="fd-field" key={field.label}>
-                  <span className="fd-field-label">{field.label}</span>
-                  <span className={field.mono ? 'fd-field-value fd-mono' : 'fd-field-value'}>{field.value}</span>
-                </div>
-              ))}
+        {/* Keyed by path: switching selection remounts the content, replaying
+            the fade-up — one smooth swap while the card frame stays put. */}
+        <div className="fd-card-content" key={entry.path}>
+          {props.isActive && (
+            <div className="fd-eyebrow fd-eyebrow-active">
+              <span className="fd-eyebrow-dot">●</span>ACTIVE REPOSITORY
             </div>
-          </>
-        )}
-
-        <div className="fd-action">
-          {props.isActive ? (
-            <button className="fd-cta" onClick={props.onOpenAgents}>Open Agents Tab →</button>
-          ) : (
-            <button
-              className="fd-cta"
-              onClick={props.onSetActive}
-              disabled={!props.canSetActive || props.settingActive}
-            >
-              {props.settingActive ? 'Setting…' : '★ Set as Active Repo'}
-            </button>
           )}
-          {props.activeError && <span className="fd-error">{props.activeError}</span>}
+
+          <h2 className="fd-title">{name}</h2>
+
+          {info?.description && <p className="fd-desc">{info.description}</p>}
+
+          {fields.length > 0 && (
+            <>
+              <hr className="fd-divider" />
+              <div className="fd-grid">
+                {fields.map((field) => (
+                  <div className="fd-field" key={field.label}>
+                    <span className="fd-field-label">{field.label}</span>
+                    <span className={field.mono ? 'fd-field-value fd-mono' : 'fd-field-value'}>{field.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="fd-action">
+            {props.isActive ? (
+              <button className="fd-cta" onClick={props.onOpenAgents}>Open Agents Tab →</button>
+            ) : (
+              <button
+                className="fd-cta"
+                onClick={props.onSetActive}
+                disabled={!props.canSetActive || props.settingActive}
+              >
+                {props.settingActive ? 'Setting…' : '★ Set as Active Repo'}
+              </button>
+            )}
+            {props.activeError && <span className="fd-error">{props.activeError}</span>}
+          </div>
         </div>
       </div>
     </div>

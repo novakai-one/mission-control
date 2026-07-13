@@ -40,6 +40,14 @@ interface FilesPanelProps {
   onOpenAgents: () => void;
 }
 
+/** The settled selection the detail card renders from. The entry and its repo
+ * info are committed together — only once the info fetch lands — so the card
+ * swaps exactly once per click instead of tearing (new title over old fields). */
+export interface DisplayedEntry {
+  entry: FsEntry;
+  info: RepoInfo | null;
+}
+
 const STORAGE_KEY = 'mc.files.root';
 const RAIL_STORAGE_KEY = 'mc.files.railOpen';
 const DEFAULT_ROOT = '~/Programming';
@@ -75,7 +83,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
 
   const [selected, setSelected] = useState<FsEntry | null>(null);
   const [gitRoot, setGitRoot] = useState<string | null>(null);
-  const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
+  const [displayed, setDisplayed] = useState<DisplayedEntry | null>(null);
   const [repoLoading, setRepoLoading] = useState(false);
   const [settingActive, setSettingActive] = useState(false);
   const [activeError, setActiveError] = useState<string | null>(null);
@@ -152,13 +160,13 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
   }, [selected]);
 
   // Fetch repo metadata for the selected entry, cancelling on change so a slow
-  // earlier response can't paint under a newer selection. The previous info is
-  // deliberately NOT cleared first — it stays up (dimmed via repoLoading) until
-  // the new payload lands, so folder-to-folder clicks crossfade instead of
-  // flashing an empty card.
+  // earlier response can't paint under a newer selection. The displayed card is
+  // deliberately NOT touched until the payload lands — the old card stays up
+  // (dimmed via repoLoading), then entry+info commit together, so each click
+  // produces exactly one content swap instead of a title/fields tear.
   useEffect(() => {
     if (!selected) {
-      setRepoInfo(null);
+      setDisplayed(null);
       return;
     }
     let cancelled = false;
@@ -166,10 +174,10 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
     fetch(`/api/repo-info?path=${encodeURIComponent(selected.path)}`)
       .then((response) => response.json())
       .then((data: RepoInfo) => {
-        if (!cancelled) setRepoInfo(data);
+        if (!cancelled) setDisplayed({ entry: selected, info: data });
       })
       .catch(() => {
-        if (!cancelled) setRepoInfo(null);
+        if (!cancelled) setDisplayed({ entry: selected, info: null });
       })
       .finally(() => {
         if (!cancelled) setRepoLoading(false);
@@ -286,8 +294,7 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
         />
       </Drawer>
       <Detail
-        selected={selected}
-        repoInfo={repoInfo}
+        displayed={displayed}
         repoLoading={repoLoading}
         isActive={isActive}
         canSetActive={canSetActive}
