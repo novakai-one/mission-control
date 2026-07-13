@@ -1,17 +1,13 @@
 import React from 'react';
 import { Settings, PanelRight } from 'lucide-react';
-import { toDisplayPath } from '../index.js';
 import './index.css';
 
 type ViewMode = 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug';
 
 interface AppHeaderProps {
-  eventCount: number;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onOpenSettings: () => void;
-  activeRepo: string | null;
-  homeDir: string | null;
   viewPanelOpen: boolean;
   onToggleViewPanel: () => void;
 }
@@ -24,8 +20,7 @@ const TABS: { mode: ViewMode; label: string }[] = [
   { mode: 'debug', label: 'Debug' },
 ];
 
-export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettings, activeRepo, homeDir, viewPanelOpen, onToggleViewPanel }: AppHeaderProps) {
-  const repoName = activeRepo ? toDisplayPath(activeRepo, homeDir).split('/').pop() : null;
+export function AppHeader({ viewMode, onViewModeChange, onOpenSettings, viewPanelOpen, onToggleViewPanel }: AppHeaderProps) {
   return (
     <header className="glass-panel dash-header">
       <div className="dash-header-group">
@@ -47,23 +42,19 @@ export function AppHeader({ eventCount, viewMode, onViewModeChange, onOpenSettin
       </div>
 
       <div className="dash-header-group">
-        {repoName && (
-          <span className="dash-repo-meta">active repo · {repoName}</span>
-        )}
-        <span className="dash-event-count">{eventCount} events</span>
         <button
           onClick={onOpenSettings}
           className="viewpanel-toggle"
           title="Settings"
         >
-          <Settings size={14} />
+          <Settings size={15} />
         </button>
         <button
           onClick={onToggleViewPanel}
           className={viewPanelOpen ? 'viewpanel-toggle viewpanel-toggle-active' : 'viewpanel-toggle'}
           title="View panel"
         >
-          <PanelRight size={14} />
+          <PanelRight size={15} />
         </button>
       </div>
     </header>

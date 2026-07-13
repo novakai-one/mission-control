@@ -79,3 +79,30 @@ export function PanelHeader({ title, actions }: PanelHeaderProps) {
     </header>
   );
 }
+
+interface PanelGlyphProps {
+  /** Divider position tells the state: near the middle = drawer open, hugging
+   * the left edge = drawer tucked away. */
+  open: boolean;
+  size?: number;
+}
+
+export function PanelGlyph({ open, size = 16 }: PanelGlyphProps) {
+  const dividerX = open ? 10.5 : 6.5;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <line x1={dividerX} y1="4" x2={dividerX} y2="20" />
+    </svg>
+  );
+}

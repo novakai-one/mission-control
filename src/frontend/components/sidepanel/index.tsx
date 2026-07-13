@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Archive, PanelLeftClose, PanelLeftOpen, Plus, Square } from 'lucide-react';
+import { Archive, Plus, Square } from 'lucide-react';
+import { PanelGlyph } from '../ui/index.js';
 import './index.css';
 
 export interface SidePanelAgent {
@@ -18,13 +19,6 @@ export interface SidePanelProps {
   onRename(agentId: string, title: string): void;
   onKill(agentId: string): void;
   onArchive(agentId: string): void;
-}
-
-function initialsOf(title: string): string {
-  const words = title.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
 }
 
 interface StatusDotProps {
@@ -125,27 +119,18 @@ function RowActions({ agent, onKill, onArchive }: RowActionsProps) {
 interface AgentRowProps {
   agent: SidePanelAgent;
   active: boolean;
-  collapsed: boolean;
   onSelect(agentId: string): void;
   onRename(agentId: string, title: string): void;
   onKill(agentId: string): void;
   onArchive(agentId: string): void;
 }
 
-function AgentRow({ agent, active, collapsed, onSelect, onRename, onKill, onArchive }: AgentRowProps) {
+function AgentRow({ agent, active, onSelect, onRename, onKill, onArchive }: AgentRowProps) {
   const [renaming, setRenaming] = useState(false);
-  const rowClass = `sidepanel-agent${active ? ' sidepanel-agent-active' : ''}${collapsed ? ' sidepanel-agent-collapsed' : ''}`;
+  const rowClass = `sidepanel-agent${active ? ' sidepanel-agent-active' : ''}`;
 
   function handleSelect(): void {
     onSelect(agent.agentId);
-  }
-
-  if (collapsed) {
-    return (
-      <button type="button" className={rowClass} onClick={handleSelect} aria-label={agent.title} title={agent.title}>
-        <span className="sidepanel-avatar">{initialsOf(agent.title)}</span>
-      </button>
-    );
   }
 
   function handleKeyDown(event: React.KeyboardEvent): void {
@@ -190,26 +175,29 @@ function AgentRow({ agent, active, collapsed, onSelect, onRename, onKill, onArch
 
 export function SidePanel(props: SidePanelProps) {
   const { agents, activeAgentId, collapsed, onToggle, onSelect, onCreate, onRename, onKill, onArchive } = props;
-  const panelClass = `sidepanel glass-panel${collapsed ? ' sidepanel-collapsed' : ''}`;
-  const toggleLabel = collapsed ? 'Expand agent panel' : 'Collapse agent panel';
+
+  // Closed: the drawer leaves the row entirely; only a bare reopen glyph
+  // remains on the canvas.
+  if (collapsed) {
+    return (
+      <button type="button" className="shell-reopen" onClick={onToggle} aria-label="Expand agent panel" title="Expand agent panel">
+        <PanelGlyph open={false} />
+      </button>
+    );
+  }
 
   return (
-    <div className={panelClass}>
+    <div className="sidepanel">
       <div className="sidepanel-header">
-        <button type="button" className="sidepanel-toggle" onClick={onToggle} aria-label={toggleLabel}>
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        <span className="u-section-title sidepanel-heading">Agents</span>
+        <button type="button" className="shell-panel-toggle" onClick={onToggle} aria-label="Collapse agent panel" title="Collapse agent panel">
+          <PanelGlyph open />
         </button>
-        {!collapsed && <span className="u-section-title sidepanel-heading">Agents</span>}
       </div>
 
-      <button
-        type="button"
-        className={collapsed ? 'sidepanel-new sidepanel-new-collapsed' : 'sidepanel-new'}
-        onClick={onCreate}
-        aria-label="New agent"
-      >
+      <button type="button" className="sidepanel-new" onClick={onCreate} aria-label="New agent">
         <Plus size={14} />
-        {!collapsed && <span>New agent</span>}
+        <span>New agent</span>
       </button>
 
       <div className="sidepanel-list">
@@ -218,7 +206,6 @@ export function SidePanel(props: SidePanelProps) {
             key={agent.agentId}
             agent={agent}
             active={agent.agentId === activeAgentId}
-            collapsed={collapsed}
             onSelect={onSelect}
             onRename={onRename}
             onKill={onKill}

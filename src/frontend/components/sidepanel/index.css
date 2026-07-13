@@ -1,44 +1,22 @@
+/* Agents drawer — floating card on the canvas (matches .fd-rail / .shell-main). */
 .sidepanel {
   display: flex;
   flex-direction: column;
   width: 240px;
   flex-shrink: 0;
-  height: 100%;
   overflow: hidden;
-  border-radius: 0;
-  transition: width var(--anim);
-}
-
-.sidepanel-collapsed {
-  width: 44px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
 }
 
 .sidepanel-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.6rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0.6rem 0.6rem 0.6rem 0.8rem;
   flex-shrink: 0;
-}
-
-.sidepanel-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.sidepanel-toggle:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
 }
 
 .sidepanel-heading {
@@ -64,11 +42,6 @@
 .sidepanel-new:hover {
   color: var(--text-primary);
   border-color: var(--border-active);
-}
-
-.sidepanel-new-collapsed {
-  justify-content: center;
-  margin: 0.5rem;
 }
 
 .sidepanel-list {
@@ -104,11 +77,6 @@
   background-color: var(--bg-tertiary);
   border-color: var(--border-active);
   color: var(--text-primary);
-}
-
-.sidepanel-agent-collapsed {
-  justify-content: center;
-  padding: 0.3rem;
 }
 
 .sidepanel-agent-title {
@@ -159,21 +127,6 @@
 .sidepanel-action-btn:hover {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
-}
-
-.sidepanel-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background-color: var(--bg-tertiary);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
-  font-weight: 600;
 }
 
 .sidepanel-dot {

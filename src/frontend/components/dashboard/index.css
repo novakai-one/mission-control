@@ -22,15 +22,15 @@
   font-weight: 500;
 }
 
-/* Header shell — flat bar. The .glass-panel.dash-header compound overrides
-   .glass-panel's translucent background, backdrop blur, and radius (the header
-   is flat, no blur); the base .glass-panel rule stays untouched. */
+/* Header shell — flat bar. No bottom hairline: the content panels float below
+   with a canvas gap, so the seam is the gap itself. The .glass-panel.dash-header
+   compound overrides .glass-panel's translucent background, backdrop blur, and
+   radius (the header is flat, no blur); the base .glass-panel rule stays untouched. */
 .dash-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.8rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
   height: 64px;
 }
 
@@ -61,20 +61,7 @@
   color: var(--text-primary);
 }
 
-/* Active-repo state meta — grey per the scene-8 mock; the header's only amber
-   is the brand glyph. */
-.dash-repo-meta {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
 .dash-tabs {
   display: flex;
   gap: 0.2rem;
-}
-
-.dash-event-count {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
 }

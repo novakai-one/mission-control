@@ -6,7 +6,9 @@
   overflow: hidden;
 }
 
-.agents-view-hidden {
+/* Double class beats .shell-main's display:flex (same file order-dependent
+   cascade otherwise — the shell utility sheet loads after this one). */
+.agents-view.agents-view-hidden {
   display: none;
 }
 

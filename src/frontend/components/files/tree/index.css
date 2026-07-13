@@ -1,4 +1,5 @@
-/* Left rail: elevated panel holding the path bar, tree and active legend. */
+/* Left rail: elevated panel holding the collapse toggle, path bar, tree and
+   active legend. */
 .fd-rail {
   width: 264px;
   flex-shrink: 0;
@@ -9,6 +10,12 @@
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 12px;
+}
+
+/* Collapse toggle row — glyph pinned to the rail's top-right (mock: scene 9). */
+.fd-rail-top {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Path bar — inset surface with a transparent mono input and near-zero-weight

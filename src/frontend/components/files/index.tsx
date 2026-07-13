@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toDisplayPath } from '../index.js';
+import { PanelGlyph } from '../ui/index.js';
 import { Rail } from './tree/index.js';
 import { Detail } from './detail/index.js';
 import './index.css';
@@ -40,6 +41,7 @@ interface FilesPanelProps {
 }
 
 const STORAGE_KEY = 'mc.files.root';
+const RAIL_STORAGE_KEY = 'mc.files.railOpen';
 const DEFAULT_ROOT = '~/Programming';
 
 async function fetchFs(path: string, showHidden: boolean): Promise<FsListing> {
@@ -51,6 +53,14 @@ async function fetchFs(path: string, showHidden: boolean): Promise<FsListing> {
 
 export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgents }: FilesPanelProps) {
   const [showHidden, setShowHidden] = useState(false);
+  const [railOpen, setRailOpen] = useState(() => localStorage.getItem(RAIL_STORAGE_KEY) !== 'false');
+
+  const toggleRail = () => {
+    setRailOpen((prev) => {
+      localStorage.setItem(RAIL_STORAGE_KEY, String(!prev));
+      return !prev;
+    });
+  };
 
   const [rootAbs, setRootAbs] = useState<string | null>(null);
   const [rootParent, setRootParent] = useState<string | null>(null);
@@ -244,9 +254,12 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
     || (homeDir != null && rootAbs === homeDir);
 
   return (
-    <div className="u-panel fd-panel">
-      <div className="fd-body">
+    // display:contents wrapper — the rail and detail become siblings in the
+    // shell content row, so they float as separate cards with the shell gap.
+    <div className="fd-panel">
+      {railOpen ? (
         <Rail
+          onCollapse={toggleRail}
           pathBarValue={pathBarValue}
           onPathChange={setPathBarValue}
           onPathSubmit={handlePathBarSubmit}
@@ -266,20 +279,23 @@ export function FilesPanel({ homeDir, activeRepo, onActiveRepoChange, onOpenAgen
           showHidden={showHidden}
           onShowHiddenToggle={handleShowHiddenToggle}
         />
-        <Detail
-          selected={selected}
-          homeDir={homeDir}
-          repoInfo={repoInfo}
-          repoLoading={repoLoading}
-          isActive={isActive}
-          canSetActive={canSetActive}
-          settingActive={settingActive}
-          activeError={activeError}
-          onSetActive={handleSetActive}
-          onOpenAgents={onOpenAgents}
-          onDeselect={() => setSelected(null)}
-        />
-      </div>
+      ) : (
+        <button type="button" className="shell-reopen" onClick={toggleRail} aria-label="Open file tree" title="Open file tree">
+          <PanelGlyph open={false} />
+        </button>
+      )}
+      <Detail
+        selected={selected}
+        repoInfo={repoInfo}
+        repoLoading={repoLoading}
+        isActive={isActive}
+        canSetActive={canSetActive}
+        settingActive={settingActive}
+        activeError={activeError}
+        onSetActive={handleSetActive}
+        onOpenAgents={onOpenAgents}
+        onDeselect={() => setSelected(null)}
+      />
     </div>
   );
 }
