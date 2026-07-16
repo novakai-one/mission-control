@@ -1,27 +1,34 @@
 import { randomUUID } from 'node:crypto';
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { spawn as spawnPty, type IPty } from 'node-pty';
-import { ConfigManager } from '../config/index.js';
-import { resolveCli } from '../agent/executor/index.js';
+import type { ProviderId } from '../../shared/project/schema.js';
 import { encodeCwd } from '../transcript/parser.js';
 import { AgentBuffer } from './buffer.js';
+import {
+  launchProvider,
+  type ProviderLauncher,
+  type ProviderTerminalProcess,
+} from './provider/index.js';
 
 export interface AgentInfo {
   agentId: string;
   title: string;
+  provider: ProviderId;
   sessionId: string;
+  sessionError?: string;
   projectDir: string;
   cwd: string;
   status: 'running' | 'exited';
   createdAt: string;
+  projectId?: string;
+  threadId?: string;
 }
 
 type RegistryEntry = AgentInfo & { archived?: boolean };
 
 interface AgentRecord {
   info: AgentInfo;
-  ptyProcess?: IPty;
+  ptyProcess?: ProviderTerminalProcess;
   buffer?: AgentBuffer;
   archived?: boolean;
 }
@@ -29,49 +36,37 @@ interface AgentRecord {
 export interface CreateAgentOptions {
   title?: string;
   cwd: string;
-}
-
-// Strip inherited Claude/Anthropic env vars (e.g. CLAUDE_CODE_CHILD_SESSION) before
-// spawning: left in place, they silently disable transcript persistence when this
-// backend itself is running inside a Claude Code session.
-function scrubEnv(): NodeJS.ProcessEnv {
-  const scrubbed = { ...process.env };
-  for (const envKey of Object.keys(scrubbed)) {
-    if (/^CLAUDE|^ANTHROPIC/.test(envKey)) delete scrubbed[envKey];
-  }
-  return scrubbed;
-}
-
-function spawnClaude(workspaceDir: string, sessionId: string): IPty {
-  const cliPath = ConfigManager.load().claudeCliPath || 'claude';
-  const { resolved } = resolveCli(cliPath);
-  return spawnPty(resolved, ['--session-id', sessionId], {
-    name: 'xterm-256color',
-    cols: 120,
-    rows: 32,
-    cwd: workspaceDir,
-    env: scrubEnv()
-  });
+  provider?: ProviderId;
+  projectId?: string;
+  threadId?: string;
 }
 
 function buildAgentInfo(agentId: string, sessionId: string, options: CreateAgentOptions): AgentInfo {
   return {
     agentId,
     title: options.title || 'agent',
+    provider: options.provider || 'claude',
     sessionId,
     projectDir: encodeCwd(options.cwd),
     cwd: options.cwd,
     status: 'running',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    ...(options.projectId ? { projectId: options.projectId } : {}),
+    ...(options.threadId ? { threadId: options.threadId } : {})
   };
 }
 
 export class TerminalManager {
   private readonly agents = new Map<string, AgentRecord>();
+  private readonly pendingCodexCwds = new Set<string>();
   private dataCallback: ((agentId: string, data: string) => void) | null = null;
   private exitCallback: ((agentId: string, exitCode: number | null) => void) | null = null;
+  private sessionCallback: ((info: AgentInfo) => void) | null = null;
 
-  constructor(private readonly registryPath = path.join(process.cwd(), '.novakai-command', 'agents.json')) {
+  constructor(
+    private readonly registryPath = path.join(process.cwd(), '.novakai-command', 'agents.json'),
+    private readonly launcher: ProviderLauncher = launchProvider,
+  ) {
     this.loadRegistry();
   }
 
@@ -88,7 +83,10 @@ export class TerminalManager {
 
   private restoreEntry(entry: RegistryEntry): void {
     const { archived, ...info } = entry;
-    this.agents.set(info.agentId, { info: { ...info, status: 'exited' }, archived });
+    this.agents.set(info.agentId, {
+      info: { ...info, provider: info.provider || 'claude', status: 'exited' },
+      archived,
+    });
   }
 
   private saveRegistry(): void {
@@ -100,19 +98,47 @@ export class TerminalManager {
     writeFileSync(this.registryPath, JSON.stringify(entries, null, 2));
   }
 
-  create(options: CreateAgentOptions): AgentInfo {
+  async create(options: CreateAgentOptions): Promise<AgentInfo> {
+    const provider = options.provider || 'claude';
+    if (provider === 'codex' && this.pendingCodexCwds.has(options.cwd)) {
+      throw new Error(`A Codex session is already starting for ${options.cwd}`);
+    }
+    if (provider === 'codex') this.pendingCodexCwds.add(options.cwd);
+    return this.launchAgent(options);
+  }
+
+  private launchAgent(options: CreateAgentOptions): AgentInfo {
     const agentId = `agent_${randomUUID()}`;
-    const sessionId = randomUUID();
-    const proc = spawnClaude(options.cwd, sessionId);
-    const info = buildAgentInfo(agentId, sessionId, options);
+    const requestedSessionId = randomUUID();
+    const launched = this.launcher(options.provider || 'claude', options.cwd, requestedSessionId);
+    const provider = options.provider || 'claude';
+    const info = buildAgentInfo(agentId, provider === 'claude' ? requestedSessionId : '', options);
     const buffer = new AgentBuffer();
-    this.agents.set(agentId, { info, ptyProcess: proc, buffer });
-    this.wire(agentId, proc, buffer);
+    this.agents.set(agentId, { info, ptyProcess: launched.process, buffer });
+    this.wire(agentId, launched.process, buffer);
     this.saveRegistry();
+    this.watchSessionIdentity(launched.sessionId, info, provider, options.cwd);
     return info;
   }
 
-  private wire(agentId: string, proc: IPty, buffer: AgentBuffer): void {
+  private watchSessionIdentity(
+    sessionId: Promise<string>, info: AgentInfo, provider: ProviderId, cwd: string,
+  ): void {
+    void sessionId.then((resolved) => {
+      info.sessionId = resolved;
+      delete info.sessionError;
+      if (provider === 'codex') this.pendingCodexCwds.delete(cwd);
+      this.saveRegistry();
+      this.sessionCallback?.(info);
+    }).catch((error) => {
+      info.sessionError = error instanceof Error ? error.message : String(error);
+      if (provider === 'codex') this.pendingCodexCwds.delete(cwd);
+      this.saveRegistry();
+      this.sessionCallback?.(info);
+    });
+  }
+
+  private wire(agentId: string, proc: ProviderTerminalProcess, buffer: AgentBuffer): void {
     proc.onData((data) => {
       buffer.push(data);
       this.dataCallback?.(agentId, data);
@@ -181,5 +207,9 @@ export class TerminalManager {
 
   onExit(callback: (agentId: string, exitCode: number | null) => void): void {
     this.exitCallback = callback;
+  }
+
+  onSession(callback: (info: AgentInfo) => void): void {
+    this.sessionCallback = callback;
   }
 }

@@ -4,11 +4,15 @@
 export interface AgentInfo {
   agentId: string;
   title: string;
+  provider: 'claude' | 'codex';
   sessionId: string;
+  sessionError?: string;
   projectDir: string;
   cwd: string;
   status: 'running' | 'exited';
   createdAt: string;
+  projectId?: string;
+  threadId?: string;
 }
 
 export interface SubagentSummary {

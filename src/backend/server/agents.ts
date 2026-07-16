@@ -5,7 +5,7 @@
 import type { Express, Request, Response } from 'express';
 import path from 'node:path';
 import { WebSocket } from 'ws';
-import { TerminalManager } from '../terminal/manager.js';
+import { TerminalManager, type CreateAgentOptions } from '../terminal/manager.js';
 import { ConfigManager } from '../config/index.js';
 import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.js';
 import { SubagentWatcher } from '../transcript/subagents/index.js';
@@ -35,15 +35,26 @@ interface SessionWatchPair {
 }
 
 export class AgentsHub {
-  private readonly manager = new TerminalManager();
   private readonly agentSubs = new Map<WebSocket, Set<string>>();
   private readonly sessionWatchers = new Map<WebSocket, Map<string, SessionWatchPair>>();
+  private readonly sessionListeners: Array<(info: Awaited<ReturnType<TerminalManager['create']>>) => void> = [];
 
-  constructor(private readonly sockets: Set<WebSocket>) {
+  constructor(
+    private readonly sockets: Set<WebSocket>,
+    private readonly manager = new TerminalManager(),
+  ) {
     this.manager.onData((agentId, data) => {
       this.sendToSubscribers(agentId, { type: 'agent-data', agentId, data });
     });
     this.manager.onExit((agentId, exitCode) => this.handleExit(agentId, exitCode));
+    this.manager.onSession((info) => {
+      this.broadcastAgentsChanged();
+      for (const listener of this.sessionListeners) listener(info);
+    });
+  }
+
+  onSessionResolved(listener: (info: Awaited<ReturnType<TerminalManager['create']>>) => void): void {
+    this.sessionListeners.push(listener);
   }
 
   handleMessage(socket: WebSocket, message: Record<string, unknown>): boolean {
@@ -67,6 +78,13 @@ export class AgentsHub {
     application.patch('/api/agents/:agentId', (request, response) => this.renameAgent(request, response));
     application.post('/api/agents/:agentId/kill', (request, response) => this.killAgent(request, response));
     application.delete('/api/agents/:agentId', (request, response) => this.archiveAgent(request, response));
+  }
+
+  /** Launch one persistent provider terminal and announce it to every client. */
+  async launch(options: CreateAgentOptions) {
+    const info = await this.manager.create(options);
+    this.broadcastAgentsChanged();
+    return info;
   }
 
   private handleExit(agentId: string, exitCode: number | null): void {
@@ -186,13 +204,16 @@ export class AgentsHub {
     pair.subagent.stop();
   }
 
-  private createAgent(request: Request, response: Response): void {
+  private async createAgent(request: Request, response: Response): Promise<void> {
     const configuration = ConfigManager.load();
     const cwd = request.body?.cwd ?? configuration.activeRepo ?? process.cwd();
     const title = typeof request.body?.title === 'string' ? request.body.title : undefined;
-    const info = this.manager.create({ title, cwd });
-    this.broadcastAgentsChanged();
-    response.status(201).json(info);
+    const provider = request.body?.provider === 'codex' ? 'codex' : 'claude';
+    try {
+      response.status(201).json(await this.launch({ title, cwd, provider }));
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   private renameAgent(request: Request, response: Response): void {

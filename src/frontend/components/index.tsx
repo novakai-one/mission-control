@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { AppHeader } from './dashboard/index.js';
+import { AppHeader, type ViewMode } from './dashboard/index.js';
 import { AgentBoard } from './board/index.js';
 import { buildToolPairs, selKey, visibilityPredicate } from './board/timelineModel.js';
 import { SelectedInspector } from './details/index.js';
@@ -12,6 +12,7 @@ import { SubTimeline, SubagentInspector, useSubagentState } from './subagent/ind
 import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
+import { ProjectWorkspace } from './workspace/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 import { useTimeZone } from '../lib/timezone/index.js';
@@ -114,8 +115,13 @@ export function DashboardShell() {
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
   const [selectedEventKey, setSelectedEventKey] = useState<string | null>(null);
   const [selectedSubKey, setSelectedSubKey] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'files' | 'agents' | 'transcript' | 'ruleset' | 'debug'>('files');
+  const [viewMode, setViewMode] = useState<ViewMode>('workspace');
   const agentsState = useAgentsState();
+
+  function openAgent(agentId: string): void {
+    agentsState.setActiveAgentId(agentId);
+    setViewMode('agents');
+  }
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -347,7 +353,13 @@ export function DashboardShell() {
           onCreate={agentsState.createAgent}
           visible={viewMode === 'agents'}
         />
-        {viewMode === 'files' ? (
+        {viewMode === 'workspace' ? (
+          <ProjectWorkspace
+            agents={agentsState.agents}
+            onAgentLaunched={agentsState.setActiveAgentId}
+            onOpenAgent={openAgent}
+          />
+        ) : viewMode === 'files' ? (
           <FilesPanel
             homeDir={homeDir}
             activeRepo={activeRepo}
