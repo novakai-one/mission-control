@@ -6,12 +6,13 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TerminalManager } from '../manager.js';
+import type { ProviderLauncher, ProviderTerminalProcess } from '../provider/index.js';
 
 const NOW = new Date().toISOString();
 
 function makeFixtureRegistry(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'mc-agents-'));
-  const registryPath = join(dir, 'agents.json');
+  const directory = mkdtempSync(join(tmpdir(), 'mc-agents-'));
+  const registryPath = join(directory, 'agents.json');
   const entries = [
     { agentId: 'agent_running', title: 'r', sessionId: 's1', projectDir: 'p1', cwd: '/tmp/p1', status: 'running', createdAt: NOW },
     { agentId: 'agent_exited', title: 'e', sessionId: 's2', projectDir: 'p2', cwd: '/tmp/p2', status: 'exited', createdAt: NOW },
@@ -72,14 +73,60 @@ function testCorruptRegistryDoesNotThrow(): void {
   assert.equal(manager.list().length, 0, 'corrupt registry starts empty rather than throwing');
 }
 
-function main(): void {
+function fakeProcess(): ProviderTerminalProcess {
+  return {
+    onData: () => ({ dispose() {} }),
+    onExit: () => ({ dispose() {} }),
+    write() {},
+    resize() {},
+    kill() {},
+  };
+}
+
+async function testProviderLaunchPersistsResolvedSession(): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), 'mc-agents-'));
+  const registryPath = join(directory, 'agents.json');
+  const launcher: ProviderLauncher = (provider) => ({
+    process: fakeProcess(),
+    sessionId: Promise.resolve(provider === 'codex' ? 'discovered-codex' : 'preset-claude'),
+  });
+  const manager = new TerminalManager(registryPath, launcher);
+  const created = await manager.create({
+    provider: 'codex', cwd: '/tmp/project', projectId: 'project-1', threadId: 'thread-1',
+  });
+  assert.equal(created.provider, 'codex');
+  assert.equal(created.sessionId, 'discovered-codex');
+  assert.equal(created.threadId, 'thread-1');
+  const saved = JSON.parse(readFileSync(registryPath, 'utf8')) as Array<{ sessionId: string }>;
+  assert.equal(saved[0]?.sessionId, 'discovered-codex');
+}
+
+async function testRejectsConcurrentCodexDiscovery(): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), 'mc-agents-'));
+  let finishDiscovery: (sessionId: string) => void = () => {};
+  const sessionId = new Promise<string>((resolve) => { finishDiscovery = resolve; });
+  const manager = new TerminalManager(join(directory, 'agents.json'), () => ({
+    process: fakeProcess(), sessionId,
+  }));
+  const first = manager.create({ provider: 'codex', cwd: '/tmp/project' });
+  await assert.rejects(
+    () => manager.create({ provider: 'codex', cwd: '/tmp/project' }),
+    /already starting/,
+  );
+  finishDiscovery('discovered-codex');
+  assert.equal((await first).sessionId, 'discovered-codex');
+}
+
+async function main(): Promise<void> {
   testLoadsExitedAndHidesArchived();
   testRenamePersists();
   testArchivePersistsAndHides();
   testKillRestoredAgent();
   testWriteResizeSnapshotOnRestoredAgent();
   testCorruptRegistryDoesNotThrow();
+  await testProviderLaunchPersistsResolvedSession();
+  await testRejectsConcurrentCodexDiscovery();
   console.log('PASS');
 }
 
-main();
+await main();

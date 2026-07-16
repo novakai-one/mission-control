@@ -97,6 +97,27 @@ Project records live under `~/.novakai-command/projects/`.
 - Browser: approval renderer and 900px layout verified.
 - Novakai Analytics: 53/100, improved from 50/100.
 
+## Phase 2 runtime checklist
+
+- [x] TerminalManager accepts Claude or Codex.
+- [x] Claude launches with a predetermined session ID.
+- [x] Codex launches in inline terminal mode.
+- [x] Codex discovers its provider-owned session ID.
+- [ ] Project launch attaches sessions automatically.
+- [ ] Project composer sends prompts to live PTYs.
+- [ ] Unified timelines update while providers run.
+- [ ] Thread switching preserves live terminals.
+- [ ] Restart restores projects and provider transcripts.
+- [ ] Complete launch loop receives browser verification.
+
+### Codex session discovery
+
+Codex CLI does not accept a predetermined session ID. Before spawning, Novakai
+snapshots `CODEX_HOME/sessions`, records launch time, then polls new rollout
+files. The first new `session_meta` matching the exact project `cwd` becomes the
+agent session. One launch request owns discovery; failures stop the PTY and
+return an actionable error instead of attaching an uncertain session.
+
 ## Commit sequence
 
 1. Document architecture and acceptance criteria.
