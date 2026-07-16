@@ -39,6 +39,8 @@ function sessionMetadata(filePath: string): CodexSessionMetadata | null {
 
 /** Discovers the provider-owned rollout created by a new Codex TUI process. */
 export class CodexSessionLocator {
+  private cancelReason: string | null = null;
+
   constructor(
     private readonly sessionsRoot = path.join(process.env.CODEX_HOME || path.join(homedir(), '.codex'), 'sessions'),
     private readonly pollMs = 100,
@@ -49,9 +51,15 @@ export class CodexSessionLocator {
     return new Set(sessionFiles(this.sessionsRoot));
   }
 
+  /** Stop a pending waitForNew, rejecting it with the given reason. */
+  cancel(reason = 'Codex session discovery cancelled'): void {
+    this.cancelReason = reason;
+  }
+
   async waitForNew(cwd: string, known: Set<string>, startedAt: number): Promise<string> {
     const deadline = Date.now() + this.timeoutMs;
     while (Date.now() <= deadline) {
+      if (this.cancelReason) throw new Error(this.cancelReason);
       const match = sessionFiles(this.sessionsRoot)
         .filter((filePath) => !known.has(filePath) && statSync(filePath).mtimeMs >= startedAt)
         .map((filePath) => ({ filePath, metadata: sessionMetadata(filePath) }))

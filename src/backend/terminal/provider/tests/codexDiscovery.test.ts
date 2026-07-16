@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CodexSessionLocator } from '../codexDiscovery.js';
-import { providerArguments, providerEnvironment } from '../index.js';
+import { launchProvider, providerArguments, providerEnvironment } from '../index.js';
 
 assert.equal(providerEnvironment('codex').TERM, 'xterm-256color');
 assert.deepEqual(providerArguments('codex', 'unused'), [
@@ -28,4 +28,26 @@ await assert.rejects(
   () => new CodexSessionLocator(root, 5, 20).waitForNew('/tmp/missing', locator.snapshot(), Date.now()),
   /saved session was not discovered/,
 );
+
+// cancel() must promptly reject a pending waitForNew with the given reason.
+const cancellable = new CodexSessionLocator(root, 5, 60_000);
+const pendingWait = cancellable.waitForNew('/tmp/never', cancellable.snapshot(), Date.now());
+cancellable.cancel('codex exited (code 1) before its session was discovered');
+await assert.rejects(pendingWait, /exited \(code 1\)/);
+
+// A provider whose CLI cannot be resolved must fail the launch loudly
+// instead of spawning a PTY that dies silently.
+{
+  const emptyCwd = mkdtempSync(path.join(tmpdir(), 'codex-no-cli-'));
+  const previousPath = process.env.PATH;
+  const previousCwd = process.cwd();
+  process.chdir(emptyCwd);
+  process.env.PATH = emptyCwd;
+  try {
+    assert.throws(() => launchProvider('codex', '/tmp/project', 'unused'), /codex CLI not found/);
+  } finally {
+    process.env.PATH = previousPath;
+    process.chdir(previousCwd);
+  }
+}
 console.log('PASS');

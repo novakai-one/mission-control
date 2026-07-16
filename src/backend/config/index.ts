@@ -5,6 +5,7 @@ export interface AppConfig {
   workspacePath: string;
   geminiApiKey?: string;
   claudeCliPath?: string;
+  codexCliPath?: string;
   serverPort: number;
   activeRepo?: string;
 }
@@ -26,7 +27,7 @@ export class ConfigManager {
     const defaultSettings: AppConfig = {
       workspacePath: process.cwd(),
       serverPort: 3031,
-      claudeCliPath: 'claude',
+      claudeCliPath: 'claude', codexCliPath: 'codex',
       geminiApiKey: process.env.GEMINI_API_KEY || ''
     };
 

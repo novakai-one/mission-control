@@ -31,6 +31,7 @@ interface AgentRecord {
   ptyProcess?: ProviderTerminalProcess;
   buffer?: AgentBuffer;
   archived?: boolean;
+  cancelSessionWait?: (reason?: string) => void;
 }
 
 export interface CreateAgentOptions {
@@ -104,7 +105,12 @@ export class TerminalManager {
       throw new Error(`A Codex session is already starting for ${options.cwd}`);
     }
     if (provider === 'codex') this.pendingCodexCwds.add(options.cwd);
-    return this.launchAgent(options);
+    try {
+      return this.launchAgent(options);
+    } catch (error) {
+      if (provider === 'codex') this.pendingCodexCwds.delete(options.cwd);
+      throw error;
+    }
   }
 
   private launchAgent(options: CreateAgentOptions): AgentInfo {
@@ -114,7 +120,9 @@ export class TerminalManager {
     const provider = options.provider || 'claude';
     const info = buildAgentInfo(agentId, provider === 'claude' ? requestedSessionId : '', options);
     const buffer = new AgentBuffer();
-    this.agents.set(agentId, { info, ptyProcess: launched.process, buffer });
+    this.agents.set(agentId, {
+      info, ptyProcess: launched.process, buffer, cancelSessionWait: launched.cancelSessionWait,
+    });
     this.wire(agentId, launched.process, buffer);
     this.saveRegistry();
     this.watchSessionIdentity(launched.sessionId, info, provider, options.cwd);
@@ -147,6 +155,9 @@ export class TerminalManager {
       const record = this.agents.get(agentId);
       if (!record) return;
       record.info.status = 'exited';
+      record.cancelSessionWait?.(
+        `${record.info.provider} exited (code ${exitCode}) before its session was discovered`,
+      );
       this.saveRegistry();
       this.exitCallback?.(agentId, exitCode);
     });
