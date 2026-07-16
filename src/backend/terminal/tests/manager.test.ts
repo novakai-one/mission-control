@@ -124,6 +124,45 @@ async function testRejectsConcurrentCodexDiscovery(): Promise<void> {
   assert.equal(first.sessionId, 'discovered-codex');
 }
 
+async function testLauncherFailureClearsPendingCodex(): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), 'mc-agents-'));
+  const manager = new TerminalManager(join(directory, 'agents.json'), () => {
+    throw new Error('codex CLI not found');
+  });
+  await assert.rejects(() => manager.create({ provider: 'codex', cwd: '/tmp/project' }), /CLI not found/);
+  await assert.rejects(
+    () => manager.create({ provider: 'codex', cwd: '/tmp/project' }),
+    /CLI not found/,
+    'retry must surface the launch failure, not "already starting"',
+  );
+}
+
+function earlyExitFixture(): { launcher: ProviderLauncher; exit: (code: number) => void } {
+  let exitHandler: (event: { exitCode: number }) => void = () => {};
+  let rejectDiscovery: (error: Error) => void = () => {};
+  const sessionId = new Promise<string>((ignored, reject) => { rejectDiscovery = reject; });
+  const launcher: ProviderLauncher = () => ({
+    process: { ...fakeProcess(), onExit: (handler) => { exitHandler = handler; return { dispose() {} }; } },
+    sessionId,
+    cancelSessionWait: (reason?: string) => rejectDiscovery(new Error(reason ?? 'cancelled')),
+  });
+  return { launcher, exit: (code) => exitHandler({ exitCode: code }) };
+}
+
+async function testEarlyExitCancelsCodexDiscovery(): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), 'mc-agents-'));
+  const fixture = earlyExitFixture();
+  const manager = new TerminalManager(join(directory, 'agents.json'), fixture.launcher);
+  const errored = new Promise<{ sessionError?: string }>((resolve) => manager.onSession((info) => resolve(info)));
+  await manager.create({ provider: 'codex', cwd: '/tmp/project' });
+  fixture.exit(1);
+  const timeout = new Promise<never>((ignored, reject) => setTimeout(() => reject(new Error('sessionError never reported after early exit')), 500));
+  const info = await Promise.race([errored, timeout]);
+  assert.match(info.sessionError ?? '', /exited/, 'early exit must surface a session error naming the exit');
+  const retried = await manager.create({ provider: 'codex', cwd: '/tmp/project' });
+  assert.equal(retried.provider, 'codex', 'early exit must release the pending-codex guard so retries launch');
+}
+
 async function main(): Promise<void> {
   testLoadsExitedAndHidesArchived();
   testRenamePersists();
@@ -133,6 +172,8 @@ async function main(): Promise<void> {
   testCorruptRegistryDoesNotThrow();
   await testProviderLaunchPersistsResolvedSession();
   await testRejectsConcurrentCodexDiscovery();
+  await testLauncherFailureClearsPendingCodex();
+  await testEarlyExitCancelsCodexDiscovery();
   console.log('PASS');
 }
 

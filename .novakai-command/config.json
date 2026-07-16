@@ -3,5 +3,6 @@
   "serverPort": 3031,
   "claudeCliPath": "/Users/christopherdasca/.nvm/versions/node/v24.13.0/bin/claude",
   "geminiApiKey": "",
-  "activeRepo": "/Users/christopherdasca/Programming/Novakai-Command"
+  "activeRepo": "/Users/christopherdasca/Programming/Novakai-Command",
+  "codexCliPath": "/Users/christopherdasca/.nvm/versions/node/v24.13.0/bin/codex"
 }
