@@ -1,4 +1,4 @@
-import type { ProviderId } from '../project/schema.js';
+import type { ProviderId, SessionReference, ThreadRecord } from '../project/schema.js';
 
 /** Provider-independent event kinds rendered by Novakai. */
 export type CanonicalEventKind =
@@ -24,6 +24,19 @@ export interface SessionSnapshot {
   provider: ProviderId;
   sessionId: string;
   events: CanonicalEvent[];
+}
+
+/** Provider session that could not contribute to a thread projection. */
+export interface SessionIssue {
+  reference: SessionReference;
+  message: string;
+}
+
+/** Read model combining one thread's provider-owned sessions. */
+export interface ThreadProjection {
+  thread: ThreadRecord;
+  events: CanonicalEvent[];
+  issues: SessionIssue[];
 }
 
 /** Create a deterministic ordering across provider transcripts. */
