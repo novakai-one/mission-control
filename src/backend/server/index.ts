@@ -51,14 +51,16 @@ export class ServerController {
   private readonly server: HttpServer;
   private readonly wsServer: WebSocketServer;
   private readonly activeSockets = new Set<WebSocket>();
-  private readonly agentsHub = new AgentsHub(this.activeSockets);
-  private readonly projectsHub = new ProjectsHub();
+  private readonly agentsHub: AgentsHub;
+  private readonly projectsHub: ProjectsHub;
 
   constructor(
     private readonly port: number,
     private readonly coordinator: AgentCoordinator,
     private readonly stateManager: StateManager
   ) {
+    this.agentsHub = new AgentsHub(this.activeSockets);
+    this.projectsHub = new ProjectsHub(this.agentsHub);
     this.server = createServer(this.app);
     this.wsServer = new WebSocketServer({ server: this.server });
 

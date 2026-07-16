@@ -3,6 +3,12 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CodexSessionLocator } from '../codexDiscovery.js';
+import { providerArguments, providerEnvironment } from '../index.js';
+
+assert.equal(providerEnvironment('codex').TERM, 'xterm-256color');
+assert.deepEqual(providerArguments('codex', 'unused'), [
+  '-c', 'check_for_update_on_startup=false', '--no-alt-screen',
+]);
 
 const root = mkdtempSync(path.join(tmpdir(), 'codex-discovery-'));
 const locator = new CodexSessionLocator(root, 5, 300);

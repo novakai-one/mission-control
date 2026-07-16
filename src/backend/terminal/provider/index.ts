@@ -21,12 +21,19 @@ export type ProviderLauncher = (
   requestedSessionId: string,
 ) => ProviderLaunch;
 
-function scrubEnv(provider: ProviderId): NodeJS.ProcessEnv {
+export function providerArguments(provider: ProviderId, requestedSessionId: string): string[] {
+  return provider === 'claude'
+    ? ['--session-id', requestedSessionId]
+    : ['-c', 'check_for_update_on_startup=false', '--no-alt-screen'];
+}
+
+export function providerEnvironment(provider: ProviderId): NodeJS.ProcessEnv {
   const scrubbed = { ...process.env };
   for (const envKey of Object.keys(scrubbed)) {
     if (/^CLAUDE|^ANTHROPIC/.test(envKey)) delete scrubbed[envKey];
     if (provider === 'codex' && /^CODEX_/.test(envKey) && envKey !== 'CODEX_HOME') delete scrubbed[envKey];
   }
+  scrubbed.TERM = 'xterm-256color';
   return scrubbed;
 }
 
@@ -39,7 +46,7 @@ function spawn(provider: ProviderId, cwd: string, args: string[]): ProviderTermi
     cols: 120,
     rows: 32,
     cwd,
-    env: scrubEnv(provider),
+    env: providerEnvironment(provider),
   });
 }
 
@@ -47,7 +54,7 @@ function spawn(provider: ProviderId, cwd: string, args: string[]): ProviderTermi
 export function launchProvider(provider: ProviderId, cwd: string, requestedSessionId: string): ProviderLaunch {
   if (provider === 'claude') {
     return {
-      process: spawn('claude', cwd, ['--session-id', requestedSessionId]),
+      process: spawn('claude', cwd, providerArguments(provider, requestedSessionId)),
       sessionId: Promise.resolve(requestedSessionId),
     };
   }
@@ -55,7 +62,7 @@ export function launchProvider(provider: ProviderId, cwd: string, requestedSessi
   const known = locator.snapshot();
   const startedAt = Date.now();
   return {
-    process: spawn('codex', cwd, ['--no-alt-screen']),
+    process: spawn('codex', cwd, providerArguments(provider, requestedSessionId)),
     sessionId: locator.waitForNew(cwd, known, startedAt),
   };
 }

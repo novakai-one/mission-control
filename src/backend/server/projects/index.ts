@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express';
 import type { SessionReference } from '../../../shared/project/schema.js';
 import { ProjectStore } from '../../project/persistence/store.js';
 import { ProjectService } from '../../project/service/service.js';
+import { ProjectRuntime } from '../../project/runtime/runtime.js';
 import { ClaudeSessionSource } from '../../provider/claude/source.js';
 import { CodexSessionSource } from '../../provider/codex/source.js';
 import { ThreadProjector } from '../../thread/projection/projector.js';
@@ -41,9 +42,11 @@ function sendError(response: Response, error: unknown): void {
 export class ProjectsHub {
   private readonly projects: ProjectService;
   private readonly projector: ThreadProjector;
+  private readonly runtime: ProjectRuntime;
 
-  constructor(store = new ProjectStore()) {
+  constructor(agents: ConstructorParameters<typeof ProjectRuntime>[1], store = new ProjectStore()) {
     this.projects = new ProjectService(store);
+    this.runtime = new ProjectRuntime(this.projects, agents);
     this.projector = new ThreadProjector({
       claude: new ClaudeSessionSource(),
       codex: new CodexSessionSource(),
@@ -58,7 +61,25 @@ export class ProjectsHub {
     application.post('/api/projects/:projectId/threads', (request, response) => this.createThread(request, response));
     application.post('/api/projects/:projectId/threads/:threadId/select', (request, response) => this.selectThread(request, response));
     application.post('/api/projects/:projectId/threads/:threadId/sessions', (request, response) => this.attachSession(request, response));
+    application.post('/api/projects/:projectId/threads/:threadId/launch', (request, response) => this.launch(request, response));
     application.get('/api/projects/:projectId/threads/:threadId/events', (request, response) => this.getEvents(request, response));
+  }
+
+  private async launch(request: Request, response: Response): Promise<void> {
+    const provider = request.body?.provider;
+    if (provider !== 'claude' && provider !== 'codex') {
+      response.status(400).json({ error: 'provider must be claude or codex' });
+      return;
+    }
+    try {
+      response.status(201).json(await this.runtime.launch(
+        request.params.projectId,
+        request.params.threadId,
+        provider,
+      ));
+    } catch (error) {
+      sendError(response, error);
+    }
   }
 
   private createProject(request: Request, response: Response): void {

@@ -42,7 +42,7 @@ export class CodexSessionLocator {
   constructor(
     private readonly sessionsRoot = path.join(process.env.CODEX_HOME || path.join(homedir(), '.codex'), 'sessions'),
     private readonly pollMs = 100,
-    private readonly timeoutMs = 15_000,
+    private readonly timeoutMs = 300_000,
   ) {}
 
   snapshot(): Set<string> {

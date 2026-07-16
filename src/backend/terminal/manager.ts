@@ -15,6 +15,7 @@ export interface AgentInfo {
   title: string;
   provider: ProviderId;
   sessionId: string;
+  sessionError?: string;
   projectDir: string;
   cwd: string;
   status: 'running' | 'exited';
@@ -60,6 +61,7 @@ export class TerminalManager {
   private readonly pendingCodexCwds = new Set<string>();
   private dataCallback: ((agentId: string, data: string) => void) | null = null;
   private exitCallback: ((agentId: string, exitCode: number | null) => void) | null = null;
+  private sessionCallback: ((info: AgentInfo) => void) | null = null;
 
   constructor(
     private readonly registryPath = path.join(process.cwd(), '.novakai-command', 'agents.json'),
@@ -102,30 +104,38 @@ export class TerminalManager {
       throw new Error(`A Codex session is already starting for ${options.cwd}`);
     }
     if (provider === 'codex') this.pendingCodexCwds.add(options.cwd);
-    try {
-      return await this.launchAgent(options);
-    } finally {
-      if (provider === 'codex') this.pendingCodexCwds.delete(options.cwd);
-    }
+    return this.launchAgent(options);
   }
 
-  private async launchAgent(options: CreateAgentOptions): Promise<AgentInfo> {
+  private launchAgent(options: CreateAgentOptions): AgentInfo {
     const agentId = `agent_${randomUUID()}`;
     const requestedSessionId = randomUUID();
     const launched = this.launcher(options.provider || 'claude', options.cwd, requestedSessionId);
-    const info = buildAgentInfo(agentId, requestedSessionId, options);
+    const provider = options.provider || 'claude';
+    const info = buildAgentInfo(agentId, provider === 'claude' ? requestedSessionId : '', options);
     const buffer = new AgentBuffer();
     this.agents.set(agentId, { info, ptyProcess: launched.process, buffer });
     this.wire(agentId, launched.process, buffer);
-    try {
-      info.sessionId = await launched.sessionId;
+    this.saveRegistry();
+    this.watchSessionIdentity(launched.sessionId, info, provider, options.cwd);
+    return info;
+  }
+
+  private watchSessionIdentity(
+    sessionId: Promise<string>, info: AgentInfo, provider: ProviderId, cwd: string,
+  ): void {
+    void sessionId.then((resolved) => {
+      info.sessionId = resolved;
+      delete info.sessionError;
+      if (provider === 'codex') this.pendingCodexCwds.delete(cwd);
       this.saveRegistry();
-      return info;
-    } catch (error) {
-      launched.process.kill();
-      this.agents.delete(agentId);
-      throw error;
-    }
+      this.sessionCallback?.(info);
+    }).catch((error) => {
+      info.sessionError = error instanceof Error ? error.message : String(error);
+      if (provider === 'codex') this.pendingCodexCwds.delete(cwd);
+      this.saveRegistry();
+      this.sessionCallback?.(info);
+    });
   }
 
   private wire(agentId: string, proc: ProviderTerminalProcess, buffer: AgentBuffer): void {
@@ -197,5 +207,9 @@ export class TerminalManager {
 
   onExit(callback: (agentId: string, exitCode: number | null) => void): void {
     this.exitCallback = callback;
+  }
+
+  onSession(callback: (info: AgentInfo) => void): void {
+    this.sessionCallback = callback;
   }
 }

@@ -86,15 +86,21 @@ function fakeProcess(): ProviderTerminalProcess {
 async function testProviderLaunchPersistsResolvedSession(): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), 'mc-agents-'));
   const registryPath = join(directory, 'agents.json');
+  let finishDiscovery: (sessionId: string) => void = () => {};
+  const sessionId = new Promise<string>((resolve) => { finishDiscovery = resolve; });
   const launcher: ProviderLauncher = (provider) => ({
     process: fakeProcess(),
-    sessionId: Promise.resolve(provider === 'codex' ? 'discovered-codex' : 'preset-claude'),
+    sessionId: provider === 'codex' ? sessionId : Promise.resolve('preset-claude'),
   });
   const manager = new TerminalManager(registryPath, launcher);
+  const resolved = new Promise<void>((resolve) => manager.onSession(() => resolve()));
   const created = await manager.create({
     provider: 'codex', cwd: '/tmp/project', projectId: 'project-1', threadId: 'thread-1',
   });
   assert.equal(created.provider, 'codex');
+  assert.equal(created.sessionId, '', 'Codex PTY returns before first-prompt discovery');
+  finishDiscovery('discovered-codex');
+  await resolved;
   assert.equal(created.sessionId, 'discovered-codex');
   assert.equal(created.threadId, 'thread-1');
   const saved = JSON.parse(readFileSync(registryPath, 'utf8')) as Array<{ sessionId: string }>;
@@ -108,13 +114,14 @@ async function testRejectsConcurrentCodexDiscovery(): Promise<void> {
   const manager = new TerminalManager(join(directory, 'agents.json'), () => ({
     process: fakeProcess(), sessionId,
   }));
-  const first = manager.create({ provider: 'codex', cwd: '/tmp/project' });
+  const first = await manager.create({ provider: 'codex', cwd: '/tmp/project' });
   await assert.rejects(
     () => manager.create({ provider: 'codex', cwd: '/tmp/project' }),
     /already starting/,
   );
   finishDiscovery('discovered-codex');
-  assert.equal((await first).sessionId, 'discovered-codex');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(first.sessionId, 'discovered-codex');
 }
 
 async function main(): Promise<void> {
