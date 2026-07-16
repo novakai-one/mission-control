@@ -6,3 +6,14 @@
 .workspace-event-approval dt { color:var(--text-muted); text-transform:uppercase; }
 .workspace-event-approval dd { margin:0; }
 .workspace-event-approval>p { color:var(--text-muted); }
+
+.workspace-event-task .workspace-event-label { color:var(--text-muted); font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
+.workspace-task-list { margin:9px 0 0; padding:0; list-style:none; display:grid; gap:6px; font-size:12px; color:var(--text-secondary); }
+.workspace-task-list li { display:flex; align-items:center; gap:8px; }
+.workspace-task-list li i { width:6px; height:6px; border-radius:50%; background:var(--text-muted); flex:none; }
+.workspace-task-list li[data-status="in_progress"] { color:var(--text-primary); }
+.workspace-task-list li[data-status="in_progress"] i { background:var(--status-active); }
+.workspace-task-list li[data-status="completed"] { color:var(--text-muted); text-decoration:line-through; }
+
+.workspace-event-failed { border-style:dashed; }
+.workspace-event-failed p { color:var(--text-muted); font-style:italic; }

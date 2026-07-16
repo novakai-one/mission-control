@@ -10,6 +10,7 @@ function canonicalKind(event: TranscriptEvent): CanonicalEvent['kind'] | null {
   if (event.kind === 'user_text') return 'user';
   if (event.kind === 'assistant_text') return 'assistant';
   if (event.kind === 'tool_use' || event.kind === 'tool_result') return 'tool';
+  if (event.kind === 'task_snapshot') return 'task';
   if (event.kind === 'usage' || event.kind === 'assistant_thinking') return null;
   return 'system';
 }
@@ -19,6 +20,10 @@ function eventText(event: TranscriptEvent): string {
   if (event.kind === 'tool_use') return event.tool;
   if (event.kind === 'tool_result') return event.isError ? `Tool failed: ${event.content}` : event.content;
   if (event.kind === 'hook_event') return event.content || event.hookEvent;
+  if (event.kind === 'task_snapshot') {
+    const done = event.tasks.filter((task) => task.status === 'completed').length;
+    return `Tasks · ${done}/${event.tasks.length} complete`;
+  }
   if (event.kind === 'session_meta') return event.summary || event.permissionMode || event.mode || '';
   return '';
 }
@@ -34,6 +39,7 @@ function canonicalEvent(event: TranscriptEvent): CanonicalEvent | null {
     timestamp: event.ts,
     text: eventText(event),
     rawType: event.kind,
+    ...(event.kind === 'task_snapshot' ? { tasks: event.tasks } : {}),
   };
 }
 

@@ -6,6 +6,7 @@ export type CanonicalEventKind =
   | 'assistant'
   | 'tool'
   | 'approval'
+  | 'task'
   | 'system';
 
 /** Provider transcript event normalized for shared projections. */
@@ -18,6 +19,15 @@ export interface CanonicalEvent {
   text: string;
   rawType: string;
   approval?: ApprovalDetails;
+  tasks?: TaskItem[];
+}
+
+/** One provider-owned task in a task-list snapshot event. */
+export interface TaskItem {
+  id: string;
+  subject: string;
+  status: string;
+  activeForm?: string;
 }
 
 /** Consequences shown before a provider approval is granted. */
