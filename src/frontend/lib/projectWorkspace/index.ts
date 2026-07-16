@@ -7,6 +7,12 @@ import type {
 } from '../../../shared/project/schema.js';
 import type { ThreadProjection } from '../../../shared/provider/schema.js';
 
+interface LaunchResult {
+  project: ProjectRecord;
+  agentId: string;
+  sessionId?: string;
+}
+
 async function requestJson<T>(resource: string, options?: RequestInit): Promise<T> {
   const response = await fetch(resource, options);
   const body = await response.json();
@@ -39,6 +45,35 @@ function useProjectRecords() {
   return { projects, setProjects, selectedProjectId, setSelectedProjectId, loading, error, setError };
 }
 
+function useSelectedProjectPolling(
+  projectId: string | null,
+  replaceProject: (project: ProjectRecord) => void,
+): void {
+  useEffect(() => {
+    if (!projectId) return;
+    const load = () => requestJson<ProjectRecord>(`/api/projects/${projectId}`).then(replaceProject).catch(() => {});
+    const interval = setInterval(load, 1_000);
+    return () => clearInterval(interval);
+  }, [projectId]);
+}
+
+function startProjectionPolling(
+  resource: string,
+  onProjection: (projection: ThreadProjection) => void,
+  onError: (error: unknown) => void,
+): () => void {
+  let active = true;
+  const load = () => requestJson<ThreadProjection>(resource)
+    .then((result) => { if (active) onProjection(result); })
+    .catch((failure) => { if (active) onError(failure); });
+  void load();
+  const interval = setInterval(load, 1_000);
+  return () => {
+    active = false;
+    clearInterval(interval);
+  };
+}
+
 function useThreadProjection(project: ProjectRecord | null) {
   const thread = project?.threads.find((entry) => entry.id === project.activeThreadId)
     ?? project?.threads[0]
@@ -51,11 +86,25 @@ function useThreadProjection(project: ProjectRecord | null) {
       return;
     }
     setError(null);
-    requestJson<ThreadProjection>(`/api/projects/${project.id}/threads/${thread.id}/events`)
-      .then(setProjection)
-      .catch((failure) => setError(failure instanceof Error ? failure.message : String(failure)));
+    const resource = `/api/projects/${project.id}/threads/${thread.id}/events`;
+    return startProjectionPolling(resource, setProjection, (failure) => {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    });
   }, [project?.id, thread?.id, thread?.sessionReferences.length]);
   return { thread, projection, error };
+}
+
+function createWorkspaceOperations(
+  project: ProjectRecord | null,
+  threadId: string | undefined,
+  replaceProject: (project: ProjectRecord) => void,
+  onAgentLaunched: (agentId: string) => void,
+) {
+  return {
+    ...createWorkspaceActions(project, replaceProject),
+    attachSession: createSessionAttacher(project, threadId, replaceProject),
+    launchProvider: createProviderLauncher(project, threadId, replaceProject, onAgentLaunched),
+  };
 }
 
 function createProjectReplacer(
@@ -106,14 +155,32 @@ function createSessionAttacher(
   };
 }
 
+function createProviderLauncher(
+  project: ProjectRecord | null,
+  threadId: string | undefined,
+  replaceProject: (project: ProjectRecord) => void,
+  onAgentLaunched: (agentId: string) => void,
+) {
+  return async (provider: ProviderId) => {
+    if (!project || !threadId) throw new Error('Select a project thread first');
+    const resource = `/api/projects/${project.id}/threads/${threadId}/launch`;
+    const result = await requestJson<LaunchResult>(resource, jsonRequest('POST', { provider }));
+    replaceProject(result.project);
+    onAgentLaunched(result.agentId);
+    return result;
+  };
+}
+
 /** Stateful project workspace interface consumed by the Projects view. */
-export function useProjectWorkspace() {
+export function useProjectWorkspace(onAgentLaunched: (agentId: string) => void = () => {}) {
   const records = useProjectRecords();
   const selectedProject = useMemo(() => records.projects.find((project) => project.id === records.selectedProjectId) ?? null, [records.projects, records.selectedProjectId]);
   const threadState = useThreadProjection(selectedProject);
   const replaceProject = createProjectReplacer(records.setProjects, records.setSelectedProjectId);
-  const actions = createWorkspaceActions(selectedProject, replaceProject);
-  const attachSession = createSessionAttacher(selectedProject, threadState.thread?.id, replaceProject);
+  useSelectedProjectPolling(records.selectedProjectId, replaceProject);
+  const operations = createWorkspaceOperations(
+    selectedProject, threadState.thread?.id, replaceProject, onAgentLaunched,
+  );
   return {
     projects: records.projects,
     selectedProject,
@@ -122,7 +189,6 @@ export function useProjectWorkspace() {
     loading: records.loading,
     error: records.error ?? threadState.error,
     selectProject: records.setSelectedProjectId,
-    ...actions,
-    attachSession,
+    ...operations,
   };
 }

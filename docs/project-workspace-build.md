@@ -103,20 +103,34 @@ Project records live under `~/.novakai-command/projects/`.
 - [x] Claude launches with a predetermined session ID.
 - [x] Codex launches in inline terminal mode.
 - [x] Codex discovers its provider-owned session ID.
-- [ ] Project launch attaches sessions automatically.
-- [ ] Project composer sends prompts to live PTYs.
-- [ ] Unified timelines update while providers run.
-- [ ] Thread switching preserves live terminals.
-- [ ] Restart restores projects and provider transcripts.
-- [ ] Complete launch loop receives browser verification.
+- [x] Project launch attaches sessions automatically.
+- [x] Project composer sends prompts to live PTYs.
+- [x] Unified timelines update while providers run.
+- [x] Thread switching preserves live terminals.
+- [x] Restart restores projects and provider transcripts.
+- [x] Complete launch loop receives browser verification.
 
 ### Codex session discovery
 
-Codex CLI does not accept a predetermined session ID. Before spawning, Novakai
-snapshots `CODEX_HOME/sessions`, records launch time, then polls new rollout
-files. The first new `session_meta` matching the exact project `cwd` becomes the
-agent session. One launch request owns discovery; failures stop the PTY and
-return an actionable error instead of attaching an uncertain session.
+Codex CLI does not accept a predetermined session ID or write its rollout until
+the first prompt. Novakai snapshots `CODEX_HOME/sessions`, launches with a real
+terminal type and startup update checks disabled, then returns the interactive
+PTY immediately. The first new `session_meta` matching the exact project `cwd`
+becomes the agent session and is attached asynchronously. One launch request
+owns discovery for each working directory. Timeouts keep the PTY available and
+show the manual attachment fallback instead of guessing an identity.
+
+### Phase 2 browser evidence
+
+- Created `Phase 2 Browser Test` through visible controls.
+- Created separate Claude and Codex threads.
+- Launched both provider CLIs from their Start buttons.
+- Sent prompts through Novakai's conversation composer.
+- Observed both exact responses in unified timelines.
+- Switched threads while Codex remained running.
+- Opened the mounted Codex terminal after switching.
+- Restarted the backend and restored Claude transcript history.
+- Opened Transcript and manual attachment fallback successfully.
 
 ## Commit sequence
 

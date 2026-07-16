@@ -117,6 +117,11 @@ export function DashboardShell() {
   const [selectedSubKey, setSelectedSubKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('workspace');
   const agentsState = useAgentsState();
+
+  function openAgent(agentId: string): void {
+    agentsState.setActiveAgentId(agentId);
+    setViewMode('agents');
+  }
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -349,7 +354,11 @@ export function DashboardShell() {
           visible={viewMode === 'agents'}
         />
         {viewMode === 'workspace' ? (
-          <ProjectWorkspace />
+          <ProjectWorkspace
+            agents={agentsState.agents}
+            onAgentLaunched={agentsState.setActiveAgentId}
+            onOpenAgent={openAgent}
+          />
         ) : viewMode === 'files' ? (
           <FilesPanel
             homeDir={homeDir}
