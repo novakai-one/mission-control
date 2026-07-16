@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
+import type { TaskItem } from '../../shared/provider/schema.js';
 
 export type TranscriptEvent =
   | { kind: 'user_text'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; text: string }
@@ -9,6 +10,7 @@ export type TranscriptEvent =
   | { kind: 'tool_use'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; tool: string; toolUseId: string; input: any; isAgentSpawn: boolean; agentDescription?: string; agentPrompt?: string; agentType?: string }
   | { kind: 'tool_result'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; toolUseId: string; content: string; isError: boolean }
   | { kind: 'hook_event'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; hookName: string; hookEvent: string; content: string; toolUseID: string }
+  | { kind: 'task_snapshot'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; tasks: TaskItem[] }
   | { kind: 'system'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; text: string; isSidechain: boolean; subtype?: string }
   | { kind: 'session_meta'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; mode?: string; permissionMode?: string; summary?: string }
   | { kind: 'usage'; eventKey?: string; uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean; model: string; msgId: string; usage: TokenUsage };
@@ -33,6 +35,45 @@ function parseTokenUsage(raw: any): TokenUsage {
     cacheRead: raw.cache_read_input_tokens || 0,
     output: raw.output_tokens || 0,
   };
+}
+
+// TranscriptEvent string fields must hold strings for ANY transcript input —
+// Claude Code adds new payload shapes without notice, and a leaked object
+// crashes every downstream renderer (black-screen regression, 2026-07-16).
+function coerceText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map((block: any) => block?.text || '').join('');
+  if (value == null) return '';
+  return JSON.stringify(value);
+}
+
+function parseTaskItems(rawTasks: unknown[]): TaskItem[] {
+  return rawTasks
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      id: String(item.id ?? ''),
+      subject: String(item.subject ?? ''),
+      status: String(item.status ?? ''),
+      ...(typeof item.activeForm === 'string' && item.activeForm ? { activeForm: item.activeForm } : {}),
+    }));
+}
+
+type EventBase = { uuid: string; parentUuid: string | null; sessionId: string; ts: string; isSidechain: boolean };
+
+function attachmentEvents(attachment: any, base: EventBase): TranscriptEvent[] {
+  if (attachment.type === 'task_reminder' && Array.isArray(attachment.content)) {
+    const tasks = parseTaskItems(attachment.content);
+    // Claude Code nags with empty reminders when task tools sit unused — noise, not events.
+    return tasks.length ? [{ kind: 'task_snapshot', ...base, tasks }] : [];
+  }
+  return [{
+    kind: 'hook_event',
+    ...base,
+    hookName: attachment.hookName || '',
+    hookEvent: attachment.hookEvent || attachment.type || '',
+    content: coerceText(attachment.content),
+    toolUseID: attachment.toolUseID || '',
+  }];
 }
 
 /**
@@ -290,27 +331,15 @@ export function parseJsonlLine(obj: any, lineKey: string, lastTs: string): Trans
     return [{ kind: 'session_meta', uuid, parentUuid, sessionId, ts, summary: obj.summary }];
   }
 
-  // Attachments (hooks, file references, etc.)
+  // Attachments (hooks, task reminders, file references, etc.)
   if (type === 'attachment') {
-    const att = obj.attachment || {};
-    return [{
-      kind: 'hook_event',
-      uuid,
-      parentUuid,
-      sessionId,
-      ts,
-      isSidechain,
-      hookName: att.hookName || '',
-      hookEvent: att.hookEvent || att.type || '',
-      content: att.content || '',
-      toolUseID: att.toolUseID || '',
-    }];
+    return attachmentEvents(obj.attachment || {}, { uuid, parentUuid, sessionId, ts, isSidechain });
   }
 
   // System messages
   if (type === 'system') {
     const msg = obj.message;
-    let text = typeof msg === 'string' ? msg : (msg?.content ?? '');
+    let text = typeof msg === 'string' ? msg : coerceText(msg?.content);
     if (!text && typeof obj.content === 'string') text = obj.content;            // away_summary
     if (!text && obj.subtype === 'turn_duration' && typeof obj.durationMs === 'number') {
       text = `turn: ${(obj.durationMs / 1000).toFixed(1)}s · ${obj.messageCount ?? 0} messages`;

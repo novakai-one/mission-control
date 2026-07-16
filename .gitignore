@@ -5,3 +5,5 @@ dist/
 release/
 desktop/package-lock.json
 .novakai-command/agents.json
+.mission-control/
+.novakai/

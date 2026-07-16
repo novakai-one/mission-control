@@ -114,6 +114,30 @@ Ruleset, Debug, or Settings.
 
 **Why:** Runtime integration must not regress established workflows.
 
+## D13 — Transcript parsing enforces string contracts; timeline rows fail alone
+
+**Decision:** The transcript parser owns the guarantee that every
+`TranscriptEvent` string field holds a string, for any provider input.
+Structured payloads become first-class typed events — Claude `task_reminder`
+attachments parse into `task_snapshot` events, surfaced as canonical `task`
+events carrying `TaskItem[]` (shared schema, D5) with a dedicated timeline
+renderer. Unknown attachment payloads degrade to JSON text; empty task
+reminders are dropped as noise. In the workspace timeline, every event renders
+inside an error boundary, and unknown canonical kinds fall back to the default
+renderer.
+
+**Why:** Claude Code began writing `task_reminder` attachments whose content is
+an array of task objects. The object leaked through `att.content || ''` into a
+React child and unmounted the entire tree — the desktop app showed only a black
+window (2026-07-16). Provider formats evolve without notice (D4), so the
+guarantee must live at the adapter boundary, and one malformed event must cost
+one timeline row, never the app.
+
+**Consequence:** New provider payload shapes appear as JSON text or a fallback
+row until deliberately modeled — visible degradation, never a crash. Renderers
+never add their own string-coercion guards; the boundary enforces the contract
+and the error boundary catches violations visibly.
+
 ## Change discipline
 
 - Prefer vertical slices through deep module interfaces.

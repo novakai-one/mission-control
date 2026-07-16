@@ -12,6 +12,7 @@ export type ProviderTerminalProcess = Pick<IPty, 'onData' | 'onExit' | 'write' |
 export interface ProviderLaunch {
   process: ProviderTerminalProcess;
   sessionId: Promise<string>;
+  cancelSessionWait?(reason?: string): void;
 }
 
 /** Injectable provider launcher used by TerminalManager and its tests. */
@@ -39,8 +40,12 @@ export function providerEnvironment(provider: ProviderId): NodeJS.ProcessEnv {
 
 function spawn(provider: ProviderId, cwd: string, args: string[]): ProviderTerminalProcess {
   const configuration = ConfigManager.load();
-  const configured = provider === 'claude' ? configuration.claudeCliPath : undefined;
-  const { resolved } = resolveCli(configured || provider);
+  const configured = provider === 'claude' ? configuration.claudeCliPath : configuration.codexCliPath;
+  const { resolved, exists } = resolveCli(configured || provider);
+  if (!exists) {
+    throw new Error(`${provider} CLI not found (looked for "${configured || provider}"). `
+      + `Set ${provider}CliPath in .novakai-command/config.json or start the backend from a shell with ${provider} on PATH.`);
+  }
   return spawnPty(resolved, args, {
     name: 'xterm-256color',
     cols: 120,
@@ -61,8 +66,10 @@ export function launchProvider(provider: ProviderId, cwd: string, requestedSessi
   const locator = new CodexSessionLocator();
   const known = locator.snapshot();
   const startedAt = Date.now();
+  const process = spawn('codex', cwd, providerArguments(provider, requestedSessionId));
   return {
-    process: spawn('codex', cwd, providerArguments(provider, requestedSessionId)),
+    process,
     sessionId: locator.waitForNew(cwd, known, startedAt),
+    cancelSessionWait: (reason) => locator.cancel(reason),
   };
 }

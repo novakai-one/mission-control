@@ -161,6 +161,79 @@ function testSummaryLine() {
   assert.equal((summaryEvents[0] as any).summary, 'My summary');
 }
 
+// task_reminder attachments carry structured task arrays. The parser emits a
+// typed task_snapshot event so tasks reach renderers as data, never as objects
+// leaking into string fields (black-screen regression, 2026-07-16).
+function testTaskReminderAttachment() {
+  const reminderLine = {
+    type: 'attachment',
+    uuid: 'att-tasks',
+    sessionId: 's1',
+    timestamp: '2026-07-10T00:00:00.000Z',
+    attachment: {
+      type: 'task_reminder',
+      itemCount: 2,
+      content: [
+        { id: '1', subject: 'Start server', description: 'Run it', activeForm: 'Starting server', status: 'completed', blocks: [], blockedBy: [] },
+        { id: '2', subject: 'Verify UI', description: '', activeForm: 'Verifying UI', status: 'in_progress', blocks: [], blockedBy: ['1'] },
+      ],
+    },
+  };
+  const events = parseJsonlLine(reminderLine, 'k3', '') ?? [];
+  assert.equal(events.length, 1);
+  assert.equal(events[0].kind, 'task_snapshot');
+  const tasks = (events[0] as any).tasks;
+  assert.equal(tasks.length, 2);
+  assert.equal(tasks[1].subject, 'Verify UI');
+  assert.equal(tasks[1].status, 'in_progress');
+  assert.equal(tasks[1].activeForm, 'Verifying UI');
+}
+
+// Claude Code nags with empty task_reminder attachments (itemCount 0) when
+// task tools sit unused — they carry no information and must not become events.
+function testEmptyTaskReminderDropped() {
+  const emptyReminderLine = {
+    type: 'attachment',
+    uuid: 'att-empty-tasks',
+    sessionId: 's1',
+    timestamp: '2026-07-10T00:00:00.000Z',
+    attachment: { type: 'task_reminder', itemCount: 0, content: [] },
+  };
+  const events = parseJsonlLine(emptyReminderLine, 'k6', '') ?? [];
+  assert.equal(events.length, 0);
+}
+
+// Attachment payloads the parser does not model degrade to JSON text —
+// TranscriptEvent.content must honor its string contract for any input.
+function testAttachmentObjectContentCoerced() {
+  const futureLine = {
+    type: 'attachment',
+    uuid: 'att-future',
+    sessionId: 's1',
+    timestamp: '2026-07-10T00:00:00.000Z',
+    attachment: { type: 'future_attachment_kind', content: { some: 'object' } },
+  };
+  const events = parseJsonlLine(futureLine, 'k4', '') ?? [];
+  assert.equal(events[0].kind, 'hook_event');
+  assert.equal(typeof (events[0] as any).content, 'string');
+  assert.ok((events[0] as any).content.includes('some'), 'unknown payloads keep their data as JSON text');
+}
+
+// system lines whose message.content is a block array yield joined block text,
+// never an array leaking into TranscriptEvent.text.
+function testSystemObjectContentCoerced() {
+  const blockLine = {
+    type: 'system',
+    uuid: 'sys-blocks',
+    sessionId: 's1',
+    timestamp: '2026-07-10T00:00:00.000Z',
+    message: { content: [{ type: 'text', text: 'block text' }] },
+  };
+  const events = parseJsonlLine(blockLine, 'k5', '') ?? [];
+  assert.equal(typeof (events[0] as any).text, 'string');
+  assert.equal((events[0] as any).text, 'block text');
+}
+
 async function main() {
   await testTailPartialLine();
   unlinkSync(tmpFile);
@@ -171,6 +244,10 @@ async function main() {
   testSystemTurnDuration();
   testSystemAwaySummary();
   testSummaryLine();
+  testTaskReminderAttachment();
+  testEmptyTaskReminderDropped();
+  testAttachmentObjectContentCoerced();
+  testSystemObjectContentCoerced();
   console.log('PASS');
 }
 
