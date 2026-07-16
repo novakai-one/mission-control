@@ -6,15 +6,16 @@ import { ConfigManager } from './config/index.js';
 
 export async function bootstrapBackend(): Promise<ServerController> {
   const configuration = ConfigManager.load();
+  const serverPort = Number(process.env.NOVAKAI_SERVER_PORT) || configuration.serverPort;
   
   const stateManager = new StateManager(configuration.workspacePath);
   const processExecutor = new AgentExecutor();
   const coordinator = new AgentCoordinator(processExecutor, stateManager);
 
-  const server = new ServerController(configuration.serverPort, coordinator, stateManager);
+  const server = new ServerController(serverPort, coordinator, stateManager);
   
   await server.start();
-  console.log(`[Novakai Command Backend] Server listening on port ${configuration.serverPort}`);
+  console.log(`[Novakai Command Backend] Server listening on port ${serverPort}`);
   return server;
 }
 

@@ -21,12 +21,22 @@ writeFileSync(path.join(dated, `rollout-2026-07-16-${sessionId}.jsonl`), [
     timestamp: '2026-07-16T00:00:02.000Z', type: 'event_msg',
     payload: { type: 'agent_message', message: 'Starting now', phase: 'commentary' },
   }),
+  JSON.stringify({
+    timestamp: '2026-07-16T00:00:03.000Z', type: 'event_msg',
+    payload: {
+      type: 'exec_approval_request',
+      command: 'npm install @openai/codex-sdk',
+      reason: 'Installing the SDK requires network access.',
+      writes: ['package.json', 'package-lock.json'],
+    },
+  }),
 ].join('\n'));
 
 const source = new CodexSessionSource(root, path.join(root, 'archived'));
 const snapshot = source.read({ provider: 'codex', sessionId });
-assert.deepEqual(snapshot.events.map((event) => event.kind), ['user', 'assistant']);
+assert.deepEqual(snapshot.events.map((event) => event.kind), ['user', 'assistant', 'approval']);
 assert.equal(snapshot.events[1]?.text, 'Starting now');
+assert.deepEqual(snapshot.events[2]?.approval?.writes, ['package.json', 'package-lock.json']);
 assert.throws(
   () => source.read({ provider: 'codex', sessionId: 'missing' }),
   /codex session not found/,

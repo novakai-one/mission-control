@@ -1,0 +1,8 @@
+.workspace-event-approval { max-width:760px; padding:28px 30px; border-color:color-mix(in srgb,var(--status-active) 34%,transparent); background:#11100e; }
+.workspace-event-approval .workspace-event-label { color:var(--status-active); font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
+.workspace-event-approval h2 { margin:9px 0 15px; font-size:20px; font-weight:600; }
+.workspace-event-approval code { display:block; padding:11px 0; border-top:1px solid var(--border-color); border-bottom:1px solid var(--border-color); color:var(--text-primary); font-size:11px; overflow-wrap:anywhere; }
+.workspace-event-approval dl { display:grid; grid-template-columns:70px 1fr; gap:9px; margin:16px 0; color:var(--text-secondary); font-size:11px; }
+.workspace-event-approval dt { color:var(--text-muted); text-transform:uppercase; }
+.workspace-event-approval dd { margin:0; }
+.workspace-event-approval>p { color:var(--text-muted); }

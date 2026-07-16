@@ -2,7 +2,7 @@ import React from 'react';
 import { Settings, PanelRight } from 'lucide-react';
 import './index.css';
 
-type ViewMode = 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug';
+export type ViewMode = 'workspace' | 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug';
 
 interface AppHeaderProps {
   viewMode: ViewMode;
@@ -13,6 +13,7 @@ interface AppHeaderProps {
 }
 
 const TABS: { mode: ViewMode; label: string }[] = [
+  { mode: 'workspace', label: 'Projects' },
   { mode: 'files', label: 'Files' },
   { mode: 'agents', label: 'Agents' },
   { mode: 'transcript', label: 'Transcript' },

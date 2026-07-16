@@ -39,52 +39,63 @@ Project records live under `~/.novakai-command/projects/`.
 
 ## Behaviour checklist
 
-- [ ] Projects persist after application restart.
-- [ ] Threads persist inside their project.
-- [ ] Claude sessions attach manually.
-- [ ] Codex sessions attach manually.
-- [ ] Missing session files show actionable errors.
-- [ ] Provider events normalize consistently.
-- [ ] Provider attribution remains visible.
-- [ ] Thread switching preserves active PTYs.
-- [ ] Browser reload restores subscriptions.
-- [ ] Background output replays correctly.
-- [ ] Transcript tab remains visible.
-- [ ] Existing Transcript behaviour still works.
-- [ ] Existing Files behaviour still works.
-- [ ] Existing Agents behaviour still works.
-- [ ] Provider transcripts remain unchanged.
+- [x] Projects persist after application restart.
+- [x] Threads persist inside their project.
+- [x] Claude sessions attach manually.
+- [x] Codex sessions attach manually.
+- [x] Missing session files show actionable errors.
+- [x] Provider events normalize consistently.
+- [x] Provider attribution remains visible.
+- [x] Thread switching preserves active PTYs.
+- [x] Browser reload restores subscriptions.
+- [x] Background output replays correctly.
+- [x] Transcript tab remains visible.
+- [x] Existing Transcript behaviour still works.
+- [x] Existing Files behaviour still works.
+- [x] Existing Agents behaviour still works.
+- [x] Provider transcripts remain unchanged.
 
 ## Visual checklist
 
-- [ ] Restrained dark-and-amber palette.
-- [ ] No neon provider colours.
-- [ ] Selected project remains obvious.
-- [ ] Selected thread remains obvious.
-- [ ] Active provider remains obvious.
-- [ ] Execution status remains calm.
-- [ ] Approval consequences remain explicit.
-- [ ] Empty states explain their next action.
-- [ ] Error states avoid technical noise.
-- [ ] Transcript tab remains prominent.
-- [ ] Desktop layout has no clipping.
-- [ ] Narrow layouts remain usable.
-- [ ] Every changed UI receives browser inspection.
+- [x] Restrained dark-and-amber palette.
+- [x] No neon provider colours.
+- [x] Selected project remains obvious.
+- [x] Selected thread remains obvious.
+- [x] Active provider remains obvious.
+- [x] Execution status remains calm.
+- [x] Approval consequences remain explicit.
+- [x] Empty states explain their next action.
+- [x] Error states avoid technical noise.
+- [x] Transcript tab remains prominent.
+- [x] Desktop layout has no clipping.
+- [x] Narrow layouts remain usable.
+- [x] Every changed UI receives browser inspection.
 
 ## Quality checklist
 
-- [ ] New modules have cohesive responsibilities.
-- [ ] New interfaces stay narrow.
-- [ ] No new import cycles.
-- [ ] No new giant files.
-- [ ] No swallowed errors.
-- [ ] No unused exports.
-- [ ] Exported declarations are documented.
-- [ ] TypeScript passes.
-- [ ] Tests pass.
-- [ ] Standards lint passes.
-- [ ] Production build passes.
-- [ ] Novakai Analytics shows no regression.
+- [x] New modules have cohesive responsibilities.
+- [x] New interfaces stay narrow.
+- [x] No new import cycles.
+- [x] No new giant files.
+- [x] No swallowed errors.
+- [x] No unused exports.
+- [x] Exported declarations are documented.
+- [x] TypeScript passes.
+- [x] Tests pass.
+- [x] Standards lint passes.
+- [x] Production build passes.
+- [x] Novakai Analytics shows no regression.
+
+## Verification evidence
+
+- Full suite: 20 tests passing.
+- Standards score: 201, matching baseline.
+- Production build: Vite build passing.
+- Browser: desktop layout, scrolling, provider switching verified.
+- Browser: Projects/Transcript switching preserves both views.
+- Browser: zero console errors after reload and switching.
+- Browser: approval renderer and 900px layout verified.
+- Novakai Analytics: 53/100, improved from 50/100.
 
 ## Commit sequence
 
@@ -98,4 +109,3 @@ Project records live under `~/.novakai-command/projects/`.
 8. Add provider and thread switching.
 9. Verify runtime persistence and transcript regression.
 10. Complete browser and analytics verification.
-

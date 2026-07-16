@@ -21,17 +21,32 @@ function eventKind(payloadType: unknown): CanonicalEvent['kind'] | null {
   if (payloadType === 'agent_message') return 'assistant';
   if (payloadType === 'custom_tool_call' || payloadType === 'custom_tool_call_output') return 'tool';
   if (payloadType === 'function_call' || payloadType === 'function_call_output') return 'tool';
+  if (payloadType === 'exec_approval_request' || payloadType === 'apply_patch_approval_request') return 'approval';
   if (payloadType === 'task_started' || payloadType === 'task_complete' || payloadType === 'turn_aborted') return 'system';
   return null;
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 function eventText(payload: Record<string, unknown>): string {
   if (typeof payload.message === 'string') return compactText(payload.message);
   if (typeof payload.name === 'string') return payload.name;
+  if (typeof payload.reason === 'string') return compactText(payload.reason);
+  if (typeof payload.command === 'string') return compactText(payload.command);
   if (payload.type === 'task_started') return 'Task started';
   if (payload.type === 'task_complete') return 'Task completed';
   if (payload.type === 'turn_aborted') return 'Turn interrupted';
   return '';
+}
+
+function approvalDetails(payload: Record<string, unknown>) {
+  return {
+    ...(typeof payload.command === 'string' ? { command: compactText(payload.command) } : {}),
+    ...(typeof payload.reason === 'string' ? { reason: compactText(payload.reason) } : {}),
+    writes: strings(payload.writes),
+  };
 }
 
 function canonicalEvent(line: CodexLine, sessionId: string, lineIndex: number): CanonicalEvent | null {
@@ -40,6 +55,7 @@ function canonicalEvent(line: CodexLine, sessionId: string, lineIndex: number): 
   const kind = eventKind(payload.type);
   if (!kind) return null;
   const rawId = payload.id || payload.call_id || `${lineIndex}`;
+  const approval = kind === 'approval' ? approvalDetails(payload) : undefined;
   return {
     id: `codex:${sessionId}:${String(rawId)}`,
     provider: 'codex',
@@ -48,6 +64,7 @@ function canonicalEvent(line: CodexLine, sessionId: string, lineIndex: number): 
     timestamp: line.timestamp || '',
     text: eventText(payload),
     rawType: String(payload.type),
+    ...(approval ? { approval } : {}),
   };
 }
 

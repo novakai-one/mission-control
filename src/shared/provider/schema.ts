@@ -17,6 +17,14 @@ export interface CanonicalEvent {
   timestamp: string;
   text: string;
   rawType: string;
+  approval?: ApprovalDetails;
+}
+
+/** Consequences shown before a provider approval is granted. */
+export interface ApprovalDetails {
+  command?: string;
+  reason?: string;
+  writes: string[];
 }
 
 /** Successful provider transcript load. */
