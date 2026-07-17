@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StudioRail, StudioWorkHead, type ViewMode } from './studio/index.js';
 import { StudioChatPanel } from './studio/chat/index.js';
+import { StudioResizeSeams } from './studio/resize.js';
 import { AgentBoard } from './board/index.js';
 import { buildToolPairs, selKey, visibilityPredicate } from './board/timelineModel.js';
 import { SelectedInspector } from './details/index.js';
@@ -516,6 +517,7 @@ export function DashboardShell() {
           onAttach={workspace.attachSession}
           onOpenAgent={openAgent}
         />
+        <StudioResizeSeams />
       </div>
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

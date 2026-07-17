@@ -68,9 +68,47 @@
 .studio-app {
   height: 100%;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 34%;
+  grid-template-columns: var(--st-rail-w, 236px) minmax(0, 1fr) var(--st-ai-w, 34%);
   gap: 14px;
   position: relative;
+}
+
+/* Drag seams live IN the gutters; invisible until used (the handle appears
+   only while it matters), a quiet hairline on hover/drag. Widths persist. */
+.studio-seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+}
+
+.studio-seam::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: transparent;
+  transition: background var(--st-dur) var(--st-ease);
+}
+
+.studio-seam:hover::after,
+.studio-seam[data-dragging]::after {
+  background: var(--st-line-3);
+}
+
+.studio-seam-rail {
+  left: var(--st-rail-w, 236px);
+}
+
+.studio-seam-ai {
+  right: var(--st-ai-w, 34%);
 }
 
 /* ------------------------------------------------------------------- rail */
@@ -481,7 +519,8 @@
     grid-template-columns: 220px minmax(0, 1fr);
   }
 
-  .studio-ai {
+  .studio-ai,
+  .studio-seam {
     display: none;
   }
 }
