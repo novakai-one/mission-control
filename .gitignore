@@ -13,3 +13,4 @@ desktop/package-lock.json
 .novakai-command/messages.jsonl
 .novakai-command/rooms.jsonl
 .novakai-command/analytics/
+.claude/settings.local.json
