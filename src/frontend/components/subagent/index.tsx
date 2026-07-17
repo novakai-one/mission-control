@@ -4,7 +4,7 @@ import { TranscriptEvent } from '../index.js';
 import { EventRow } from '../board/index.js';
 import { EventDetailBody, EventNav, formatClock, truncate } from '../details/index.js';
 import { getChipLabel, selKey } from '../board/timelineModel.js';
-import { upsertEvent } from '../../lib/upsertEvents.js';
+import { mergeEvents, upsertEvent } from '../../lib/upsertEvents.js';
 import { costOf, formatCost, formatTokens, tokensOf, type CostSettings, type SessionUsage } from '../../lib/cost/index.js';
 import './index.css';
 
@@ -104,9 +104,9 @@ export function useSubagentState(projectDir: string | null, sessionId: string | 
         if (ignore) return;
         // Live frames may have landed while the fetch was in flight; upsert
         // them over the file snapshot instead of discarding them.
-        setSubEvents(prev => prev.reduce(
-          (merged, liveEvent) => upsertEvent(merged, liveEvent),
+        setSubEvents(prev => mergeEvents(
           data.filter(event => event.kind !== 'usage'),
+          prev,
         ));
       })
       .catch(() => { if (!ignore) setSubEvents([]); });

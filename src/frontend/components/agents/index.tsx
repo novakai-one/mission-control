@@ -3,6 +3,7 @@ import * as agentSocket from '../../lib/agentSocket/index.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import { AgentTerminal } from './terminal.js';
 import { CalmView } from './calm/index.js';
+import { reconcileAgents } from './reconcile/index.js';
 import './index.css';
 
 const COLLAPSE_STORAGE_KEY = 'mc-sidepanel-collapsed';
@@ -33,12 +34,12 @@ export function useAgentsState(): AgentsState {
   useEffect(() => {
     fetch('/api/agents')
       .then(res => res.json())
-      .then(data => setAgents(data.agents ?? []))
+      .then(data => setAgents(previous => reconcileAgents(previous, data.agents ?? [])))
       .catch(() => {})
       .finally(() => setAgentsLoaded(true));
     agentSocket.connect();
     return agentSocket.onAgentsChanged((nextAgents) => {
-      setAgents(nextAgents);
+      setAgents(previous => reconcileAgents(previous, nextAgents));
       setAgentsLoaded(true);
     });
   }, []);
@@ -123,7 +124,7 @@ interface AgentPaneProps {
   onModeChange: (agentId: string, mode: RawCalmMode) => void;
 }
 
-function AgentPane({ agent, active, mode, onModeChange }: AgentPaneProps) {
+const AgentPane = React.memo(function AgentPane({ agent, active, mode, onModeChange }: AgentPaneProps) {
   const paneClass = active ? 'agent-pane agent-pane-visible' : 'agent-pane';
   const rawActive = mode === 'raw';
   const rawButtonClass = rawActive ? 'agent-toggle-btn agent-toggle-btn-active' : 'agent-toggle-btn';
@@ -148,7 +149,7 @@ function AgentPane({ agent, active, mode, onModeChange }: AgentPaneProps) {
       </div>
     </div>
   );
-}
+});
 
 interface AgentsEmptyProps {
   onCreate: () => void;
