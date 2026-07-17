@@ -17,6 +17,7 @@ import { getRepoInfo } from '../versionControl/index.js';
 import { AgentsHub } from './agents.js';
 import { ProjectsHub } from './projects/index.js';
 import { CanvasHub } from './canvas/index.js';
+import { AnalyticsHub } from './analytics/index.js';
 import { MessagingHub } from '../messaging/index.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
@@ -57,6 +58,7 @@ export class ServerController {
   private readonly agentsHub: AgentsHub;
   private readonly projectsHub: ProjectsHub;
   private readonly canvasHub: CanvasHub;
+  private readonly analyticsHub: AnalyticsHub;
   private readonly messagingHub: MessagingHub;
 
   constructor(
@@ -68,6 +70,7 @@ export class ServerController {
     this.agentsHub = new AgentsHub(this.activeSockets, terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     this.canvasHub = new CanvasHub((event, payload) => this.broadcastEvent(event, payload));
+    this.analyticsHub = new AnalyticsHub((event, payload) => this.broadcastEvent(event, payload));
     this.messagingHub = this.buildMessagingHub();
     this.server = createServer(this.app);
     this.wsServer = new WebSocketServer({ server: this.server });
@@ -125,6 +128,7 @@ export class ServerController {
     this.agentsHub.registerRoutes(this.app);
     this.projectsHub.registerRoutes(this.app);
     this.canvasHub.registerRoutes(this.app);
+    this.analyticsHub.registerRoutes(this.app);
     this.messagingHub.registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {

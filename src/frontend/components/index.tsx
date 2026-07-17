@@ -13,6 +13,7 @@ import { SubTimeline, SubagentInspector, useSubagentState } from './subagent/ind
 import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
 import { CanvasView, CANVAS_CHANGED_EVENT } from './canvas/index.js';
+import { AnalyticsView, ANALYTICS_CHANGED_EVENT } from './analytics/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { WorkspaceTimeline } from './workspace/timeline/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
@@ -79,7 +80,7 @@ const COL_MIN = 280;
 const COL_MAX = 900;
 const VIEW_MODE_STORAGE_KEY = 'novakai-view-mode';
 const SESSION_STORAGE_KEY = 'novakai-selected-session';
-const VIEW_MODES = new Set<ViewMode>(['workspace', 'files', 'agents', 'transcript', 'ruleset', 'debug']);
+const VIEW_MODES = new Set<ViewMode>(['workspace', 'files', 'analytics', 'agents', 'transcript', 'ruleset', 'debug']);
 
 function restoredViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
@@ -298,6 +299,9 @@ export function DashboardShell() {
         // External canvas write (the ./canvas CLI, an editor) — the always-
         // mounted CanvasView listens for this and reloads its document.
         window.dispatchEvent(new CustomEvent(CANVAS_CHANGED_EVENT, { detail: message.payload }));
+      } else if (message.event === 'analytics-event') {
+        // Analyzer run lifecycle — the Analytics lens refreshes its result.
+        window.dispatchEvent(new CustomEvent(ANALYTICS_CHANGED_EVENT, { detail: message.payload }));
       } else if (message.event === 'build-session' && message.payload?.sessionId && message.payload?.projectDir) {
         const { sessionId, projectDir } = message.payload;
         setSessions(prev => prev.some(session => session.sessionId === sessionId)
@@ -406,6 +410,9 @@ export function DashboardShell() {
         />
         {/* Always mounted so the map's pan/zoom and selection survive tab switches. */}
         <CanvasView visible={viewMode === 'canvas'} />
+        {viewMode === 'analytics' && (
+          <AnalyticsView repoPath={workspace.selectedProject?.rootPath ?? activeRepo} />
+        )}
         {viewMode === 'workspace' ? (
           <WorkspaceTimeline
             project={workspace.selectedProject}
