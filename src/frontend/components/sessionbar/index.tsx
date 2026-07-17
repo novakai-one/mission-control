@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, History } from 'lucide-react';
-import { SessionMeta } from '../index.js';
+import { SessionMeta, TranscriptEvent } from '../index.js';
+import { TranscriptToolsPopover } from '../viewpanel/index.js';
+import type { FilterKeyUpdate, TimelineVariant } from '../board/timelineModel.js';
 import { formatCost, formatTokens, sessionCost, sessionTokens, type CostSettings, type SessionUsage } from '../../lib/cost/index.js';
 import { currentTimeZone } from '../../lib/timezone/index.js';
 import './index.css';
@@ -13,6 +15,13 @@ interface SessionBarProps {
   subagentCount: number;
   sessionUsage: SessionUsage | null;
   costSettings: CostSettings;
+  /** Full event array — the tools popover enumerates categories from it. */
+  events: TranscriptEvent[];
+  hiddenEvents: Set<string>;
+  onToggleEvents: (update: FilterKeyUpdate) => void;
+  variant: TimelineVariant;
+  onVariantChange: (variant: TimelineVariant) => void;
+  onCostSettingsChange: (next: CostSettings) => void;
 }
 
 function formatWhen(modified: number): string {
@@ -20,7 +29,7 @@ function formatWhen(modified: number): string {
 }
 
 /** Transcript header: session dropdown + title on the left, aggregate stats on the right. */
-export function SessionBar({ sessions, selectedSession, onSelectSession, eventCount, subagentCount, sessionUsage, costSettings }: SessionBarProps) {
+export function SessionBar({ sessions, selectedSession, onSelectSession, eventCount, subagentCount, sessionUsage, costSettings, events, hiddenEvents, onToggleEvents, variant, onVariantChange, onCostSettingsChange }: SessionBarProps) {
   const [open, setOpen] = useState(false);
   const selected = sessions.find((session) => session.sessionId === selectedSession) ?? null;
 
@@ -51,6 +60,16 @@ export function SessionBar({ sessions, selectedSession, onSelectSession, eventCo
           <> · {formatTokens(sessionTokens(sessionUsage))} tok · ≈ {formatCost(sessionCost(sessionUsage, costSettings), costSettings.currency)}</>
         )}
       </span>
+      <TranscriptToolsPopover
+        events={events}
+        hiddenEvents={hiddenEvents}
+        onToggle={onToggleEvents}
+        variant={variant}
+        onVariantChange={onVariantChange}
+        sessionUsage={sessionUsage}
+        costSettings={costSettings}
+        onCostSettingsChange={onCostSettingsChange}
+      />
       {open && (
         <>
           {/* Invisible backdrop: any outside click closes the menu. */}

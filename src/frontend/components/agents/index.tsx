@@ -4,6 +4,8 @@ import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import { AgentTerminal } from './terminal.js';
 import { CalmView } from './calm/index.js';
 import { reconcileAgents } from './reconcile/index.js';
+import { AgentCostPopover } from '../viewpanel/index.js';
+import type { CostSettings } from '../../lib/cost/index.js';
 import './index.css';
 
 const COLLAPSE_STORAGE_KEY = 'mc-sidepanel-collapsed';
@@ -115,6 +117,8 @@ export interface AgentsViewProps {
   onCreate: () => void;
   /** Stays mounted across tab switches (terminals survive); hidden via CSS when false. */
   visible: boolean;
+  costSettings: CostSettings;
+  onCostSettingsChange: (next: CostSettings) => void;
 }
 
 interface AgentPaneProps {
@@ -122,9 +126,11 @@ interface AgentPaneProps {
   active: boolean;
   mode: RawCalmMode;
   onModeChange: (agentId: string, mode: RawCalmMode) => void;
+  costSettings: CostSettings;
+  onCostSettingsChange: (next: CostSettings) => void;
 }
 
-const AgentPane = React.memo(function AgentPane({ agent, active, mode, onModeChange }: AgentPaneProps) {
+const AgentPane = React.memo(function AgentPane({ agent, active, mode, onModeChange, costSettings, onCostSettingsChange }: AgentPaneProps) {
   const paneClass = active ? 'agent-pane agent-pane-visible' : 'agent-pane';
   const rawActive = mode === 'raw';
   const rawButtonClass = rawActive ? 'agent-toggle-btn agent-toggle-btn-active' : 'agent-toggle-btn';
@@ -142,6 +148,9 @@ const AgentPane = React.memo(function AgentPane({ agent, active, mode, onModeCha
             Calm
           </button>
         </div>
+        {/* Cost popover mounts only for the visible active pane, so exactly one
+            usage watcher runs at a time (refcounted watch/unwatch). */}
+        {active && <AgentCostPopover agent={agent} settings={costSettings} onSettingsChange={onCostSettingsChange} />}
       </div>
       <div className="agent-pane-body">
         <AgentTerminal agent={agent} visible={active && rawActive} />
@@ -166,7 +175,7 @@ function AgentsEmpty({ onCreate }: AgentsEmptyProps) {
   );
 }
 
-export function AgentsView({ agents, activeAgentId, onCreate, visible }: AgentsViewProps) {
+export function AgentsView({ agents, activeAgentId, onCreate, visible, costSettings, onCostSettingsChange }: AgentsViewProps) {
   const [modes, setModes] = useState<Map<string, RawCalmMode>>(new Map());
   // Default mode is seeded once per agentId from the status it had when first
   // seen (exited → calm, running → raw), then frozen — an agent killed while
@@ -199,6 +208,8 @@ export function AgentsView({ agents, activeAgentId, onCreate, visible }: AgentsV
             active={visible && agent.agentId === activeAgentId}
             mode={modeFor(agent)}
             onModeChange={setModeFor}
+            costSettings={costSettings}
+            onCostSettingsChange={onCostSettingsChange}
           />
         ))
       )}

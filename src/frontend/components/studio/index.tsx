@@ -2,7 +2,7 @@
 // workspace head (view tabs + live session chips). Ported from the approved
 // prototype in docs/messaging-studio.html; brand tokens live in index.css.
 import React, { useState } from 'react';
-import { Settings, PanelRight } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import type { ProjectRecord, ThreadRecord } from '../../../shared/project/schema.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import { useHighlightedObject } from '../../lib/highlight/index.js';
@@ -157,8 +157,6 @@ interface StudioWorkHeadProps {
   /** Live agents tied to the selected thread — rendered as session chips. */
   sessionAgents: AgentInfo[];
   onOpenSettings(): void;
-  viewPanelOpen: boolean;
-  onToggleViewPanel(): void;
 }
 
 function SessionChip({ agent }: { agent: AgentInfo }) {
@@ -193,15 +191,6 @@ export function StudioWorkHead(props: StudioWorkHeadProps) {
       ))}
       <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
         <Settings size={14} />
-      </button>
-      <button
-        type="button"
-        className={props.viewPanelOpen ? 'studio-head-glyph studio-head-glyph-on' : 'studio-head-glyph'}
-        title="View panel"
-        aria-label="View panel"
-        onClick={props.onToggleViewPanel}
-      >
-        <PanelRight size={14} />
       </button>
     </div>
   );

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, X, Key, Terminal, FolderOpen, Save, Check } from 'lucide-react';
+import { Settings, X, Key, Terminal, FolderOpen, Save, Check, Palette, Clock } from 'lucide-react';
+import { AppearanceSection } from '../viewpanel/index.js';
+import { TimezonePicker } from '../viewpanel/timezone/index.js';
 import './index.css';
 
 interface AppConfig {
@@ -157,6 +159,24 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               placeholder="claude"
               className="u-input set-input"
             />
+          </SettingField>
+
+          {/* Appearance — theme + font, formerly in the right drawer. */}
+          <SettingField
+            icon={<Palette size={14} color="var(--text-secondary)" />}
+            label="Appearance"
+            description="Theme and font for the studio"
+          >
+            <AppearanceSection />
+          </SettingField>
+
+          {/* User settings — timezone, formerly in the right drawer. */}
+          <SettingField
+            icon={<Clock size={14} color="var(--text-secondary)" />}
+            label="User Settings"
+            description="Timezone applied to every timestamp"
+          >
+            <TimezonePicker />
           </SettingField>
 
           {/* Server info */}

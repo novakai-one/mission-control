@@ -15,7 +15,7 @@ import { AgentsView, useAgentsState } from './agents/index.js';
 import { CanvasView, CANVAS_CHANGED_EVENT } from './canvas/index.js';
 import { AnalyticsView, ANALYTICS_CHANGED_EVENT } from './analytics/index.js';
 import { DesignView, DESIGN_CHANGED_EVENT } from './design/index.js';
-import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
+import { useViewPanelState } from './viewpanel/index.js';
 import { WorkspaceTimeline } from './workspace/timeline/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
 import { mergeEvents, upsertEvent } from '../lib/upsertEvents.js';
@@ -387,8 +387,6 @@ export function DashboardShell() {
             onViewModeChange={setViewMode}
             sessionAgents={threadAgents}
             onOpenSettings={() => setSettingsOpen(true)}
-            viewPanelOpen={viewPanel.open}
-            onToggleViewPanel={viewPanel.toggleOpen}
           />
           <div className="studio-work-body">
         {/* Left drawer is page-owned: the agents list only exists on the Agents
@@ -412,6 +410,8 @@ export function DashboardShell() {
           activeAgentId={agentsState.activeAgentId}
           onCreate={agentsState.createAgent}
           visible={viewMode === 'agents'}
+          costSettings={costSettings}
+          onCostSettingsChange={setCostSettings}
         />
         {/* Always mounted so the map's pan/zoom and selection survive tab switches. */}
         <CanvasView visible={viewMode === 'canvas'} />
@@ -445,6 +445,12 @@ export function DashboardShell() {
               subagentCount={subagentState.subagents.length}
               sessionUsage={sessionUsage}
               costSettings={costSettings}
+              events={events}
+              hiddenEvents={viewPanel.hiddenEvents}
+              onToggleEvents={viewPanel.onToggle}
+              variant={viewPanel.variant}
+              onVariantChange={viewPanel.onVariantChange}
+              onCostSettingsChange={setCostSettings}
             />
             <div className="shell-row">
               <AgentBoard
@@ -497,16 +503,6 @@ export function DashboardShell() {
             />
           </div>
         ) : null}
-        {/* Panel enumerates from the FULL event array; the board filters its own slice. */}
-        <ViewPanel
-          viewMode={viewMode}
-          events={events}
-          {...viewPanel}
-          sessionUsage={sessionUsage}
-          costSettings={costSettings}
-          onCostSettingsChange={setCostSettings}
-          activeAgent={agentsState.agents.find(agent => agent.agentId === agentsState.activeAgentId) ?? null}
-        />
           </div>
         </main>
         <StudioChatPanel
