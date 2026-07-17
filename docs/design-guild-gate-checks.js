@@ -98,6 +98,98 @@
   cv.font = '16px monospace'; const wMono = cv.measureText(probe).width;
   const interReal = Math.abs(wInter - wMono) > 1 && (document.fonts ? document.fonts.check('16px Inter') : true);
 
+  // C22 — frame everything (nested hierarchy, codex ruling). Page bg is gutter
+  // only. Identity-based, not color-based: on a subtle ramp the deepest panel sits
+  // 3-5/channel from the page bg, so color proximity can't separate them. Instead:
+  // walk up to the first PAINTED element (bg alpha > 0.25). If that element is the
+  // page shell (covers ~the whole viewport, or body/html), the zone sits flat on
+  // the page; if it's a smaller container, the zone is framed. Survives token drift
+  // (calibrated on variant B #0b0b0d/#101012 AND brand #0d0d0f/#121214).
+  const vw = innerWidth, vh = innerHeight;
+  const paintedAnchor = (el) => {
+    for (let n = el; n; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (c && c.a > 0.25) return n;
+    }
+    return document.documentElement;
+  };
+  const isPageShell = (el) => {
+    if (el === document.body || el === document.documentElement) return true;
+    const r = el.getBoundingClientRect();
+    return r.width >= vw * 0.92 && r.height >= vh * 0.92;
+  };
+  // Loophole guard (codex: "border alone passes nothing" — same for paint): a zone
+  // painted imperceptibly close (±2/channel) to the page shell's own bg is still flat.
+  const shellBg = parse(getComputedStyle(paintedAnchor(document.body)).backgroundColor) ||
+    { r: 13, g: 13, b: 15 };
+  const onPage = (el) => {
+    const a = paintedAnchor(el);
+    if (isPageShell(a)) return true;
+    const c = parse(getComputedStyle(a).backgroundColor);
+    return !!c && Math.abs(c.r - shellBg.r) <= 2 && Math.abs(c.g - shellBg.g) <= 2 &&
+      Math.abs(c.b - shellBg.b) <= 2;
+  };
+  const showsPageBg = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    return !el || onPage(el);
+  };
+  // Gutter-vs-flat discriminator: a transparent layout wrapper whose framed children
+  // cover it (page bg = gutters only) is LEGAL; a zone whose interior mostly shows
+  // page bg is FLAT. Sample a 5x4 interior grid.
+  const pageFrac = (r) => {
+    let hit = 0, n = 0;
+    for (let i = 1; i <= 5; i++) for (let j = 1; j <= 4; j++) {
+      const x = r.left + (r.width * i) / 6, y = r.top + (r.height * j) / 5;
+      if (x < 0 || y < 0 || x >= vw || y >= vh) continue;
+      n++; if (showsPageBg(x, y)) hit++;
+    }
+    return n ? hit / n : 0;
+  };
+  const flatZones = [];
+  for (const el of all) {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    const r = el.getBoundingClientRect();
+    const zoneSized = r.width >= 240 && r.height >= 160 &&
+      !(r.width >= vw * 0.92 && r.height >= vh * 0.92); // app shell exempt — it IS the page
+    if (!zoneSized || el.children.length < 2) continue;
+    if (onPage(el) && pageFrac(r) > 0.35) {
+      if (!flatZones.some((z) => z.contains(el))) flatZones.push(el);
+    }
+  }
+  // Global exposure: fraction of a 24x16 viewport grid showing page bg (gutters+margins
+  // should keep this small; a flat build pushes it toward 1).
+  let expHit = 0, expN = 0;
+  for (let i = 1; i <= 24; i++) for (let j = 1; j <= 16; j++) {
+    expN++; if (showsPageBg((vw * i) / 25, (vh * j) / 17)) expHit++;
+  }
+  const pageBgExposure = +(expHit / expN).toFixed(3);
+  // Advisory: child surface darker than its parent surface (drawer law: children lighter).
+  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  const isGray = (c) => Math.abs(c.r - c.g) <= 8 && Math.abs(c.g - c.b) <= 8;
+  const darkerChildren = [];
+  for (const el of all) {
+    const own = parse(getComputedStyle(el).backgroundColor);
+    if (!own || own.a <= 0.25 || !isGray(own) || isPageShell(el)) continue;
+    let anc = null;
+    for (let n = el.parentElement; n; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (c && c.a > 0.25) { anc = c; break; }
+    }
+    if (anc && isGray(anc) && lum(own) < lum(anc) - 3) {
+      darkerChildren.push(`${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]} ${Math.round(lum(own))}<${Math.round(lum(anc))}`);
+    }
+  }
+  // C22a — selection/active/unread states must never carry gold.
+  const selGold = all
+    .filter((el) => el.matches('[aria-selected="true"],[class*="selected"],[class*="active"],[class*="unread"]'))
+    .filter((el) => {
+      const cs = getComputedStyle(el);
+      return [cs.color, cs.backgroundColor, cs.borderTopColor, cs.outlineColor]
+        .map(parse).some(isGold) || GOLD.some((g) => cs.boxShadow.includes(`${g[0]}, ${g[1]}, ${g[2]}`));
+    })
+    .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`);
+
   const body = getComputedStyle(document.body);
   return JSON.stringify({
     url: location.href,
@@ -114,6 +206,12 @@
     C12_badRadius: badRadius.slice(0, 8),
     C12_badFonts: [...badFonts].slice(0, 8),
     C16_directiveCopy: directiveHits.slice(0, 8),
+    C22_pageBgExposure: pageBgExposure,
+    C22_flatZoneCount: flatZones.length,
+    C22_flatZones: flatZones.slice(0, 8).map((e) =>
+      `${e.tagName.toLowerCase()}.${String(e.className).split(' ')[0]} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)}`),
+    C22_darkerChildren: darkerChildren.slice(0, 8),
+    C22a_goldInSelection: selGold.slice(0, 8),
     // Tint law: clay (orbit) may tint text/avatar, NEVER a fill; and any tinted element
     // must belong to that person (binding checked per-element against actor context).
     C12_tintReport: (() => {
