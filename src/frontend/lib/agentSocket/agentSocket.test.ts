@@ -104,8 +104,15 @@ const resentWatch = framesOf(socketTwo, 'watch-session');
 assert.equal(resentWatch.length, 1);
 assert.deepEqual(resentWatch[0], { type: 'watch-session', projectDir: 'proj-dir', sessionId: 'sess-1' });
 
-// unwatchSession sends the frame when open and drops the target from tracking —
-// a later reconnect must not resend watch-session for it.
+// A second consumer of the same session must share the server watch. Releasing
+// one consumer must not stop transcript updates for the other.
+watchSession('proj-dir', 'sess-1');
+assert.equal(framesOf(socketTwo, 'watch-session').length, 1);
+unwatchSession('proj-dir', 'sess-1');
+assert.equal(framesOf(socketTwo, 'unwatch-session').length, 0);
+
+// The last consumer sends the unwatch frame and drops the target from tracking,
+// so a later reconnect must not resurrect it.
 unwatchSession('proj-dir', 'sess-1');
 const unwatchFrames = framesOf(socketTwo, 'unwatch-session');
 assert.equal(unwatchFrames.length, 1);
