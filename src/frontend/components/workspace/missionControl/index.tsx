@@ -1,17 +1,41 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { ProjectRecord, ThreadRecord } from '../../../../shared/project/schema.js';
 import type { ThreadProjection } from '../../../../shared/provider/schema.js';
 import type { AgentInfo } from '../../../lib/agentSocket/index.js';
-import type { AttentionView } from '../../../lib/attention/index.js';
+import {
+  buildAttentionQueue,
+  messageItemId,
+  updateAttentionQueue,
+  useAttention,
+  type AttentionView,
+} from '../../../lib/attention/index.js';
 import type { SessionUsage } from '../../../lib/cost/index.js';
+import { buildTargets } from '../../../lib/mentions/index.js';
+import {
+  advanceCursor,
+  saveLane,
+  savedLane,
+  useReadCursors,
+} from '../../../lib/readCursor/index.js';
+import {
+  CHRIS,
+  buildConversations,
+  dmId,
+  latestChrisQuestion,
+  liveRoster,
+  messagesFor,
+  useTunnelFeed,
+  useTunnelRooms,
+  type Conversation,
+  type ConversationId,
+} from '../../../lib/tunnelModel/index.js';
+import { MessengerComposer, Transcript } from '../../studio/chat/tunnel/transcript/index.js';
 import { PanelGlyph } from '../../ui/index.js';
 import { AgentRow } from './agentRow.js';
 import {
   attentionApproval,
   liveMissionAgents,
-  missionActivity,
   missionHealth,
-  missionStages,
 } from './model.js';
 import './index.css';
 
@@ -39,6 +63,8 @@ const LEFT_OPEN_KEY = 'novakai.mission.leftRailOpen';
 const RIGHT_OPEN_KEY = 'novakai.mission.rightRailOpen';
 const LEFT_WIDTH_KEY = 'novakai.mission.leftRailWidth';
 const RIGHT_WIDTH_KEY = 'novakai.mission.rightRailWidth';
+const ROOM_LIMIT = 5;
+const PHASES = ['Understand', 'Design', 'Build', 'Verify'] as const;
 
 function restoredBoolean(storageKey: string, fallback: boolean): boolean {
   const stored = localStorage.getItem(storageKey);
@@ -60,17 +86,82 @@ export function MissionControl(props: MissionControlProps) {
   const [leftWidth, setLeftWidth] = useState(() => restoredWidth(LEFT_WIDTH_KEY, 224, 180, 360));
   const [rightWidth, setRightWidth] = useState(() => restoredWidth(RIGHT_WIDTH_KEY, 304, 240, 440));
   const [draggingRail, setDraggingRail] = useState<'left' | 'right' | null>(null);
-  const stages = missionStages(props.projection);
-  const activity = missionActivity(props.projection);
+  const [roomsExpanded, setRoomsExpanded] = useState(false);
+  const [activePhase, setActivePhase] = useState(2);
+  const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
+  const { feed, loadConversation } = useTunnelFeed();
+  const { rooms } = useTunnelRooms();
+  const roster = useMemo(() => liveRoster(props.agents), [props.agents]);
+  const conversations = useMemo(
+    () => buildConversations(feed, rooms, roster),
+    [feed, rooms, roster],
+  );
+  const missionRooms = conversations.filter((conversation) => conversation.kind !== 'dm');
+  const directMessages = conversations.filter((conversation) => conversation.kind === 'dm');
+  const visibleRooms = roomsExpanded ? missionRooms : missionRooms.slice(0, ROOM_LIMIT);
+  const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
+  const liveNames = roster.map((entry) => entry.name);
+  const targets = useMemo(
+    () => buildTargets(props.agents, props.project?.threads ?? []),
+    [props.agents, props.project],
+  );
+  const cursors = useReadCursors();
+  const messageAttention = useAttention();
+  const question = useMemo(() => latestChrisQuestion(feed), [feed]);
   const squad = liveMissionAgents(props.agents, props.project?.id, props.thread?.id);
   const approval = attentionApproval(props.projection, props.attention);
   const health = missionHealth(props.projection, squad, props.usage ?? null);
   const running = squad.filter((agent) => agent.status === 'running').length;
   const title = props.thread?.title ?? props.project?.name ?? 'No mission selected';
   const missionFacts = [
-    props.projection ? `${props.projection.events.length} recorded events` : null,
+    selected ? `${messagesFor(feed, selected.id).length} messages` : null,
     squad.length > 0 ? `${running} of ${squad.length} agents live` : null,
   ].filter(Boolean).join(' · ');
+
+  useEffect(() => {
+    if (selectedId || conversations.length === 0) return;
+    const remembered = savedLane();
+    const restored = remembered && conversations.find((lane) => lane.id === remembered);
+    setSelectedId(restored ? restored.id : conversations[0].id);
+  }, [selectedId, conversations]);
+
+  useEffect(() => {
+    if (selectedId) loadConversation(selectedId);
+  }, [selectedId, loadConversation]);
+
+  useEffect(() => {
+    updateAttentionQueue(buildAttentionQueue(null, feed, dismissed));
+  }, [feed, dismissed]);
+
+  function selectConversation(conversation: Conversation): void {
+    setSelectedId(conversation.id);
+    saveLane(conversation.id);
+    if (question && messageAttention.goldId === messageItemId(question.envelopeId)
+      && conversation.id === question.conversationId) {
+      setDismissed((current) => new Set(current).add(messageItemId(question.envelopeId)));
+    }
+  }
+
+  function selectPerson(agent: AgentInfo): void {
+    props.onSelectAgent?.(agent.agentId);
+    const conversation = conversations.find((candidate) => candidate.id === dmId(agent.title));
+    if (conversation) selectConversation(conversation);
+  }
+
+  async function send(body: string): Promise<void> {
+    if (!selected) return;
+    const recipient = selected.kind === 'dm' ? selected.title : selected.id;
+    const response = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: CHRIS, to: recipient, delivery: 'normal', body }),
+    });
+    if (!response.ok) {
+      const failure = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(failure?.error ?? `HTTP ${response.status}`);
+    }
+  }
 
   function toggleLeft(): void {
     setLeftOpen((open) => {
@@ -134,26 +225,44 @@ export function MissionControl(props: MissionControlProps) {
               </button>
             </div>
 
-            {props.project && (
-              <>
-                <div className="mc-section-label">Mission work</div>
-                <div className="mc-room-list">
-                  {props.project.threads.map((candidate) => (
-                    <button
-                      type="button"
-                      key={candidate.id}
-                      className={candidate.id === props.thread?.id ? 'mc-room mc-room-active' : 'mc-room'}
-                      onClick={() => props.onSelectThread?.(candidate.id)}
-                      disabled={!props.onSelectThread}
-                    >
-                      <span>#</span>
-                      <strong>{candidate.title}</strong>
-                      <small>{candidate.sessionReferences.length} session{candidate.sessionReferences.length === 1 ? '' : 's'}</small>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <button
+              type="button"
+              className="mc-section-label mc-section-toggle"
+              onClick={() => setRoomsExpanded((expanded) => !expanded)}
+              aria-expanded={roomsExpanded}
+            >
+              <span>Mission rooms</span>
+              <span>{roomsExpanded ? '−' : `+${Math.max(0, missionRooms.length - ROOM_LIMIT)}`}</span>
+            </button>
+            <div className="mc-room-list">
+              {visibleRooms.map((conversation) => (
+                <button
+                  type="button"
+                  key={conversation.id}
+                  className={conversation.id === selectedId ? 'mc-room mc-room-active' : 'mc-room'}
+                  onClick={() => selectConversation(conversation)}
+                >
+                  <span>#</span>
+                  <strong>{conversation.title}</strong>
+                  <small>{conversation.lastMessageAt ? 'Recent activity' : 'No messages yet'}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="mc-section-label mc-section-spaced">Direct messages</div>
+            <div className="mc-rail-agents">
+              {directMessages.map((conversation) => {
+                const agent = props.agents.find((candidate) => candidate.title === conversation.title);
+                return agent ? (
+                  <AgentRow
+                    key={conversation.id}
+                    agent={agent}
+                    selected={conversation.id === selectedId}
+                    onSelect={() => selectPerson(agent)}
+                  />
+                ) : null;
+              })}
+            </div>
           </>
         ) : (
           <button type="button" className="mc-rail-reopen" onClick={toggleLeft} aria-label="Open mission rail" title="Open mission rail">
@@ -196,42 +305,45 @@ export function MissionControl(props: MissionControlProps) {
           )}
         </header>
 
-        {stages.length > 0 && (
-          <section className="mc-stage-strip" aria-label="Mission stages">
-            {stages.slice(0, 5).map((stage, index) => (
-              <article className={`mc-stage mc-stage-${stage.state}`} key={stage.id}>
+        <section className="mc-stage-strip" aria-label="Mission phases">
+          {PHASES.map((phase, index) => (
+            <button
+              type="button"
+              className={`mc-stage mc-stage-${index < activePhase ? 'done' : index === activePhase ? 'active' : 'waiting'}`}
+              key={phase}
+              onClick={() => setActivePhase(index)}
+              aria-pressed={index === activePhase}
+            >
                 <span>{index + 1}</span>
-                <strong>{stage.label}</strong>
-                <small>{stage.detail}</small>
-              </article>
-            ))}
-          </section>
-        )}
+                <strong>{phase}</strong>
+                <small>{index < activePhase ? 'Complete' : index === activePhase ? 'In progress' : 'Waiting'}</small>
+            </button>
+          ))}
+        </section>
 
         <section className="mc-panel mc-activity">
           <header>
             <div>
-              <span className="mc-kicker">Central activity</span>
-              <h2>{props.thread?.title ?? props.project?.name ?? 'Mission activity'}</h2>
+              <span className="mc-kicker">Shared conversation</span>
+              <h2>{selected?.title ?? 'Select a conversation'}</h2>
             </div>
             {running > 0 && <span className="mc-live"><i /> Live</span>}
           </header>
-          <div className="mc-activity-list">
-            {activity.length === 0 && <p className="mc-empty">No mission activity is available yet.</p>}
-            {activity.map((item) => (
-              <article className="mc-activity-row" key={item.id}>
-                <span className="mc-avatar">{item.actor.slice(0, 2).toUpperCase()}</span>
-                <div>
-                  <header>
-                    <strong>{item.actor}</strong>
-                    <span>{item.kind}</span>
-                    {item.time && <time>{item.time}</time>}
-                  </header>
-                  <p>{item.detail}</p>
-                </div>
-              </article>
-            ))}
-          </div>
+          {selected ? (
+            <>
+              <Transcript
+                conversation={selected}
+                messages={messagesFor(feed, selected.id)}
+                liveNames={liveNames}
+                targets={targets}
+                onResolve={(itemId) => setDismissed((current) => new Set(current).add(itemId))}
+                onSeen={(createdAt) => advanceCursor(selected.id, createdAt)}
+              />
+              <MessengerComposer conversation={selected} onSend={send} />
+            </>
+          ) : (
+            <p className="mc-empty">Choose a mission room or direct message.</p>
+          )}
         </section>
 
         {health.length > 0 && (
@@ -289,7 +401,7 @@ export function MissionControl(props: MissionControlProps) {
                     key={agent.agentId}
                     agent={agent}
                     selected={agent.agentId === props.selectedAgentId}
-                    onSelect={props.onSelectAgent ? () => props.onSelectAgent?.(agent.agentId) : undefined}
+                    onSelect={() => selectPerson(agent)}
                   />
                 ))}
               </section>
