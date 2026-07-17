@@ -17,6 +17,7 @@ import { getRepoInfo } from '../versionControl/index.js';
 import { AgentsHub } from './agents.js';
 import { ProjectsHub } from './projects/index.js';
 import { MessagingHub } from '../messaging/index.js';
+import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -59,9 +60,10 @@ export class ServerController {
   constructor(
     private readonly port: number,
     private readonly coordinator: AgentCoordinator,
-    private readonly stateManager: StateManager
+    private readonly stateManager: StateManager,
+    terminals: TerminalRuntime,
   ) {
-    this.agentsHub = new AgentsHub(this.activeSockets);
+    this.agentsHub = new AgentsHub(this.activeSockets, terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     this.messagingHub = this.buildMessagingHub();
     this.server = createServer(this.app);

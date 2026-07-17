@@ -6,7 +6,9 @@ import { resolveCli } from '../../agent/executor/index.js';
 import { CodexSessionLocator } from './codexDiscovery.js';
 
 /** Minimal PTY interface consumed by the persistent terminal module. */
-export type ProviderTerminalProcess = Pick<IPty, 'onData' | 'onExit' | 'write' | 'resize' | 'kill'>;
+export type ProviderTerminalProcess =
+  Pick<IPty, 'onData' | 'onExit' | 'write' | 'resize' | 'kill'>
+  & Partial<Pick<IPty, 'pid'>>;
 
 /** Spawn result whose provider session identity may resolve asynchronously. */
 export interface ProviderLaunch {

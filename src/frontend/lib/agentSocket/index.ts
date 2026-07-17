@@ -10,6 +10,7 @@ export interface AgentInfo {
   projectDir: string;
   cwd: string;
   status: 'running' | 'exited';
+  terminalPid?: number;
   createdAt: string;
   projectId?: string;
   threadId?: string;

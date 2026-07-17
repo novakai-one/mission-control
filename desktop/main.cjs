@@ -37,6 +37,7 @@ function startDevServer() {
   devServer = spawn('/bin/zsh', ['-lc', 'exec npm run dev'], {
     cwd: REPO_DIR,
     detached: true, // own process group, so quit can tree-kill it
+    env: { ...process.env, NOVAKAI_DESKTOP_PID: String(process.pid) },
     stdio: ['ignore', log, log],
   });
   devServer.on('exit', () => { devServer = null; });

@@ -5,7 +5,8 @@
 import type { Express, Request, Response } from 'express';
 import path from 'node:path';
 import { WebSocket } from 'ws';
-import { TerminalManager, type CreateAgentOptions } from '../terminal/manager.js';
+import { TerminalManager, type AgentInfo, type CreateAgentOptions } from '../terminal/manager.js';
+import type { TerminalRuntime } from '../terminal/runtime/index.js';
 import { nextSpawnName, isNameTaken } from '../messaging/address/index.js';
 import { ConfigManager } from '../config/index.js';
 import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.js';
@@ -38,12 +39,12 @@ interface SessionWatchPair {
 export class AgentsHub {
   private readonly agentSubs = new Map<WebSocket, Set<string>>();
   private readonly sessionWatchers = new Map<WebSocket, Map<string, SessionWatchPair>>();
-  private readonly sessionListeners: Array<(info: Awaited<ReturnType<TerminalManager['create']>>) => void> = [];
-  private readonly launchListeners: Array<(info: Awaited<ReturnType<TerminalManager['create']>>) => void> = [];
+  private readonly sessionListeners: Array<(info: AgentInfo) => void> = [];
+  private readonly launchListeners: Array<(info: AgentInfo) => void> = [];
 
   constructor(
     private readonly sockets: Set<WebSocket>,
-    private readonly manager = new TerminalManager(),
+    private readonly manager: TerminalRuntime = new TerminalManager(),
   ) {
     this.manager.onData((agentId, data) => {
       this.sendToSubscribers(agentId, { type: 'agent-data', agentId, data });
@@ -55,17 +56,17 @@ export class AgentsHub {
     });
   }
 
-  onSessionResolved(listener: (info: Awaited<ReturnType<TerminalManager['create']>>) => void): void {
+  onSessionResolved(listener: (info: AgentInfo) => void): void {
     this.sessionListeners.push(listener);
   }
 
   /** Fires after every successful launch — the messaging tunnel briefs new agents here. */
-  onLaunch(listener: (info: Awaited<ReturnType<TerminalManager['create']>>) => void): void {
+  onLaunch(listener: (info: AgentInfo) => void): void {
     this.launchListeners.push(listener);
   }
 
   /** The terminal surface the messaging tunnel routes through (roster + PTY writes). */
-  get terminals(): TerminalManager {
+  get terminals(): TerminalRuntime {
     return this.manager;
   }
 

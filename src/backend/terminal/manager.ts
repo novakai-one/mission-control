@@ -19,6 +19,7 @@ export interface AgentInfo {
   projectDir: string;
   cwd: string;
   status: 'running' | 'exited';
+  terminalPid?: number;
   createdAt: string;
   projectId?: string;
   threadId?: string;
@@ -42,7 +43,12 @@ export interface CreateAgentOptions {
   threadId?: string;
 }
 
-function buildAgentInfo(agentId: string, sessionId: string, options: CreateAgentOptions): AgentInfo {
+function buildAgentInfo(
+  agentId: string,
+  sessionId: string,
+  options: CreateAgentOptions,
+  terminalPid?: number,
+): AgentInfo {
   return {
     agentId,
     title: options.title || 'agent',
@@ -51,6 +57,7 @@ function buildAgentInfo(agentId: string, sessionId: string, options: CreateAgent
     projectDir: encodeCwd(options.cwd),
     cwd: options.cwd,
     status: 'running',
+    ...(terminalPid === undefined ? {} : { terminalPid }),
     createdAt: new Date().toISOString(),
     ...(options.projectId ? { projectId: options.projectId } : {}),
     ...(options.threadId ? { threadId: options.threadId } : {})
@@ -118,7 +125,12 @@ export class TerminalManager {
     const requestedSessionId = randomUUID();
     const launched = this.launcher(options.provider || 'claude', options.cwd, requestedSessionId);
     const provider = options.provider || 'claude';
-    const info = buildAgentInfo(agentId, provider === 'claude' ? requestedSessionId : '', options);
+    const info = buildAgentInfo(
+      agentId,
+      provider === 'claude' ? requestedSessionId : '',
+      options,
+      launched.process.pid,
+    );
     const buffer = new AgentBuffer();
     this.agents.set(agentId, {
       info, ptyProcess: launched.process, buffer, cancelSessionWait: launched.cancelSessionWait,
