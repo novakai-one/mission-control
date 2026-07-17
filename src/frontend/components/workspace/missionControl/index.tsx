@@ -18,7 +18,6 @@ import {
   useReadCursors,
 } from '../../../lib/readCursor/index.js';
 import {
-  CHRIS,
   buildConversations,
   dmId,
   latestChrisQuestion,
@@ -152,10 +151,10 @@ export function MissionControl(props: MissionControlProps) {
   async function send(body: string): Promise<void> {
     if (!selected) return;
     const recipient = selected.kind === 'dm' ? selected.title : selected.id;
-    const response = await fetch('/api/messages', {
+    const response = await fetch('/api/user/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: CHRIS, to: recipient, delivery: 'normal', body }),
+      body: JSON.stringify({ to: recipient, delivery: 'normal', body }),
     });
     if (!response.ok) {
       const failure = await response.json().catch(() => null) as { error?: string } | null;

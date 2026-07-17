@@ -1,5 +1,5 @@
-// Message router — records every envelope, then delivers DMs via PTY or
-// records channel posts pull-only (docs/agent-messaging.md §2, §4). Failures
+// Message router — records every envelope, then delivers agent DMs via PTY,
+// user replies via the browser inbox, and channel posts by sender policy. Failures
 // are part of the audit record: the envelope is appended first, and every
 // outcome lands as a status amendment.
 import { MessageStore } from '../store/index.js';
@@ -86,7 +86,7 @@ export class MessageRouter {
     }
     const room = this.rooms.get(envelope.to);
     if (!room) throw this.fail(envelope, new RoomNotFoundError(envelope.to));
-    if (!room.members.includes(envelope.from)) {
+    if (envelope.from !== CHRIS_MEMBER && !room.members.includes(envelope.from)) {
       throw this.fail(envelope, new NotARoomMemberError(envelope.from, envelope.to));
     }
 
@@ -113,16 +113,30 @@ export class MessageRouter {
     }
   }
 
-  /** Channel fan-out is record-only: readers pull, nothing is PTY-injected (§4). */
-  private routeChannel(envelope: MessageEnvelope): DeliveryReceipt {
+  /** Agent channel posts stay pull-only. Chris owns the interactive team chat:
+   * his browser-authored posts are pushed to every live agent immediately. */
+  private async routeChannel(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     if (envelope.delivery === 'interrupt') {
       throw this.fail(envelope, new ChannelInterruptError(envelope.to));
+    }
+    if (envelope.from === CHRIS_MEMBER) {
+      for (const address of this.roster()) {
+        try {
+          await this.delivery.deliver(address, envelope);
+        } catch {
+          // Team chat fan-out is best-effort; the audit record remains readable.
+        }
+      }
     }
     this.settle(envelope, 'delivered');
     return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'channel' };
   }
 
   private async routeDirect(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
+    if (envelope.to === CHRIS_MEMBER) {
+      this.settle(envelope, 'delivered');
+      return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'user-inbox' };
+    }
     const roster = this.roster();
     const address = roster.find((agent) => agent.name === envelope.to);
     if (!address) throw this.fail(envelope, new RecipientNotFoundError(envelope.to, roster));

@@ -8,7 +8,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import { messageItemId, useAttention } from '../../../../lib/attention/index.js';
 import {
-  CHRIS,
   buildConversations,
   conversationIdsFor,
   latestChrisQuestion,
@@ -130,10 +129,9 @@ export function TunnelMessenger({
   }
 
   async function startChat(members: string[], name: string): Promise<void> {
-    const data = (await postJson('/api/rooms', {
+    const data = (await postJson('/api/user/rooms', {
       name,
-      members: [...members, CHRIS],
-      from: CHRIS,
+      members,
     })) as { room: TunnelRoom };
     ingestRoom(data.room);
     setSelectedId(data.room.roomId);
@@ -142,7 +140,7 @@ export function TunnelMessenger({
   async function send(body: string): Promise<void> {
     if (!selected) return;
     const recipient = selected.kind === 'dm' ? selected.title : selected.id;
-    await postJson('/api/messages', { from: CHRIS, 'to': recipient, delivery: 'normal', body });
+    await postJson('/api/user/messages', { 'to': recipient, delivery: 'normal', body });
   }
 
   const liveNames = roster.map((entry) => entry.name);

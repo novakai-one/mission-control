@@ -14,6 +14,7 @@ import {
   type TunnelEnvelope,
 } from '../../../../../lib/tunnelModel/index.js';
 import { avatarInitials, formatChatTime } from '../../../../../lib/chatModel/index.js';
+import { clearDraft, loadDraft, saveDraft } from '../../../../../lib/composerDraft/index.js';
 import type { MentionTarget } from '../../../../../lib/mentions/index.js';
 import { MarkdownText } from '../../../../../lib/markdown/index.js';
 import { MentionText } from '../../mention/index.js';
@@ -175,9 +176,14 @@ interface MessengerComposerProps {
 }
 
 export function MessengerComposer({ conversation, onSend }: MessengerComposerProps) {
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => loadDraft(conversation.id));
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    setDraft(loadDraft(conversation.id));
+    setError(null);
+  }, [conversation.id]);
 
   async function send(): Promise<void> {
     const body = draft.trim();
@@ -187,6 +193,7 @@ export function MessengerComposer({ conversation, onSend }: MessengerComposerPro
     try {
       await onSend(body);
       setDraft('');
+      clearDraft(conversation.id);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
@@ -209,7 +216,11 @@ export function MessengerComposer({ conversation, onSend }: MessengerComposerPro
           aria-label={`Message ${conversation.title}`}
           placeholder="Say it in your own words…"
           value={draft}
-          onChange={(change) => setDraft(change.target.value)}
+          onChange={(change) => {
+            const nextDraft = change.target.value;
+            setDraft(nextDraft);
+            saveDraft(conversation.id, nextDraft);
+          }}
           onKeyDown={handleKeyDown}
         />
         <div className="st-composer-foot">
