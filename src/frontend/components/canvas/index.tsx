@@ -4,7 +4,7 @@
 // the backend's canvas-event ws frames) reload external edits live.
 import React, { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
-  Background, BackgroundVariant, Controls, ReactFlow, ReactFlowProvider,
+  Background, BackgroundVariant, Controls, ReactFlow, ReactFlowProvider, useReactFlow,
   type Connection, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -63,6 +63,25 @@ function connect(engine: CanvasEngine, connection: Connection): string | null {
     wire: { id, source: connection.source, target: connection.target, label: 'connects', kind: 'references', routing: 'elbow' },
   });
   return id;
+}
+
+/** The lens mounts hidden (display:none), so React Flow's initial fitView
+ * measures a zero-size container. Refit once the lens is actually visible
+ * AND the document has content — after React Flow's ResizeObserver has seen
+ * the real dimensions — then never again, preserving the user's pan/zoom
+ * across tab switches. */
+function FitOnReveal({ visible, nodeCount }: { visible: boolean; nodeCount: number }) {
+  const { fitView } = useReactFlow();
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || !visible || nodeCount === 0) return;
+    fitted.current = true;
+    // Two frames + a beat: display:none -> block must flow through React
+    // Flow's ResizeObserver before fitView can measure honestly.
+    const timer = window.setTimeout(() => { void fitView({ padding: 0.12, maxZoom: 1 }); }, 120);
+    return () => window.clearTimeout(timer);
+  }, [visible, nodeCount, fitView]);
+  return null;
 }
 
 /** The Canvas studio lens. Always mounted so pan/zoom and selection survive
@@ -140,6 +159,7 @@ export function CanvasView({ visible }: { visible: boolean }) {
           selectionOnDrag snapGrid={[preferences.canvas.gridSize, preferences.canvas.gridSize]}
           snapToGrid={preferences.canvas.snapToGrid}
         >
+          <FitOnReveal visible={visible} nodeCount={Object.keys(document.nodes).length} />
           {preferences.canvas.showGrid && <Background color="#26262b" gap={preferences.canvas.gridSize * 2} variant={BackgroundVariant.Dots} />}
           {preferences.canvas.showControls && <Controls position="bottom-left" showInteractive={false} />}
         </ReactFlow>
