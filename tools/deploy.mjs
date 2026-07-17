@@ -22,6 +22,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
   readdirSync,
@@ -74,7 +75,11 @@ export function readCurrent() {
 
 export function writeCurrent(short) {
   mkdirSync(DEPLOY_DIR, { recursive: true });
-  writeFileSync(CURRENT_FILE, `${JSON.stringify({ shortSha: short }, null, 2)}\n`);
+  // Atomic flip: write a temp file then rename, so a concurrent `serve` reading
+  // `current.json` during a redeploy never sees a half-written pointer.
+  const temp = `${CURRENT_FILE}.${process.pid}.tmp`;
+  writeFileSync(temp, `${JSON.stringify({ shortSha: short }, null, 2)}\n`);
+  renameSync(temp, CURRENT_FILE);
 }
 
 // ---- git / build ----------------------------------------------------------
@@ -200,11 +205,18 @@ async function cmdServe() {
   let child = null;
   let restarting = false;
   let shuttingDown = false;
+  // Escalating respawn backoff so a crash-looping snapshot doesn't hammer;
+  // resets after a run stays healthy long enough to clear a transient failure.
+  const MIN_BACKOFF_MS = 500;
+  const MAX_BACKOFF_MS = 5000;
+  const HEALTHY_UPTIME_MS = 10000;
+  let backoffMs = MIN_BACKOFF_MS;
 
   const startChild = () => {
     const resolved = resolveCurrentSnapshot();
     if (!resolved) fail("no current snapshot to serve — run 'npm run redeploy'.");
     const { dir, manifest } = resolved;
+    const startedAt = Date.now();
 
     // Dep-skew guard: a snapshot built against different deps than the
     // workspace lockfile can boot against wrong node_modules. Refuse loudly.
@@ -233,12 +245,18 @@ async function cmdServe() {
       child = null;
       if (shuttingDown) return;
       if (restarting) {
+        // Intentional snapshot swap (SIGHUP), not a crash — respawn immediately.
         restarting = false;
+        backoffMs = MIN_BACKOFF_MS;
         startChild();
         return;
       }
-      console.error(`[deploy] backend exited (code ${code}, signal ${signal}) — respawning in 1s`);
-      setTimeout(startChild, 1000);
+      // A run that stayed up long enough was healthy; clear the escalation.
+      if (Date.now() - startedAt >= HEALTHY_UPTIME_MS) backoffMs = MIN_BACKOFF_MS;
+      const delay = backoffMs;
+      backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+      console.error(`[deploy] backend exited (code ${code}, signal ${signal}) — respawning in ${delay}ms`);
+      setTimeout(startChild, delay);
     });
   };
 
