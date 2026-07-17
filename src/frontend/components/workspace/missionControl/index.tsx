@@ -27,6 +27,7 @@ import {
   useTunnelRooms,
   type Conversation,
   type ConversationId,
+  type TunnelRoom,
 } from '../../../lib/tunnelModel/index.js';
 import { MessengerComposer, Transcript } from '../../studio/chat/tunnel/transcript/index.js';
 import { PanelGlyph } from '../../ui/index.js';
@@ -86,11 +87,16 @@ export function MissionControl(props: MissionControlProps) {
   const [rightWidth, setRightWidth] = useState(() => restoredWidth(RIGHT_WIDTH_KEY, 304, 240, 440));
   const [draggingRail, setDraggingRail] = useState<'left' | 'right' | null>(null);
   const [roomsExpanded, setRoomsExpanded] = useState(false);
+  const [roomComposerOpen, setRoomComposerOpen] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomMembers, setNewRoomMembers] = useState<ReadonlySet<string>>(() => new Set());
+  const [creatingRoom, setCreatingRoom] = useState(false);
+  const [roomError, setRoomError] = useState<string | null>(null);
   const [activePhase, setActivePhase] = useState(2);
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const { feed, loadConversation } = useTunnelFeed();
-  const { rooms } = useTunnelRooms();
+  const { rooms, ingestRoom } = useTunnelRooms();
   const roster = useMemo(() => liveRoster(props.agents), [props.agents]);
   const conversations = useMemo(
     () => buildConversations(feed, rooms, roster),
@@ -146,6 +152,48 @@ export function MissionControl(props: MissionControlProps) {
     props.onSelectAgent?.(agent.agentId);
     const conversation = conversations.find((candidate) => candidate.id === dmId(agent.title));
     if (conversation) selectConversation(conversation);
+  }
+
+  function toggleNewRoomMember(agentName: string): void {
+    setNewRoomMembers((current) => {
+      const next = new Set(current);
+      if (next.has(agentName)) next.delete(agentName);
+      else next.add(agentName);
+      return next;
+    });
+  }
+
+  async function createRoom(): Promise<void> {
+    const name = newRoomName.trim();
+    if (!name || newRoomMembers.size === 0 || creatingRoom) return;
+    setCreatingRoom(true);
+    setRoomError(null);
+    try {
+      const response = await fetch('/api/user/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, members: [...newRoomMembers] }),
+      });
+      const payload = await response.json().catch(() => null) as { room?: TunnelRoom; error?: string } | null;
+      if (!response.ok || !payload?.room) {
+        throw new Error(payload?.error ?? `HTTP ${response.status}`);
+      }
+      ingestRoom(payload.room);
+      selectConversation({
+        id: payload.room.roomId,
+        kind: 'room',
+        title: payload.room.name,
+        members: payload.room.members,
+      });
+      setNewRoomName('');
+      setNewRoomMembers(new Set());
+      setRoomComposerOpen(false);
+      setRoomsExpanded(true);
+    } catch (failure) {
+      setRoomError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setCreatingRoom(false);
+    }
   }
 
   async function send(body: string): Promise<void> {
@@ -224,15 +272,67 @@ export function MissionControl(props: MissionControlProps) {
               </button>
             </div>
 
-            <button
-              type="button"
-              className="mc-section-label mc-section-toggle"
-              onClick={() => setRoomsExpanded((expanded) => !expanded)}
-              aria-expanded={roomsExpanded}
-            >
-              <span>Mission rooms</span>
-              <span>{roomsExpanded ? '−' : `+${Math.max(0, missionRooms.length - ROOM_LIMIT)}`}</span>
-            </button>
+            <div className="mc-section-label mc-section-heading">
+              <button
+                type="button"
+                className="mc-section-toggle"
+                onClick={() => setRoomsExpanded((expanded) => !expanded)}
+                aria-expanded={roomsExpanded}
+              >
+                <span>Mission rooms</span>
+                <span>{roomsExpanded ? '−' : `+${Math.max(0, missionRooms.length - ROOM_LIMIT)}`}</span>
+              </button>
+              <button
+                type="button"
+                className="mc-room-create-toggle"
+                onClick={() => {
+                  setRoomComposerOpen((open) => !open);
+                  setRoomError(null);
+                }}
+                aria-expanded={roomComposerOpen}
+                aria-label="New mission room"
+                title="New mission room"
+              >
+                +
+              </button>
+            </div>
+            {roomComposerOpen && (
+              <div className="mc-room-composer">
+                <input
+                  aria-label="Mission room name"
+                  placeholder="Room name"
+                  value={newRoomName}
+                  autoFocus
+                  onChange={(change) => setNewRoomName(change.target.value)}
+                  onKeyDown={(press) => {
+                    if (press.key === 'Enter') void createRoom();
+                    if (press.key === 'Escape') setRoomComposerOpen(false);
+                  }}
+                />
+                <div className="mc-room-member-list" aria-label="Room participants">
+                  {roster.map((agent) => (
+                    <button
+                      type="button"
+                      key={agent.name}
+                      className={newRoomMembers.has(agent.name) ? 'mc-room-member is-selected' : 'mc-room-member'}
+                      onClick={() => toggleNewRoomMember(agent.name)}
+                    >
+                      <span />
+                      {agent.name}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="mc-room-create"
+                  disabled={!newRoomName.trim() || newRoomMembers.size === 0 || creatingRoom}
+                  onClick={() => void createRoom()}
+                >
+                  {creatingRoom ? 'Creating…' : 'Create room'}
+                </button>
+                {roomError && <div className="mc-room-error">{roomError}</div>}
+              </div>
+            )}
             <div className="mc-room-list">
               {visibleRooms.map((conversation) => (
                 <button

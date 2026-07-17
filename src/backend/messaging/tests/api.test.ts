@@ -185,6 +185,26 @@ async function testAgentsCanReplyToUserInbox(): Promise<void> {
   assert.equal(reply.json.envelope.status, 'delivered');
 }
 
+async function testOpenBrowserTabsUpgradeToRegisteredIdentity(): Promise<void> {
+  const legacySend = await post({ from: 'chris', 'to': 'codex-1', body: 'legacy tab send' });
+  assert.equal(legacySend.status, 201);
+  assert.equal(legacySend.json.envelope.from, 'chris');
+
+  const roomResponse = await fetch(`${baseUrl}/api/rooms`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Legacy tab room',
+      members: ['codex-1'],
+      from: 'chris',
+    }),
+  });
+  assert.equal(roomResponse.status, 201);
+  const room = (await roomResponse.json()).room;
+  assert.equal(room.createdBy, 'chris');
+  assert.deepEqual(room.members, ['codex-1', 'chris']);
+}
+
 try {
   await testSendDeliversAndBroadcasts();
   await testHistoryQueryFilters();
@@ -195,6 +215,7 @@ try {
   await testRegisteredUserIdentityOwnsBrowserSends();
   await testOwnerTeamPostReachesEveryLiveAgent();
   await testAgentsCanReplyToUserInbox();
+  await testOpenBrowserTabsUpgradeToRegisteredIdentity();
   console.log('PASS');
 } finally {
   server.close();

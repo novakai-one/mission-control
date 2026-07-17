@@ -98,11 +98,10 @@ export class MessagingHub {
       const name = this.requireText(payload.name, 'name');
       const members = this.requireStringArray(payload.members, 'members');
       const createdBy = this.requireText(payload.from, 'from');
-      if (createdBy === CHRIS_MEMBER) {
-        response.status(403).json({ error: 'the Chris identity is reserved for browser-authenticated routes' });
-        return;
-      }
-      response.status(201).json({ room: this.rooms.create({ name, members, createdBy }) });
+      const resolvedMembers = createdBy === CHRIS_MEMBER
+        ? [...new Set([...members, CHRIS_IDENTITY.memberName])]
+        : members;
+      response.status(201).json({ room: this.rooms.create({ name, members: resolvedMembers, createdBy }) });
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
     }
@@ -179,11 +178,8 @@ export class MessagingHub {
 
   private async handleSend(request: Request, response: Response): Promise<void> {
     const payload = (request.body ?? {}) as Partial<SendMessage> & { from?: string; threadId?: string };
-    if (payload.from === CHRIS_MEMBER) {
-      response.status(403).json({ error: 'the Chris identity is reserved for browser-authenticated routes' });
-      return;
-    }
-    await this.sendPayload(payload.from as string, payload, response);
+    const sender = payload.from === CHRIS_MEMBER ? CHRIS_IDENTITY.memberName : payload.from as string;
+    await this.sendPayload(sender, payload, response);
   }
 
   private async handleUserSend(request: Request, response: Response): Promise<void> {

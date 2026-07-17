@@ -140,8 +140,16 @@
   padding: 20px 23px 8px;
 }
 
+.mc-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 13px;
+}
+
 .mc-section-toggle {
-  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -153,6 +161,107 @@
 
 .mc-section-toggle:hover {
   color: var(--st-muted, #a2a2aa);
+}
+
+.mc-room-create-toggle {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--st-r, 6px);
+  background: transparent;
+  color: var(--st-faint, #8b8b94);
+  cursor: pointer;
+}
+
+.mc-room-create-toggle:hover,
+.mc-room-create-toggle[aria-expanded='true'] {
+  background: var(--st-panel-2, #1b1b1e);
+  color: var(--st-ink, #ececee);
+}
+
+.mc-room-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 13px 9px;
+  padding: 10px;
+  border: 1px solid var(--st-frame, #26262a);
+  border-radius: var(--st-r, 6px);
+  background: var(--st-panel-2, #1b1b1e);
+}
+
+.mc-room-composer > input {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--st-line-2);
+  border-radius: var(--st-r-sm, 5px);
+  outline: none;
+  background: var(--st-panel-3, #252529);
+  color: var(--st-ink, #ececee);
+  font-size: 11px;
+}
+
+.mc-room-composer > input:focus {
+  border-color: var(--st-line-3, #36363b);
+}
+
+.mc-room-member-list {
+  max-height: 130px;
+  overflow-y: auto;
+}
+
+.mc-room-member {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--st-muted, #a2a2aa);
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mc-room-member > span {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--st-faintest, #626269);
+}
+
+.mc-room-member.is-selected {
+  color: var(--st-ink, #ececee);
+}
+
+.mc-room-member.is-selected > span {
+  background: var(--st-ink, #ececee);
+}
+
+.mc-room-create {
+  padding: 7px 9px;
+  border: 1px solid var(--st-line-2);
+  border-radius: var(--st-r-sm, 5px);
+  background: var(--st-panel-3, #252529);
+  color: var(--st-ink, #ececee);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.mc-room-create:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mc-room-error {
+  color: var(--st-faint, #8b8b94);
+  font-size: 10px;
+  overflow-wrap: anywhere;
 }
 
 .mc-section-spaced {
