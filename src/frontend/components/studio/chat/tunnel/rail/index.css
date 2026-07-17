@@ -161,3 +161,70 @@
   font-size: 11.5px;
   color: var(--st-faintest);
 }
+
+/* ---- one-index chrome (C24): search, kind filter, quiet unread ---- */
+.st-ms-search {
+  padding: 0 12px;
+}
+
+.st-ms-search input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-r-sm);
+  background: var(--st-panel-2);
+  color: var(--st-ink);
+  font: 11.5px var(--st-sans);
+}
+
+.st-ms-search input:focus {
+  outline: none;
+  border-color: var(--st-line-3);
+}
+
+.st-ms-search input::placeholder {
+  color: var(--st-faintest);
+}
+
+.st-ms-chips {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px;
+}
+
+.st-ms-chip {
+  border: 0;
+  background: none;
+  color: var(--st-faint);
+  font: 10.5px var(--st-sans);
+  padding: 2px 7px;
+  border-radius: var(--st-r-sm);
+  cursor: pointer;
+  transition: color var(--st-dur) var(--st-ease), background var(--st-dur) var(--st-ease);
+}
+
+.st-ms-chip-on {
+  color: var(--st-ink);
+  background: var(--st-panel-2);
+}
+
+/* Unread: ink weight + a quiet tabular count — never gold (C22a). */
+.st-ms-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: var(--st-muted);
+}
+
+.st-ms-chat-unread .st-ms-chat-title {
+  color: var(--st-ink);
+  font-weight: 500;
+}
+
+.st-ms-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--st-line);
+  padding-top: 10px;
+}

@@ -1,8 +1,8 @@
-// Messenger left rail: live presence roster (quiet dot for online — the one
-// ornament the spec grants) and the unified chats list. Picking agents grows
-// a Start Chat affordance; naming stays inline — no modal, nothing covers the
-// page. Rows are plain text: the amber engine may tint ONE chat row gold, and
-// resolving it exhales through sage.
+// Messenger rail — ONE conversation index (C24): Needs you / Unread / Recent
+// / All over a single search + kind filter. Every lane appears exactly once,
+// in its highest section. There is no parallel people list: the live roster
+// appears only inside the collapsed New-room picker. Unread is quiet ink and
+// weight (C22a) — gold belongs to the amber engine's single lane alone.
 import React, { useState } from 'react';
 import type {
   Conversation,
@@ -11,9 +11,13 @@ import type {
 } from '../../../../../lib/tunnelModel/index.js';
 import './index.css';
 
+type KindFilter = 'all' | 'people' | 'rooms';
+
 interface MessengerRailProps {
   roster: RosterEntry[];
   conversations: Conversation[];
+  /** Derived from the ReadCursor store — never a store of its own. */
+  unread: Record<ConversationId, number>;
   selectedId: ConversationId | null;
   /** The lane whose latest word holds the app's single amber right now. */
   goldId: ConversationId | null;
@@ -22,9 +26,49 @@ interface MessengerRailProps {
   onStartChat(members: string[], name: string): Promise<void>;
 }
 
-export function MessengerRail(props: MessengerRailProps) {
+interface Section {
+  label: string;
+  lanes: Conversation[];
+}
+
+/** Split the (recency-sorted) lanes into the four index sections; each lane
+ * lands in its FIRST matching section only. */
+export function buildSections(
+  conversations: Conversation[],
+  unread: Record<ConversationId, number>,
+  goldId: ConversationId | null,
+): Section[] {
+  const needs: Conversation[] = [];
+  const unreadLanes: Conversation[] = [];
+  const recent: Conversation[] = [];
+  const rest: Conversation[] = [];
+  for (const lane of conversations) {
+    if (lane.id === goldId) needs.push(lane);
+    else if ((unread[lane.id] ?? 0) > 0) unreadLanes.push(lane);
+    else if (lane.lastMessageAt) recent.push(lane);
+    else rest.push(lane);
+  }
+  return [
+    { label: 'Needs you', lanes: needs },
+    { label: 'Unread', lanes: unreadLanes },
+    { label: 'Recent', lanes: recent },
+    { label: 'All', lanes: rest },
+  ].filter((section) => section.lanes.length > 0);
+}
+
+function matchesFilter(lane: Conversation, kind: KindFilter, query: string): boolean {
+  if (kind === 'people' && lane.kind !== 'dm') return false;
+  if (kind === 'rooms' && lane.kind === 'dm') return false;
+  if (query && !lane.title.toLowerCase().includes(query)) return false;
+  return true;
+}
+
+function NewRoomPicker(props: {
+  roster: RosterEntry[];
+  onStartChat: MessengerRailProps['onStartChat'];
+  onClose(): void;
+}) {
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set<string>());
-  const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,24 +80,15 @@ export function MessengerRail(props: MessengerRailProps) {
       else next.add(agentName);
       return next;
     });
-    setNaming(false);
-  }
-
-  function beginNaming(): void {
-    setName([...picked].join(' + '));
-    setError(null);
-    setNaming(true);
   }
 
   async function create(): Promise<void> {
-    if (!name.trim() || creating) return;
+    if (!name.trim() || picked.size === 0 || creating) return;
     setCreating(true);
     setError(null);
     try {
       await props.onStartChat([...picked], name.trim());
-      setPicked(new Set());
-      setNaming(false);
-      setName('');
+      props.onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
@@ -63,20 +98,12 @@ export function MessengerRail(props: MessengerRailProps) {
 
   function handleNameKey(press: React.KeyboardEvent<HTMLInputElement>): void {
     if (press.key === 'Enter') void create();
-    if (press.key === 'Escape') setNaming(false);
-  }
-
-  function chatClass(conversation: Conversation): string {
-    let names = 'st-ms-chat';
-    if (conversation.id === props.selectedId) names += ' st-ms-chat-on';
-    if (conversation.id === props.goldId) names += ' st-ms-chat-gold';
-    if (conversation.id === props.settlingId) names += ' st-ms-chat-settling';
-    return names;
+    if (press.key === 'Escape') props.onClose();
   }
 
   return (
-    <div className="st-ms-rail">
-      <div className="st-ms-label">Agents</div>
+    <div className="st-ms-picker">
+      <div className="st-ms-label">New room</div>
       <div className="st-ms-list">
         {props.roster.map((agent) => (
           <button
@@ -91,13 +118,11 @@ export function MessengerRail(props: MessengerRailProps) {
         ))}
         {props.roster.length === 0 && <div className="st-ms-quiet">No live agents</div>}
       </div>
-      {picked.size > 0 && !naming && (
-        <button type="button" className="st-ms-start" onClick={beginNaming}>Start Chat</button>
-      )}
-      {naming && (
+      {picked.size > 0 && (
         <div className="st-ms-name">
           <input
-            aria-label="Chat name"
+            aria-label="Room name"
+            placeholder="Room name"
             value={name}
             autoFocus
             onChange={(change) => setName(change.target.value)}
@@ -109,19 +134,85 @@ export function MessengerRail(props: MessengerRailProps) {
         </div>
       )}
       {error && <div className="st-ms-error">{error}</div>}
-      <div className="st-ms-label">Chats</div>
-      <div className="st-ms-list">
-        {props.conversations.map((conversation) => (
+    </div>
+  );
+}
+
+const FILTERS: { id: KindFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'people', label: 'People' },
+  { id: 'rooms', label: 'Rooms' },
+];
+
+export function MessengerRail(props: MessengerRailProps) {
+  const [query, setQuery] = useState('');
+  const [kind, setKind] = useState<KindFilter>('all');
+  const [picking, setPicking] = useState(false);
+
+  const q = query.trim().toLowerCase();
+  const visible = props.conversations.filter((lane) => matchesFilter(lane, kind, q));
+  const sections = buildSections(visible, props.unread, props.goldId);
+
+  function laneClass(lane: Conversation, count: number): string {
+    let names = 'st-ms-chat';
+    if (lane.id === props.selectedId) names += ' st-ms-chat-on';
+    if (lane.id === props.goldId) names += ' st-ms-chat-gold';
+    if (lane.id === props.settlingId) names += ' st-ms-chat-settling';
+    if (count > 0 && lane.id !== props.goldId) names += ' st-ms-chat-unread';
+    return names;
+  }
+
+  return (
+    <div className="st-ms-rail">
+      <div className="st-ms-search">
+        <input
+          aria-label="Search conversations"
+          placeholder="Search"
+          value={query}
+          onChange={(change) => setQuery(change.target.value)}
+        />
+      </div>
+      <div className="st-ms-chips" role="radiogroup" aria-label="Conversation kind">
+        {FILTERS.map((filter) => (
           <button
-            key={conversation.id}
+            key={filter.id}
             type="button"
-            className={chatClass(conversation)}
-            onClick={() => props.onSelect(conversation)}
+            role="radio"
+            aria-checked={kind === filter.id}
+            className={kind === filter.id ? 'st-ms-chip st-ms-chip-on' : 'st-ms-chip'}
+            onClick={() => setKind(filter.id)}
           >
-            <span className="st-ms-chat-title">{conversation.title}</span>
+            {filter.label}
           </button>
         ))}
       </div>
+      {sections.map((section) => (
+        <React.Fragment key={section.label}>
+          <div className="st-ms-label">{section.label}</div>
+          <div className="st-ms-list">
+            {section.lanes.map((lane) => {
+              const count = props.unread[lane.id] ?? 0;
+              return (
+                <button
+                  key={lane.id}
+                  type="button"
+                  className={laneClass(lane, count)}
+                  onClick={() => props.onSelect(lane)}
+                >
+                  <span className="st-ms-chat-title">{lane.title}</span>
+                  {count > 0 && <span className="st-ms-count">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </React.Fragment>
+      ))}
+      {sections.length === 0 && <div className="st-ms-quiet">No matches</div>}
+      {picking ? (
+        <NewRoomPicker roster={props.roster} onStartChat={props.onStartChat} onClose={() => setPicking(false)} />
+      ) : (
+        <button type="button" className="st-ms-start" onClick={() => setPicking(true)}>New room</button>
+      )}
     </div>
   );
 }
