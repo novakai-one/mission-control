@@ -11,7 +11,8 @@ import { nextSpawnName, isNameTaken } from '../messaging/address/index.js';
 import { ConfigManager } from '../config/index.js';
 import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.js';
 import { SubagentWatcher } from '../transcript/subagents/index.js';
-import { SessionControl, type SessionControlIntent } from '../terminal/control/index.js';
+import type { SessionControlIntent } from '../../shared/sessionControl.js';
+import { SessionControl } from '../terminal/control/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -149,11 +150,15 @@ export class AgentsHub {
   }
 
   private control(socket: WebSocket, message: Record<string, unknown>): boolean {
-    if (typeof message.agentId !== 'string' || !isSessionControlIntent(message.intent)) return true;
+    if (
+      typeof message.commandId !== 'string'
+      || typeof message.agentId !== 'string'
+      || !isSessionControlIntent(message.intent)
+    ) return true;
     const result = this.sessionControl.execute(message.agentId, message.intent);
     this.sendIfOpen(socket, {
       type: 'agent-control-result',
-      commandId: typeof message.commandId === 'string' ? message.commandId : undefined,
+      commandId: message.commandId,
       ...result,
     });
     return true;

@@ -1,13 +1,11 @@
 import type { ProviderId } from '../../../shared/project/schema.js';
+import type {
+  SessionControlIntent,
+  SessionControlResult,
+} from '../../../shared/sessionControl.js';
 import type { TerminalRuntime } from '../runtime/index.js';
 
-export type SessionControlIntent =
-  | { kind: 'interrupt' }
-  | { kind: 'model'; model: string };
-
-export type SessionControlResult =
-  | { status: 'accepted'; agentId: string; intent: SessionControlIntent }
-  | { status: 'rejected'; agentId: string; intent: SessionControlIntent; reason: string };
+export type { SessionControlIntent, SessionControlResult } from '../../../shared/sessionControl.js';
 
 const MODEL_ID = /^[A-Za-z0-9._-]{1,80}$/;
 
