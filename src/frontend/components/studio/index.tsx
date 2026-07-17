@@ -6,6 +6,7 @@ import { Settings, PanelRight } from 'lucide-react';
 import type { ProjectRecord, ThreadRecord } from '../../../shared/project/schema.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import { useHighlightedObject } from '../../lib/highlight/index.js';
+import { useAttention } from '../../lib/attention/index.js';
 import { agentObjectId, threadObjectId } from '../../lib/mentions/index.js';
 import './index.css';
 
@@ -63,9 +64,15 @@ function ProjectRow({ project, here, onSelect }: { project: ProjectRecord; here:
 
 function ThreadRow({ thread, here, onSelect }: { thread: ThreadRecord; here: boolean; onSelect(): void }) {
   // A chat mention pointing at this thread lights the row — the chip stays
-  // quiet, the object glows.
+  // quiet, the object glows. The amber engine may additionally grant this
+  // row the app's one gold dot (its thread holds the item needing Chris),
+  // which releases to sage as the item settles.
   const isLit = useHighlightedObject() === threadObjectId(thread.id);
-  const rowClass = `studio-thread${here ? ' studio-here' : ''}${isLit ? ' studio-lit' : ''}`;
+  const attention = useAttention();
+  const needsYou = attention.goldThreadId === thread.id;
+  const settlingHere = !needsYou && attention.settlingThreadId === thread.id;
+  const rowClass = `studio-thread${here ? ' studio-here' : ''}${isLit ? ' studio-lit' : ''}`
+    + `${needsYou ? ' studio-needs' : ''}${settlingHere ? ' studio-settling' : ''}`;
   return (
     <button type="button" className={rowClass} onClick={onSelect}>
       <span className="studio-dot" />

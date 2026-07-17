@@ -16,6 +16,13 @@ import {
 } from '../../../lib/chatModel/index.js';
 import { buildTargets, type MentionTarget } from '../../../lib/mentions/index.js';
 import { pinObject, useHighlightedObject } from '../../../lib/highlight/index.js';
+import {
+  approvalItemId,
+  buildAttentionQueue,
+  updateAttentionQueue,
+  useAttention,
+} from '../../../lib/attention/index.js';
+import { useTunnelFeed } from '../../../lib/tunnelModel/index.js';
 import { ChatComposer } from './composer.js';
 import { MentionText } from './mention/index.js';
 import { TunnelFeed } from './tunnel/index.js';
@@ -77,8 +84,15 @@ function StateRows({ message }: { message: ChatMessage }) {
 }
 
 function ChatMessageBlock({ message, targets }: { message: ChatMessage; targets: MentionTarget[] }) {
+  // Gold is granted by the amber engine, never claimed locally: this approval
+  // reads gold only while it is THE thing needing Chris, and reads sage for a
+  // breath right after it resolves.
+  const attention = useAttention();
+  const holdsGold = message.needsYou && attention.goldId === approvalItemId(message.id);
+  const isSettling = attention.settlingId === approvalItemId(message.id);
+  const blockClass = `st-msg${holdsGold ? ' st-msg-needs' : ''}${isSettling ? ' st-msg-settling' : ''}`;
   return (
-    <div className={message.needsYou ? 'st-msg st-msg-needs' : 'st-msg'}>
+    <div className={blockClass}>
       <div className={message.fromYou ? 'st-by st-by-you' : 'st-by'}>
         <b>{message.author}</b>
         {message.time && <> · {message.time}</>}
@@ -250,6 +264,18 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
     [props.agents, props.project],
   );
 
+  // Amber engine feed. The tunnel feed lives HERE (not in the Tunnel tab) so
+  // a failed delivery claims attention whichever lens is open. Clicking
+  // through a failed send dismisses it — that is its resolution.
+  const tunnelFeed = useTunnelFeed();
+  const [dismissedNeeds, setDismissedNeeds] = useState<ReadonlySet<string>>(() => new Set<string>());
+  useEffect(() => {
+    updateAttentionQueue(buildAttentionQueue(props.projection, tunnelFeed, dismissedNeeds));
+  }, [props.projection, tunnelFeed, dismissedNeeds]);
+  function resolveNeed(itemId: string): void {
+    setDismissedNeeds((current) => new Set(current).add(itemId));
+  }
+
   return (
     <aside className="studio-ai">
       <div className="st-ai-head">
@@ -273,7 +299,9 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
         <ConversationBody projection={props.projection} thread={props.thread} pendingSends={pendingSends} targets={mentionTargets} />
       )}
       {activeTab === 'context' && <ContextBody {...props} />}
-      {activeTab === 'tunnel' && <TunnelFeed agents={props.agents} targets={mentionTargets} />}
+      {activeTab === 'tunnel' && (
+        <TunnelFeed feed={tunnelFeed} agents={props.agents} targets={mentionTargets} onResolve={resolveNeed} />
+      )}
       {activeTab === 'evidence' && <div className="st-ai-quiet">Nothing captured yet</div>}
 
       {activeTab === 'conversation' && (

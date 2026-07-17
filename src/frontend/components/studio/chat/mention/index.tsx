@@ -9,13 +9,21 @@ import './index.css';
 
 function MentionChip({ label, objectId }: { label: string; objectId: string }) {
   const isLit = useHighlightedObject() === objectId;
+
+  // Inspecting a mention is never a state change to its row: the click must
+  // not bubble into whatever the row does (e.g. resolving a gold tunnel row).
+  function handleClick(click: React.MouseEvent<HTMLButtonElement>): void {
+    click.stopPropagation();
+    pinObject(objectId);
+  }
+
   return (
     <button
       type="button"
       className={isLit ? 'st-mention st-mention-on' : 'st-mention'}
       onMouseEnter={() => glowObject(objectId)}
       onMouseLeave={() => glowObject(null)}
-      onClick={() => pinObject(objectId)}
+      onClick={handleClick}
     >
       {label}
     </button>
