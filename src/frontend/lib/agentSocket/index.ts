@@ -41,6 +41,7 @@ interface ServerFrame {
 interface WatchTarget {
   projectDir: string;
   sessionId: string;
+  subscribers: number;
 }
 
 const READY_CONNECTING = 0;
@@ -136,7 +137,9 @@ function isOpen(): boolean {
 
 function resubscribeAll(): void {
   for (const agentId of agentHandlers.keys()) send({ type: 'agent-subscribe', agentId });
-  for (const watch of watchedSessions.values()) send({ type: 'watch-session', ...watch });
+  for (const watch of watchedSessions.values()) {
+    send({ type: 'watch-session', projectDir: watch.projectDir, sessionId: watch.sessionId });
+  }
 }
 
 function handleOpen(): void {
@@ -204,14 +207,27 @@ export function sendResize(agentId: string, cols: number, rows: number): void {
 // Same not-queued rule as subscribeAgent: resubscribeAll() re-sends watch-session
 // for every watched session on open, so queueing it here too would double-send it.
 export function watchSession(projectDir: string, sessionId: string): void {
-  watchedSessions.set(watchKey(projectDir, sessionId), { projectDir, sessionId });
+  const watchId = watchKey(projectDir, sessionId);
+  const current = watchedSessions.get(watchId);
+  if (current) {
+    current.subscribers += 1;
+    return;
+  }
+  watchedSessions.set(watchId, { projectDir, sessionId, subscribers: 1 });
   if (isOpen()) send({ type: 'watch-session', projectDir, sessionId });
 }
 
 // Same not-queued rule: removing from watchedSessions alone is correct when the
 // socket is closed, since resubscribeAll() only re-sends what's still in the map.
 export function unwatchSession(projectDir: string, sessionId: string): void {
-  watchedSessions.delete(watchKey(projectDir, sessionId));
+  const watchId = watchKey(projectDir, sessionId);
+  const current = watchedSessions.get(watchId);
+  if (!current) return;
+  if (current.subscribers > 1) {
+    current.subscribers -= 1;
+    return;
+  }
+  watchedSessions.delete(watchId);
   if (isOpen()) send({ type: 'unwatch-session', projectDir, sessionId });
 }
 
