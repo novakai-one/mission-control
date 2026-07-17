@@ -28,17 +28,20 @@ export function providerArguments(provider: ProviderId, requestedSessionId: stri
     : ['-c', 'check_for_update_on_startup=false', '--no-alt-screen'];
 }
 
-export function providerEnvironment(provider: ProviderId): NodeJS.ProcessEnv {
+export function providerEnvironment(provider: ProviderId, browserSession?: string): NodeJS.ProcessEnv {
   const scrubbed = { ...process.env };
   for (const envKey of Object.keys(scrubbed)) {
     if (/^CLAUDE|^ANTHROPIC/.test(envKey)) delete scrubbed[envKey];
     if (provider === 'codex' && /^CODEX_/.test(envKey) && envKey !== 'CODEX_HOME') delete scrubbed[envKey];
   }
   scrubbed.TERM = 'xterm-256color';
+  // Bind each agent to its own isolated browser session. When the agent runs
+  // `browse`, it auto-scopes to this id — parallel agents never share a tab.
+  if (browserSession) scrubbed.NVK_SESSION = browserSession;
   return scrubbed;
 }
 
-function spawn(provider: ProviderId, cwd: string, args: string[]): ProviderTerminalProcess {
+function spawn(provider: ProviderId, cwd: string, args: string[], browserSession: string): ProviderTerminalProcess {
   const configuration = ConfigManager.load();
   const configured = provider === 'claude' ? configuration.claudeCliPath : configuration.codexCliPath;
   const { resolved, exists } = resolveCli(configured || provider);
@@ -51,7 +54,7 @@ function spawn(provider: ProviderId, cwd: string, args: string[]): ProviderTermi
     cols: 120,
     rows: 32,
     cwd,
-    env: providerEnvironment(provider),
+    env: providerEnvironment(provider, browserSession),
   });
 }
 
@@ -59,14 +62,14 @@ function spawn(provider: ProviderId, cwd: string, args: string[]): ProviderTermi
 export function launchProvider(provider: ProviderId, cwd: string, requestedSessionId: string): ProviderLaunch {
   if (provider === 'claude') {
     return {
-      process: spawn('claude', cwd, providerArguments(provider, requestedSessionId)),
+      process: spawn('claude', cwd, providerArguments(provider, requestedSessionId), requestedSessionId),
       sessionId: Promise.resolve(requestedSessionId),
     };
   }
   const locator = new CodexSessionLocator();
   const known = locator.snapshot();
   const startedAt = Date.now();
-  const process = spawn('codex', cwd, providerArguments(provider, requestedSessionId));
+  const process = spawn('codex', cwd, providerArguments(provider, requestedSessionId), requestedSessionId);
   return {
     process,
     sessionId: locator.waitForNew(cwd, known, startedAt),
