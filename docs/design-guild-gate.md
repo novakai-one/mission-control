@@ -115,6 +115,11 @@ is a C1 fail.
   the `>_ novakai` wordmark = FAIL. Test results, diffs, code refs, terminal-ish
   evidence all render in Inter as designed rows (sage ✓ row / ink-bright ✕ row,
   aligned columns, tabular numerals fine). The app is the anti-terminal.
+  **Drop-1 clarification (codex, binding):** literal and total — inline code, fenced
+  code, debug type labels, logs, and raw session output are ALL Inter, hidden lenses
+  included. Code meaning comes from surface/weight/syntax tint/whitespace/tabular
+  numerals, never a mono face. Sole exemption: the `>_` wordmark glyph
+  (suggested token: `--st-wordmark`; legacy `--st-mono`/`--font-mono` alias to sans).
 - **C12 amendment (pending opus swatches, invariants ratified):** Inter must RENDER
   (measured glyphs — `C12_interReal` in the harness — not a font-family string; local()
   + embedded woff2 both C13-legal). Color allowlist grows to: per-person identity tints
@@ -147,6 +152,11 @@ is a C1 fail.
   gutter between surfaces; every primary zone root resolves to a panel-ramp value;
   child controls resolve LIGHTER than their parent surface. **[mech: computed-bg walk
   of zone roots + child controls; page bg found inside a zone = FAIL]**
+- **C22 interior-well ruling (codex, Drop 1 — binding):** an interior surface painted
+  the page value (e.g. `.workspace-timeline` on `var(--st-stage)` `#0d0d0f` inside the
+  framed workspace) FAILS — no inset-well exception. Fix shape: interior scroll regions
+  take the next-lighter ramp step (`#1b1b1e` child inside `#121214` parent); groups may
+  stay transparent within it. Page `#0d0d0f` is gutter-only, everywhere, always.
 - **C22a — Selection never steals gold.** Visual check on every drive: ordinary
   selection, hover, and unread states consume ink/tint/weight only — never any gold
   family value. Gold remains exclusively the one human-required item (C1/C2/C21).
