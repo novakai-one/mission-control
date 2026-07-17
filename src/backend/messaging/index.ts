@@ -15,12 +15,16 @@ import {
   RecipientNotFoundError,
   InterruptRateLimitError,
   ChannelInterruptError,
+  NotARoomMemberError,
+  RoomNotFoundError,
 } from './router/index.js';
+import { RoomStore } from './rooms/index.js';
 import { SendApi, InvalidSendError } from './send/index.js';
 import { MessageStore } from './store/index.js';
-import type { MessageQuery, SendMessage } from './types.js';
+import type { MessageQuery, Room, SendMessage } from './types.js';
 
 export { MessageStore } from './store/index.js';
+export { RoomStore } from './rooms/index.js';
 export { PtyDelivery } from './delivery/index.js';
 export { MessageRouter, InterruptRateLimiter } from './router/index.js';
 export { SendApi } from './send/index.js';
@@ -35,6 +39,7 @@ export interface AgentTerminals extends PtyWriter {
 
 export interface MessagingOptions {
   storePath?: string;
+  roomsStorePath?: string;
   timings?: DeliveryTimings;
   maxInterruptsPerMinute?: number;
   /** How long a freshly spawned CLI gets to boot before the briefing is typed. */
@@ -46,6 +51,7 @@ export interface MessagingOptions {
 export class MessagingHub {
   private readonly store: MessageStore;
   private readonly delivery: PtyDelivery;
+  private readonly rooms: RoomStore;
   private readonly sendApi: SendApi;
   private readonly spawnBriefingDelayMs: number;
   private readonly serverPort: number;
@@ -57,10 +63,13 @@ export class MessagingHub {
   ) {
     this.store = new MessageStore(options.storePath);
     this.store.onAppend((envelope) => this.broadcast('message-envelope', envelope));
+    this.rooms = new RoomStore(options.roomsStorePath);
+    this.rooms.onAppend(() => this.broadcast('rooms-changed', { rooms: this.rooms.list() }));
     this.delivery = new PtyDelivery(this.terminals, options.timings);
     const router = new MessageRouter(
       this.store,
       this.delivery,
+      this.rooms,
       () => rosterFromAgents(this.terminals.list()),
       new InterruptRateLimiter(options.maxInterruptsPerMinute),
     );
@@ -72,6 +81,59 @@ export class MessagingHub {
   registerRoutes(application: Express): void {
     application.post('/api/messages', (request, response) => void this.handleSend(request, response));
     application.get('/api/messages', (request, response) => this.handleHistory(request, response));
+    application.post('/api/rooms', (request, response) => this.handleCreateRoom(request, response));
+    application.get('/api/rooms', (_request, response) => response.json({ rooms: this.rooms.list() }));
+    application.post(
+      '/api/rooms/:roomId/members',
+      (request, response) => this.handleAddMembers(request, response),
+    );
+  }
+
+  private handleCreateRoom(request: Request, response: Response): void {
+    const payload = (request.body ?? {}) as { name?: unknown; members?: unknown; from?: unknown };
+    try {
+      const name = this.requireText(payload.name, 'name');
+      const members = this.requireStringArray(payload.members, 'members');
+      const createdBy = this.requireText(payload.from, 'from');
+      response.status(201).json({ room: this.rooms.create({ name, members, createdBy }) });
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private handleAddMembers(request: Request, response: Response): void {
+    const roomId = request.params.roomId;
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      response.status(404).json({ error: new RoomNotFoundError(roomId).message });
+      return;
+    }
+    const payload = (request.body ?? {}) as { add?: unknown; from?: unknown };
+    try {
+      const sender = this.requireText(payload.from, 'from');
+      if (!room.members.includes(sender)) {
+        response.status(403).json({ error: new NotARoomMemberError(sender, roomId).message });
+        return;
+      }
+      const add = this.requireStringArray(payload.add, 'add');
+      response.json({ room: this.rooms.addMembers(roomId, add) as Room });
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private requireText(value: unknown, field: string): string {
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(`${field} must be a non-empty string`);
+    }
+    return value;
+  }
+
+  private requireStringArray(value: unknown, field: string): string[] {
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || entry.trim() === '')) {
+      throw new Error(`${field} must be an array of non-empty strings`);
+    }
+    return value;
   }
 
   /**
@@ -112,6 +174,10 @@ export class MessagingHub {
       response.status(400).json({ error: message });
     } else if (error instanceof RecipientNotFoundError) {
       response.status(404).json({ error: message, roster: error.roster });
+    } else if (error instanceof RoomNotFoundError) {
+      response.status(404).json({ error: message });
+    } else if (error instanceof NotARoomMemberError) {
+      response.status(403).json({ error: message });
     } else if (error instanceof InterruptRateLimitError) {
       response.status(429).json({ error: message });
     } else if (error instanceof DeliveryFailedError) {
@@ -124,6 +190,7 @@ export class MessagingHub {
   private handleHistory(request: Request, response: Response): void {
     const query: MessageQuery = {};
     if (typeof request.query.withAgent === 'string') query.withAgent = request.query.withAgent;
+    if (typeof request.query.withRoom === 'string') query.withRoom = request.query.withRoom;
     if (typeof request.query.threadId === 'string') query.threadId = request.query.threadId;
     if (typeof request.query.since === 'string') query.since = request.query.since;
     if (typeof request.query.limit === 'string') {

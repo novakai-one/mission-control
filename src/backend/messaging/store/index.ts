@@ -44,6 +44,10 @@ export class MessageStore {
       const agent = query.withAgent;
       envelopes = envelopes.filter((message) => message.from === agent || message.to === agent);
     }
+    if (query.withRoom !== undefined) {
+      const room = query.withRoom;
+      envelopes = envelopes.filter((message) => message.to === room);
+    }
     if (query.threadId !== undefined) {
       envelopes = envelopes.filter((message) => message.threadId === query.threadId);
     }
