@@ -19,6 +19,7 @@ import { AnalyticsView, ANALYTICS_CHANGED_EVENT } from './analytics/index.js';
 import { DesignView, DESIGN_CHANGED_EVENT } from './design/index.js';
 import { useViewPanelState } from './viewpanel/index.js';
 import { WorkspaceTimeline } from './workspace/timeline/index.js';
+import { MessagesView } from './workspace/messages/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
 import { mergeEvents, upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
@@ -83,7 +84,7 @@ const COL_MIN = 280;
 const COL_MAX = 900;
 const VIEW_MODE_STORAGE_KEY = 'novakai-view-mode';
 const SESSION_STORAGE_KEY = 'novakai-selected-session';
-const VIEW_MODES = new Set<ViewMode>(['workspace', 'organization', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
+const VIEW_MODES = new Set<ViewMode>(['workspace', 'organization', 'messages', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
 
 function restoredViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
@@ -373,8 +374,8 @@ export function DashboardShell() {
 
   return (
     <div className="studio-stage">
-      <div className="studio-app">
-        <StudioRail
+      <div className={viewMode === 'messages' ? 'studio-app studio-app-immersive' : 'studio-app'}>
+        {viewMode !== 'messages' && <StudioRail
           projects={workspace.projects}
           selectedProject={workspace.selectedProject}
           selectedThread={workspace.selectedThread}
@@ -382,7 +383,7 @@ export function DashboardShell() {
           onSelectThread={workspace.selectThread}
           onCreateProject={workspace.createProject}
           onCreateThread={workspace.createThread}
-        />
+        />}
         <main className="studio-work">
           <StudioWorkHead
             viewMode={viewMode}
@@ -425,7 +426,13 @@ export function DashboardShell() {
         )}
         {/* Always mounted so the prototype's shadow DOM survives tab switches. */}
         <DesignView visible={viewMode === 'design'} />
-        {viewMode === 'organization' ? (
+        {viewMode === 'messages' ? (
+          <MessagesView
+            agents={agentsState.agents}
+            projects={workspace.projects}
+            project={workspace.selectedProject}
+          />
+        ) : viewMode === 'organization' ? (
           <OrganizationLens agents={agentsState.agents} />
         ) : viewMode === 'workspace' ? (
           <WorkspaceTimeline
@@ -512,7 +519,7 @@ export function DashboardShell() {
         ) : null}
           </div>
         </main>
-        <StudioChatPanel
+        {viewMode !== 'messages' && <StudioChatPanel
           project={workspace.selectedProject}
           thread={workspace.selectedThread}
           projection={workspace.projection}
@@ -522,8 +529,8 @@ export function DashboardShell() {
           onLaunch={workspace.launchProvider}
           onAttach={workspace.attachSession}
           onOpenAgent={openAgent}
-        />
-        <StudioResizeSeams />
+        />}
+        {viewMode !== 'messages' && <StudioResizeSeams />}
       </div>
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

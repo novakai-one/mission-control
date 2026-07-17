@@ -73,6 +73,10 @@
   position: relative;
 }
 
+.studio-app.studio-app-immersive {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* Drag seams live IN the gutters; invisible until used (the handle appears
    only while it matters), a quiet hairline on hover/drag. Widths persist. */
 .studio-seam {
