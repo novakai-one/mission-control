@@ -18,6 +18,7 @@ import { AgentsHub } from './agents.js';
 import { ProjectsHub } from './projects/index.js';
 import { CanvasHub } from './canvas/index.js';
 import { AnalyticsHub } from './analytics/index.js';
+import { DesignHub } from './design/index.js';
 import { MessagingHub } from '../messaging/index.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
@@ -59,6 +60,7 @@ export class ServerController {
   private readonly projectsHub: ProjectsHub;
   private readonly canvasHub: CanvasHub;
   private readonly analyticsHub: AnalyticsHub;
+  private readonly designHub: DesignHub;
   private readonly messagingHub: MessagingHub;
 
   constructor(
@@ -69,11 +71,9 @@ export class ServerController {
   ) {
     this.agentsHub = new AgentsHub(this.activeSockets, terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
-    this.canvasHub = new CanvasHub((event, payload) => this.broadcastEvent(event, payload));
-    this.analyticsHub = new AnalyticsHub((event, payload) => this.broadcastEvent(event, payload));
+    [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
     this.messagingHub = this.buildMessagingHub();
-    this.server = createServer(this.app);
-    this.wsServer = new WebSocketServer({ server: this.server });
+    this.server = createServer(this.app); this.wsServer = new WebSocketServer({ server: this.server });
 
     this.configureExpress();
     this.configureWebSockets();
@@ -82,6 +82,12 @@ export class ServerController {
     this.coordinator.setBroadcastHandler((event, payload) => {
       this.broadcastEvent(event, payload);
     });
+  }
+
+  /** Studio lenses share one event broadcast boundary. */
+  private buildStudioHubs(): [CanvasHub, AnalyticsHub, DesignHub] {
+    const broadcast = (event: string, payload: unknown): void => this.broadcastEvent(event, payload);
+    return [new CanvasHub(broadcast), new AnalyticsHub(broadcast), new DesignHub(broadcast)];
   }
 
   /**
@@ -129,6 +135,7 @@ export class ServerController {
     this.projectsHub.registerRoutes(this.app);
     this.canvasHub.registerRoutes(this.app);
     this.analyticsHub.registerRoutes(this.app);
+    this.designHub.registerRoutes(this.app);
     this.messagingHub.registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {
