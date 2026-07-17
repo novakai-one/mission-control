@@ -11,6 +11,8 @@ import { nextSpawnName, isNameTaken } from '../messaging/address/index.js';
 import { ConfigManager } from '../config/index.js';
 import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.js';
 import { SubagentWatcher } from '../transcript/subagents/index.js';
+import type { SessionControlIntent } from '../../shared/sessionControl.js';
+import { SessionControl } from '../terminal/control/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -41,11 +43,13 @@ export class AgentsHub {
   private readonly sessionWatchers = new Map<WebSocket, Map<string, SessionWatchPair>>();
   private readonly sessionListeners: Array<(info: AgentInfo) => void> = [];
   private readonly launchListeners: Array<(info: AgentInfo) => void> = [];
+  private readonly sessionControl: SessionControl;
 
   constructor(
     private readonly sockets: Set<WebSocket>,
     private readonly manager: TerminalRuntime = new TerminalManager(),
   ) {
+    this.sessionControl = new SessionControl(this.manager);
     this.manager.onData((agentId, data) => {
       this.sendToSubscribers(agentId, { type: 'agent-data', agentId, data });
     });
@@ -74,6 +78,7 @@ export class AgentsHub {
     if (message.type === 'agent-subscribe') return this.subscribe(socket, message);
     if (message.type === 'agent-input') return this.input(message);
     if (message.type === 'agent-resize') return this.resize(message);
+    if (message.type === 'agent-control') return this.control(socket, message);
     if (message.type === 'watch-session') return this.watchSession(socket, message);
     if (message.type === 'unwatch-session') return this.unwatchSession(socket, message);
     return false;
@@ -141,6 +146,21 @@ export class AgentsHub {
       && typeof message.cols === 'number' && typeof message.rows === 'number';
     if (!valid) return true;
     this.manager.resize(message.agentId as string, message.cols as number, message.rows as number);
+    return true;
+  }
+
+  private control(socket: WebSocket, message: Record<string, unknown>): boolean {
+    if (
+      typeof message.commandId !== 'string'
+      || typeof message.agentId !== 'string'
+      || !isSessionControlIntent(message.intent)
+    ) return true;
+    const result = this.sessionControl.execute(message.agentId, message.intent);
+    this.sendIfOpen(socket, {
+      type: 'agent-control-result',
+      commandId: message.commandId,
+      ...result,
+    });
     return true;
   }
 
@@ -272,4 +292,11 @@ export class AgentsHub {
     this.broadcastAgentsChanged();
     response.status(204).end();
   }
+}
+
+function isSessionControlIntent(value: unknown): value is SessionControlIntent {
+  if (!value || typeof value !== 'object') return false;
+  const intent = value as Record<string, unknown>;
+  if (intent.kind === 'interrupt') return true;
+  return intent.kind === 'model' && typeof intent.model === 'string';
 }
