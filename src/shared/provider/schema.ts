@@ -35,6 +35,8 @@ export interface ApprovalDetails {
   command?: string;
   reason?: string;
   writes: string[];
+  /** Answer choices when the approval is a question (AskUserQuestion). */
+  options?: string[];
 }
 
 /** Successful provider transcript load. */

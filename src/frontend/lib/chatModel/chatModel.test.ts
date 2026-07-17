@@ -72,6 +72,21 @@ assert.equal(approvals[0].rows[0].mono, 'npm run migrate');
 assert.equal(approvals[0].rows[0].state, 'awaiting');
 assert.equal(approvals[0].rows[2].mono, 'b.ts');
 
+// question approval → one row per answer choice, labels in the text slot.
+const questions = buildChatMessages(projection([event({
+  id: 'p2',
+  kind: 'approval',
+  text: 'Which chat model should rooms use?',
+  approval: { reason: 'Chat model', writes: [], options: ['Ad-hoc rooms', 'One standing group'] },
+})]));
+assert.equal(questions[0].caption, 'Which chat model should rooms use?');
+assert.equal(questions[0].rows.length, 2);
+assert.equal(questions[0].rows[0].mono, '');
+assert.equal(questions[0].rows[0].text, 'Ad-hoc rooms');
+assert.equal(questions[0].rows[0].state, 'option');
+assert.equal(questions[0].rows[1].text, 'One standing group');
+assert.equal(questions[0].rows[1].settled, false);
+
 // The limit keeps only the newest messages.
 const capped = buildChatMessages(
   projection([event({ id: 'm1' }), event({ id: 'm2' }), event({ id: 'm3' })]),
