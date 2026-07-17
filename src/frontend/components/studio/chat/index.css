@@ -359,14 +359,15 @@
   color: var(--st-faintest);
 }
 
-/* Primary action = solid gold, dark glyph — the brand signature. */
+/* Send stays neutral: gold is never a routine CTA — only the amber engine's
+   single human-required item may hold it (C1/C2/C22a, codex Drop-1 ruling). */
 .st-send {
   width: 27px;
   height: 27px;
   border-radius: var(--st-r);
-  border: 0;
-  background: var(--st-gold);
-  color: var(--st-on-gold);
+  border: 1px solid var(--st-line-2);
+  background: var(--st-panel-3);
+  color: var(--st-ink);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -375,7 +376,7 @@
 }
 
 .st-send:hover:not(:disabled) {
-  background: var(--st-gold-bright);
+  background: var(--st-panel-4);
 }
 
 .st-send:disabled {

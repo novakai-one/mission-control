@@ -94,7 +94,8 @@
 .wt-reveal-clip pre {
   margin: 0;
   padding: 4px 0 6px 63px; /* aligns under .wt-line (kind 52px + 11px gap) */
-  font: 11px/1.7 var(--st-mono);
+  font: 11px/1.7 var(--st-sans);
+  font-variant-numeric: tabular-nums;
   color: var(--st-muted);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -176,7 +177,8 @@
 
 .wt-decide-cmd {
   padding: 12px 14px;
-  font-family: var(--st-mono);
+  font-family: var(--st-sans);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--st-ink);
   overflow-wrap: anywhere;
