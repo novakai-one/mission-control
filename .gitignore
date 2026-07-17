@@ -15,3 +15,5 @@ desktop/package-lock.json
 .novakai-command/rooms.jsonl
 .novakai-command/analytics/
 .claude/settings.local.json
+# symlinked in worktrees; the dir pattern above misses symlinks
+node_modules
