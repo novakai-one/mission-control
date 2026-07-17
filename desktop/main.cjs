@@ -1,5 +1,7 @@
 // Electron thin shell for Novakai Command.
-// Attaches to a running dev server on :3030, or spawns `npm run dev` itself.
+// Attaches to a running server on :3030, or spawns `npm run prod` itself —
+// a no-watch deploy snapshot (tools/deploy.mjs) so main merges no longer
+// restart prod. A manual `npm run dev` still wins the :3030 attach for HMR work.
 // The backend (tsx + node-pty) always runs in system Node, never inside Electron.
 const { app, BrowserWindow, shell } = require('electron');
 const { spawn } = require('child_process');
@@ -34,9 +36,9 @@ function probe() {
 
 function startDevServer() {
   const log = fs.openSync(LOG_FILE, 'a');
-  fs.writeSync(log, `\n--- Novakai Command shell: starting dev server ${new Date().toISOString()} ---\n`);
+  fs.writeSync(log, `\n--- Novakai Command shell: starting prod server ${new Date().toISOString()} ---\n`);
   // Login shell so a Finder/Dock launch (bare PATH) still finds node/npm.
-  devServer = spawn('/bin/zsh', ['-lc', 'exec npm run dev'], {
+  devServer = spawn('/bin/zsh', ['-lc', 'exec npm run prod'], {
     cwd: REPO_DIR,
     detached: true, // own process group, so quit can tree-kill it
     env: { ...process.env, NOVAKAI_DESKTOP_PID: String(process.pid) },

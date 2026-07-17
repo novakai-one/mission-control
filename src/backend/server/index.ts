@@ -51,10 +51,23 @@ function validateProjectSession(
   return { projectDir, sessionId };
 }
 
+/**
+ * Production ('npm run prod') serves the browser from a pinned deploy snapshot:
+ * `staticDir` points at the snapshot's built frontend, `appPort` (3030) adds a
+ * second listener so the app is same-origin — API, ws, and static assets all
+ * come from one process. Dev leaves both unset; vite still owns 3030.
+ */
+export interface ServerOptions {
+  staticDir?: string;
+  appPort?: number;
+}
+
 export class ServerController {
   private readonly app = express();
   private readonly server: HttpServer;
   private readonly wsServer: WebSocketServer;
+  private appServer?: HttpServer;
+  private appWss?: WebSocketServer;
   private readonly activeSockets = new Set<WebSocket>();
   private readonly agentsHub: AgentsHub;
   private readonly projectsHub: ProjectsHub;
@@ -68,20 +81,27 @@ export class ServerController {
     private readonly coordinator: AgentCoordinator,
     private readonly stateManager: StateManager,
     terminals: TerminalRuntime,
+    private readonly options: ServerOptions = {},
   ) {
     this.agentsHub = new AgentsHub(this.activeSockets, terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
     this.messagingHub = this.buildMessagingHub();
-    this.server = createServer(this.app); this.wsServer = new WebSocketServer({ server: this.server });
-
+    this.server = createServer(this.app);
+    this.wsServer = new WebSocketServer({ server: this.server });
+    this.createAppListener();
     this.configureExpress();
     this.configureWebSockets();
     this.configureRoutes();
+    this.configureStaticFallback();
+    this.coordinator.setBroadcastHandler((event, payload) => this.broadcastEvent(event, payload));
+  }
 
-    this.coordinator.setBroadcastHandler((event, payload) => {
-      this.broadcastEvent(event, payload);
-    });
+  /** Optional same-origin app listener — prod serves the built frontend here. */
+  private createAppListener(): void {
+    if (!this.options.appPort) return;
+    this.appServer = createServer(this.app);
+    this.appWss = new WebSocketServer({ server: this.appServer });
   }
 
   /** Studio lenses share one event broadcast boundary. */
@@ -108,10 +128,21 @@ export class ServerController {
   private configureExpress(): void {
     this.app.use(cors({ origin: 'http://localhost:3030' }));
     this.app.use(express.json());
+    if (this.options.staticDir) {
+      this.app.use(express.static(this.options.staticDir));
+    }
   }
 
   private configureWebSockets(): void {
-    this.wsServer.on('connection', (socket) => {
+    this.attachConnectionHandler(this.wsServer);
+    if (this.appWss) this.attachConnectionHandler(this.appWss);
+  }
+
+  private attachConnectionHandler(socketServer: WebSocketServer): void {
+    // ws re-emits http-server errors on the WebSocketServer; without this
+    // listener a listen() failure crashes as an unhandled 'error' event.
+    socketServer.on('error', () => {});
+    socketServer.on('connection', (socket) => {
       this.activeSockets.add(socket);
 
       socket.on('message', (data) => {
@@ -127,6 +158,22 @@ export class ServerController {
         this.activeSockets.delete(socket);
         this.agentsHub.handleClose(socket);
       });
+    });
+  }
+
+  /**
+   * SPA fallback for the built frontend: any non-/api GET returns index.html so
+   * client-side routing works on reload. Registered after all API routes.
+   */
+  private configureStaticFallback(): void {
+    const staticDir = this.options.staticDir;
+    if (!staticDir) return;
+    this.app.get('*', (request, response, next) => {
+      if (request.path.startsWith('/api')) {
+        next();
+        return;
+      }
+      response.sendFile(path.join(staticDir, 'index.html'));
     });
   }
 
@@ -379,34 +426,34 @@ export class ServerController {
     }
   }
 
-  public start(): Promise<void> {
+  public async start(): Promise<void> {
+    await this.listen(this.server, this.port);
+    if (this.appServer && this.options.appPort) {
+      await this.listen(this.appServer, this.options.appPort);
+    }
+  }
+
+  private listen(server: HttpServer, port: number): Promise<void> {
     return new Promise((resolve, reject) => {
-      // ws re-emits http-server errors on the WebSocketServer; without a
-      // listener there, listen() failures crash as an unhandled 'error'
-      // event "on WebSocketServer instance" instead of reaching reject.
-      this.wsServer.on('error', () => {});
-      this.server.on('error', (error: NodeJS.ErrnoException) => {
+      server.on('error', (error: NodeJS.ErrnoException) => {
         if (error.code === 'EADDRINUSE') {
           console.error(
-            `[Novakai Command Backend] Port ${this.port} is already in use — a stale dev backend is probably still running.\n` +
-            `Free it with: lsof -ti:${this.port} | xargs kill`
+            `[Novakai Command Backend] Port ${port} is already in use — a stale server is probably still running.\n` +
+            `Free it with: lsof -ti:${port} | xargs kill`
           );
         }
         reject(error);
       });
-      this.server.listen(this.port, '127.0.0.1', () => {
+      server.listen(port, '127.0.0.1', () => {
         resolve();
       });
     });
   }
 
-  public stop(): Promise<void> {
-    return new Promise((resolve) => {
-      this.wsServer.close(() => {
-        this.server.close(() => {
-          resolve();
-        });
-      });
-    });
+  public async stop(): Promise<void> {
+    const wsServers = this.appWss ? [this.wsServer, this.appWss] : [this.wsServer];
+    const httpServers = this.appServer ? [this.server, this.appServer] : [this.server];
+    await Promise.all(wsServers.map((socketServer) => new Promise<void>((resolve) => socketServer.close(() => resolve()))));
+    await Promise.all(httpServers.map((httpServer) => new Promise<void>((resolve) => httpServer.close(() => resolve()))));
   }
 }

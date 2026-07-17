@@ -8,16 +8,21 @@ import { createTerminalRuntime } from './terminal/host/launch/index.js';
 export async function bootstrapBackend(): Promise<ServerController> {
   const configuration = ConfigManager.load();
   const serverPort = Number(process.env.NOVAKAI_SERVER_PORT) || configuration.serverPort;
-  
+  // Production (deploy snapshot) serves the built frontend + a same-origin
+  // listener on NOVAKAI_APP_PORT; dev leaves both unset and vite owns 3030.
+  const staticDir = process.env.NOVAKAI_STATIC_DIR || undefined;
+  const appPort = Number(process.env.NOVAKAI_APP_PORT) || undefined;
+
   const stateManager = new StateManager(configuration.workspacePath);
   const processExecutor = new AgentExecutor();
   const coordinator = new AgentCoordinator(processExecutor, stateManager);
   const terminals = await createTerminalRuntime();
 
-  const server = new ServerController(serverPort, coordinator, stateManager, terminals);
-  
+  const server = new ServerController(serverPort, coordinator, stateManager, terminals, { staticDir, appPort });
+
   await server.start();
-  console.log(`[Novakai Command Backend] Server listening on port ${serverPort}`);
+  const served = appPort ? `${serverPort} (api/tooling) + ${appPort} (app)` : String(serverPort);
+  console.log(`[Novakai Command Backend] Server listening on port ${served}`);
   return server;
 }
 
