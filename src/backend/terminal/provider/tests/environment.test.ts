@@ -19,7 +19,29 @@ function testStillScrubsProviderSecrets(): void {
   assert.deepEqual(leaked, [], 'provider secrets remain scrubbed');
 }
 
+function testPointsAgentAtOwnBackend(): void {
+  delete process.env.NVK_COMMAND_URL;
+  const environment = providerEnvironment('claude', 'sess', 3931);
+  assert.equal(
+    environment.NVK_COMMAND_URL,
+    'http://127.0.0.1:3931',
+    'agent tunnel points at this backend, not prod :3031',
+  );
+}
+
+function testHonoursInheritedCommandUrl(): void {
+  process.env.NVK_COMMAND_URL = 'http://127.0.0.1:9999';
+  try {
+    const environment = providerEnvironment('claude', 'sess', 3931);
+    assert.equal(environment.NVK_COMMAND_URL, 'http://127.0.0.1:9999', 'explicit override wins');
+  } finally {
+    delete process.env.NVK_COMMAND_URL;
+  }
+}
+
 testBindsBrowserSession();
 testOmitsBrowserSessionWhenUnset();
 testStillScrubsProviderSecrets();
+testPointsAgentAtOwnBackend();
+testHonoursInheritedCommandUrl();
 console.log('PASS');

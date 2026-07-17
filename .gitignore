@@ -8,6 +8,7 @@ desktop/package-lock.json
 .novakai-command/agents-*.json
 .novakai-command/messages.jsonl
 .novakai-command/terminal-host/
+.novakai-command/deploy/
 .mission-control/
 .novakai/
 .novakai-command/messages.jsonl
