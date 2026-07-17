@@ -142,17 +142,25 @@ is a C1 fail.
   (panel background from the panel ramp, distinct from page `#0d0d0f`, with the drawer
   hierarchy rule: children lighter than parent). Any primary zone rendered flat on the
   page background = FAIL. Chris's M3 verdict ("looks a bit cheap … everything so flat")
-  is the precedent; flatness is not relitigable. **[mech: for each primary zone root,
-  computed background must differ from the page bg and resolve to a panel-ramp value]**
+  is the precedent; flatness is not relitigable. Mech form (codex design-authority
+  ruling): NESTED HIERARCHY, not "has a border" — page `#0d0d0f` appears only as
+  gutter between surfaces; every primary zone root resolves to a panel-ramp value;
+  child controls resolve LIGHTER than their parent surface. **[mech: computed-bg walk
+  of zone roots + child controls; page bg found inside a zone = FAIL]**
+- **C22a — Selection never steals gold.** Visual check on every drive: ordinary
+  selection, hover, and unread states consume ink/tint/weight only — never any gold
+  family value. Gold remains exclusively the one human-required item (C1/C2/C21).
 
 ## Terminal parity (nailed acceptance contract — Chris ruling 2026-07-17)
 
 - **C23 — Terminal parity in Conversation.** "Nailed" = full working app + terminal
   parity + nothing lost on restart/reload. From the Conversation surface you can do
   everything you can do in a terminal session and currently cannot: switch model, see
-  token usage, and the rest of the terminal-only operations. Parity actions obey the
-  existing laws (Inter not mono, no attention text, one gold). Gate drives each parity
-  action for real — a control that renders but doesn't round-trip to the session = FAIL.
+  token usage, and the rest of the terminal-only operations. Parity controls live in
+  the ACTIVE Conversation's header/context (codex ruling) — they may not spawn a new
+  rail or global zone. Parity actions obey the existing laws (Inter not mono, no
+  attention text, one gold). Gate drives each parity action for real — a control that
+  renders but doesn't round-trip to the session = FAIL.
 
 ## Procedure
 
