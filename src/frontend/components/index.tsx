@@ -379,6 +379,15 @@ export function DashboardShell() {
   return (
     <div className="studio-stage">
       <div className={immersiveView ? 'studio-app studio-app-immersive' : 'studio-app'}>
+        <StudioWorkHead
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          sessionAgents={threadAgents}
+          agents={agentsState.agents}
+          project={workspace.selectedProject}
+          thread={workspace.selectedThread}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
         {!immersiveView && <StudioRail
           projects={workspace.projects}
           selectedProject={workspace.selectedProject}
@@ -389,15 +398,6 @@ export function DashboardShell() {
           onCreateThread={workspace.createThread}
         />}
         <main className="studio-work">
-          <StudioWorkHead
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            sessionAgents={threadAgents}
-            agents={agentsState.agents}
-            project={workspace.selectedProject}
-            thread={workspace.selectedThread}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
           <div className="studio-work-body">
         {/* Left drawer is page-owned: the agents list only exists on the Agents
             tab (Files brings its own tree rail; other tabs have no drawer). */}

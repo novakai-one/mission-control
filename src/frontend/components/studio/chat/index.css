@@ -4,9 +4,11 @@
    hairline-separated text, and the only saturated marks are the gold agent
    name, the gold send action, and sage on settled rows. */
 .studio-ai {
+  grid-row: 2;
   background: var(--st-panel);
-  border: 1px solid var(--st-frame);
-  border-radius: var(--st-r-lg);
+  border: 0;
+  border-left: 1px solid var(--st-frame);
+  border-radius: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
