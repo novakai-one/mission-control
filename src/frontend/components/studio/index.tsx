@@ -1,0 +1,184 @@
+// Studio shell chrome — the left rail (brand + projects + threads) and the
+// workspace head (view tabs + live session chips). Ported from the approved
+// prototype in docs/messaging-studio.html; brand tokens live in index.css.
+import React, { useState } from 'react';
+import { Settings, PanelRight } from 'lucide-react';
+import type { ProjectRecord, ThreadRecord } from '../../../shared/project/schema.js';
+import type { AgentInfo } from '../../lib/agentSocket/index.js';
+import './index.css';
+
+export type ViewMode = 'workspace' | 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug';
+
+const VIEW_TABS: { mode: ViewMode; label: string }[] = [
+  { mode: 'workspace', label: 'Workspace' },
+  { mode: 'files', label: 'Files' },
+  { mode: 'agents', label: 'Agents' },
+  { mode: 'transcript', label: 'Transcript' },
+  { mode: 'ruleset', label: 'Ruleset' },
+  { mode: 'debug', label: 'Debug' },
+];
+
+interface StudioRailProps {
+  projects: ProjectRecord[];
+  selectedProject: ProjectRecord | null;
+  selectedThread: ThreadRecord | null;
+  onSelectProject(projectId: string): void;
+  onSelectThread(threadId: string): void;
+  onCreateProject(name: string, rootPath: string): Promise<void>;
+  onCreateThread(title: string): Promise<void>;
+}
+
+function ProjectForm({ onCreateProject }: { onCreateProject(name: string, rootPath: string): Promise<void> }) {
+  const [name, setName] = useState('');
+  const [rootPath, setRootPath] = useState('');
+
+  async function create(): Promise<void> {
+    await onCreateProject(name.trim(), rootPath.trim());
+    setName('');
+    setRootPath('');
+  }
+
+  return (
+    <div className="studio-rail-form">
+      <input aria-label="Project name" placeholder="Project name" value={name} onChange={(change) => setName(change.target.value)} />
+      <input aria-label="Project root" placeholder="/path/to/project" value={rootPath} onChange={(change) => setRootPath(change.target.value)} />
+      <button type="button" disabled={!name.trim() || !rootPath.trim()} onClick={create}>Create Project</button>
+    </div>
+  );
+}
+
+function ProjectRow({ project, here, onSelect }: { project: ProjectRecord; here: boolean; onSelect(): void }) {
+  return (
+    <button type="button" className={here ? 'studio-thread studio-here' : 'studio-thread'} onClick={onSelect}>
+      <span className="studio-dot" />
+      <span className="studio-thread-name">
+        {project.name}
+        <small>{project.rootPath}</small>
+      </span>
+    </button>
+  );
+}
+
+function ThreadRow({ thread, here, onSelect }: { thread: ThreadRecord; here: boolean; onSelect(): void }) {
+  return (
+    <button type="button" className={here ? 'studio-thread studio-here' : 'studio-thread'} onClick={onSelect}>
+      <span className="studio-dot" />
+      <span className="studio-thread-name">{thread.title}</span>
+      {thread.sessionReferences.length > 0 && <span className="studio-count">{thread.sessionReferences.length}</span>}
+    </button>
+  );
+}
+
+export function StudioRail(props: StudioRailProps) {
+  const [projectFormOpen, setProjectFormOpen] = useState(false);
+  const [threadTitle, setThreadTitle] = useState('');
+
+  async function createThread(): Promise<void> {
+    if (!threadTitle.trim()) return;
+    await props.onCreateThread(threadTitle.trim());
+    setThreadTitle('');
+  }
+
+  function handleThreadKeyDown(press: React.KeyboardEvent<HTMLInputElement>): void {
+    if (press.key === 'Enter') void createThread();
+  }
+
+  return (
+    <aside className="studio-rail">
+      <div className="studio-brand">
+        <span className="studio-glyph">&gt;_</span>
+        <b>novakai<span>&nbsp;command</span></b>
+      </div>
+
+      <div className="studio-group">
+        Projects
+        <button type="button" className="studio-group-add" aria-label="New project" onClick={() => setProjectFormOpen(!projectFormOpen)}>+</button>
+      </div>
+      {projectFormOpen && <ProjectForm onCreateProject={async (name, rootPath) => { await props.onCreateProject(name, rootPath); setProjectFormOpen(false); }} />}
+      {props.projects.map((project) => (
+        <ProjectRow
+          key={project.id}
+          project={project}
+          here={project.id === props.selectedProject?.id}
+          onSelect={() => props.onSelectProject(project.id)}
+        />
+      ))}
+
+      {props.selectedProject && (
+        <>
+          <div className="studio-group">Threads</div>
+          {props.selectedProject.threads.map((thread) => (
+            <ThreadRow
+              key={thread.id}
+              thread={thread}
+              here={thread.id === props.selectedThread?.id}
+              onSelect={() => props.onSelectThread(thread.id)}
+            />
+          ))}
+        </>
+      )}
+
+      <div className="studio-rail-foot">
+        <div className="studio-newthread">
+          <input
+            aria-label="New thread"
+            placeholder="New thread"
+            value={threadTitle}
+            disabled={!props.selectedProject}
+            onChange={(change) => setThreadTitle(change.target.value)}
+            onKeyDown={handleThreadKeyDown}
+          />
+          <button type="button" aria-label="Create thread" disabled={!props.selectedProject || !threadTitle.trim()} onClick={createThread}>+</button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+interface StudioWorkHeadProps {
+  viewMode: ViewMode;
+  onViewModeChange(mode: ViewMode): void;
+  /** Live agents tied to the selected thread — rendered as session chips. */
+  sessionAgents: AgentInfo[];
+  onOpenSettings(): void;
+  viewPanelOpen: boolean;
+  onToggleViewPanel(): void;
+}
+
+export function StudioWorkHead(props: StudioWorkHeadProps) {
+  return (
+    <div className="studio-work-head">
+      <nav className="studio-view-tabs" aria-label="Views">
+        {VIEW_TABS.map((entry) => (
+          <button
+            key={entry.mode}
+            type="button"
+            className={entry.mode === props.viewMode ? 'studio-tab studio-tab-on' : 'studio-tab'}
+            onClick={() => props.onViewModeChange(entry.mode)}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </nav>
+      <span className="studio-head-spacer" />
+      {props.sessionAgents.map((agent) => (
+        <span key={agent.agentId} className="studio-sess">
+          <span className={agent.status === 'running' ? 'studio-sess-dot studio-live' : 'studio-sess-dot'} />
+          {agent.provider} · {agent.sessionId.slice(0, 8)}
+        </span>
+      ))}
+      <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
+        <Settings size={14} />
+      </button>
+      <button
+        type="button"
+        className={props.viewPanelOpen ? 'studio-head-glyph studio-head-glyph-on' : 'studio-head-glyph'}
+        title="View panel"
+        aria-label="View panel"
+        onClick={props.onToggleViewPanel}
+      >
+        <PanelRight size={14} />
+      </button>
+    </div>
+  );
+}

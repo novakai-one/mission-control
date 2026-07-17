@@ -1,25 +1,10 @@
-/* App shell layout — top-level flex frame + full-height content row. */
-.shell-root {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background-color: var(--bg-primary);
-}
-
+/* App shell layout — the studio frame itself lives in studio/index.css;
+   .shell-row remains for views that nest their own full-height rows
+   (transcript). */
 .shell-row {
   display: flex;
   flex: 1;
   overflow: hidden;
-}
-
-/* Outer content row only (the transcript view nests a plain .shell-row):
-   panels float on the canvas — detached from the header, gapped from each
-   other. */
-.shell-content {
-  --shell-gap: 14px;
-  gap: var(--shell-gap);
-  padding: 12px 16px 16px;
-  min-height: 0;
 }
 
 /* Collapsible left drawer — a clipping mask that eases between the panel
@@ -119,7 +104,7 @@
 }
 
 .shell-main,
-.shell-content > .shell-drawer,
+.studio-work-body > .shell-drawer,
 .fd-panel > * {
   animation: view-enter var(--anim-slow) backwards;
 }

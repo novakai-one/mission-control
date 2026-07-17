@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { AppHeader, type ViewMode } from './dashboard/index.js';
+import { StudioRail, StudioWorkHead, type ViewMode } from './studio/index.js';
+import { StudioChatPanel } from './studio/chat/index.js';
 import { AgentBoard } from './board/index.js';
 import { buildToolPairs, selKey, visibilityPredicate } from './board/timelineModel.js';
 import { SelectedInspector } from './details/index.js';
@@ -12,7 +13,8 @@ import { SubTimeline, SubagentInspector, useSubagentState } from './subagent/ind
 import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
-import { ProjectWorkspace } from './workspace/index.js';
+import { WorkspaceTimeline } from './workspace/timeline/index.js';
+import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
 import { upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 import { useTimeZone } from '../lib/timezone/index.js';
@@ -117,6 +119,14 @@ export function DashboardShell() {
   const [selectedSubKey, setSelectedSubKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('workspace');
   const agentsState = useAgentsState();
+  const workspace = useProjectWorkspace(agentsState.setActiveAgentId);
+  // Live agents belonging to the selected thread: chips in the work head, and
+  // the newest one is the chat panel's runtime (same rule the old Projects
+  // view used).
+  const threadAgents = agentsState.agents.filter((agent) =>
+    agent.projectId === workspace.selectedProject?.id && agent.threadId === workspace.selectedThread?.id);
+  const runtimeAgent = [...threadAgents]
+    .sort((first, second) => second.createdAt.localeCompare(first.createdAt))[0] ?? null;
 
   function openAgent(agentId: string): void {
     agentsState.setActiveAgentId(agentId);
@@ -322,15 +332,27 @@ export function DashboardShell() {
   }
 
   return (
-    <div className="shell-root">
-      <AppHeader
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onOpenSettings={() => setSettingsOpen(true)}
-        viewPanelOpen={viewPanel.open}
-        onToggleViewPanel={viewPanel.toggleOpen}
-      />
-      <div className="shell-row shell-content">
+    <div className="studio-stage">
+      <div className="studio-app">
+        <StudioRail
+          projects={workspace.projects}
+          selectedProject={workspace.selectedProject}
+          selectedThread={workspace.selectedThread}
+          onSelectProject={workspace.selectProject}
+          onSelectThread={workspace.selectThread}
+          onCreateProject={workspace.createProject}
+          onCreateThread={workspace.createThread}
+        />
+        <main className="studio-work">
+          <StudioWorkHead
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            sessionAgents={threadAgents}
+            onOpenSettings={() => setSettingsOpen(true)}
+            viewPanelOpen={viewPanel.open}
+            onToggleViewPanel={viewPanel.toggleOpen}
+          />
+          <div className="studio-work-body">
         {/* Left drawer is page-owned: the agents list only exists on the Agents
             tab (Files brings its own tree rail; other tabs have no drawer). */}
         {viewMode === 'agents' && (
@@ -354,10 +376,12 @@ export function DashboardShell() {
           visible={viewMode === 'agents'}
         />
         {viewMode === 'workspace' ? (
-          <ProjectWorkspace
-            agents={agentsState.agents}
-            onAgentLaunched={agentsState.setActiveAgentId}
-            onOpenAgent={openAgent}
+          <WorkspaceTimeline
+            project={workspace.selectedProject}
+            thread={workspace.selectedThread}
+            projection={workspace.projection}
+            loading={workspace.loading}
+            error={workspace.error}
           />
         ) : viewMode === 'files' ? (
           <FilesPanel
@@ -437,6 +461,17 @@ export function DashboardShell() {
           costSettings={costSettings}
           onCostSettingsChange={setCostSettings}
           activeAgent={agentsState.agents.find(agent => agent.agentId === agentsState.activeAgentId) ?? null}
+        />
+          </div>
+        </main>
+        <StudioChatPanel
+          project={workspace.selectedProject}
+          thread={workspace.selectedThread}
+          projection={workspace.projection}
+          runtimeAgent={runtimeAgent}
+          onLaunch={workspace.launchProvider}
+          onAttach={workspace.attachSession}
+          onOpenAgent={openAgent}
         />
       </div>
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
