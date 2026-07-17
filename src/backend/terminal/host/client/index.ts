@@ -22,7 +22,7 @@ interface PendingCreate {
 }
 
 interface ConnectionState {
-  pending: string;
+  pending: string[];
   settled: boolean;
 }
 
@@ -120,7 +120,7 @@ export class TerminalHostClient implements TerminalRuntime {
   }
 
   private wireSocket(socket: Socket, resolve: ResolveClient, reject: RejectClient): void {
-    const state: ConnectionState = { pending: '', settled: false };
+    const state: ConnectionState = { pending: [], settled: false };
     socket.setEncoding('utf8');
     socket.on('data', (chunk) => this.handleChunk(socket, chunk, state, resolve, reject));
     socket.once('error', (error) => this.handleOpenError(error, state, reject));
@@ -134,10 +134,18 @@ export class TerminalHostClient implements TerminalRuntime {
     resolve: ResolveClient,
     reject: RejectClient,
   ): void {
-    state.pending += chunk.toString();
-    const lines = state.pending.split('\n');
-    state.pending = lines.pop() ?? '';
-    for (const line of lines) this.handleLine(socket, line, state, resolve, reject);
+    const text = chunk.toString();
+    let start = 0;
+    let newline = text.indexOf('\n');
+    while (newline >= 0) {
+      state.pending.push(text.slice(start, newline));
+      const line = state.pending.join('');
+      state.pending = [];
+      this.handleLine(socket, line, state, resolve, reject);
+      start = newline + 1;
+      newline = text.indexOf('\n', start);
+    }
+    if (start < text.length) state.pending.push(text.slice(start));
   }
 
   private handleLine(
