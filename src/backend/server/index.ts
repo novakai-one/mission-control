@@ -16,6 +16,7 @@ import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } 
 import { getRepoInfo } from '../versionControl/index.js';
 import { AgentsHub } from './agents.js';
 import { ProjectsHub } from './projects/index.js';
+import { MessagingHub } from '../messaging/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -53,6 +54,7 @@ export class ServerController {
   private readonly activeSockets = new Set<WebSocket>();
   private readonly agentsHub: AgentsHub;
   private readonly projectsHub: ProjectsHub;
+  private readonly messagingHub: MessagingHub;
 
   constructor(
     private readonly port: number,
@@ -61,6 +63,7 @@ export class ServerController {
   ) {
     this.agentsHub = new AgentsHub(this.activeSockets);
     this.projectsHub = new ProjectsHub(this.agentsHub);
+    this.messagingHub = this.buildMessagingHub();
     this.server = createServer(this.app);
     this.wsServer = new WebSocketServer({ server: this.server });
 
@@ -71,6 +74,21 @@ export class ServerController {
     this.coordinator.setBroadcastHandler((event, payload) => {
       this.broadcastEvent(event, payload);
     });
+  }
+
+  /**
+   * Agent messaging tunnel (docs/agent-messaging.md): envelopes broadcast on
+   * the shared ws so the Messages view can build a live feed; new agents get
+   * their spawn briefing typed into their PTY.
+   */
+  private buildMessagingHub(): MessagingHub {
+    const messagingHub = new MessagingHub(
+      this.agentsHub.terminals,
+      (event, payload) => this.broadcastEvent(event, payload),
+      { serverPort: this.port },
+    );
+    this.agentsHub.onLaunch((info) => messagingHub.handleAgentSpawned(info));
+    return messagingHub;
   }
 
   private configureExpress(): void {
@@ -101,6 +119,7 @@ export class ServerController {
   private configureRoutes(): void {
     this.agentsHub.registerRoutes(this.app);
     this.projectsHub.registerRoutes(this.app);
+    this.messagingHub.registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {
       res.json(ConfigManager.load());

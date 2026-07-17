@@ -6,6 +6,7 @@ import type { Express, Request, Response } from 'express';
 import path from 'node:path';
 import { WebSocket } from 'ws';
 import { TerminalManager, type CreateAgentOptions } from '../terminal/manager.js';
+import { nextSpawnName, isNameTaken } from '../messaging/address/index.js';
 import { ConfigManager } from '../config/index.js';
 import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.js';
 import { SubagentWatcher } from '../transcript/subagents/index.js';
@@ -38,6 +39,7 @@ export class AgentsHub {
   private readonly agentSubs = new Map<WebSocket, Set<string>>();
   private readonly sessionWatchers = new Map<WebSocket, Map<string, SessionWatchPair>>();
   private readonly sessionListeners: Array<(info: Awaited<ReturnType<TerminalManager['create']>>) => void> = [];
+  private readonly launchListeners: Array<(info: Awaited<ReturnType<TerminalManager['create']>>) => void> = [];
 
   constructor(
     private readonly sockets: Set<WebSocket>,
@@ -55,6 +57,16 @@ export class AgentsHub {
 
   onSessionResolved(listener: (info: Awaited<ReturnType<TerminalManager['create']>>) => void): void {
     this.sessionListeners.push(listener);
+  }
+
+  /** Fires after every successful launch — the messaging tunnel briefs new agents here. */
+  onLaunch(listener: (info: Awaited<ReturnType<TerminalManager['create']>>) => void): void {
+    this.launchListeners.push(listener);
+  }
+
+  /** The terminal surface the messaging tunnel routes through (roster + PTY writes). */
+  get terminals(): TerminalManager {
+    return this.manager;
   }
 
   handleMessage(socket: WebSocket, message: Record<string, unknown>): boolean {
@@ -84,6 +96,7 @@ export class AgentsHub {
   async launch(options: CreateAgentOptions) {
     const info = await this.manager.create(options);
     this.broadcastAgentsChanged();
+    for (const listener of this.launchListeners) listener(info);
     return info;
   }
 
@@ -207,8 +220,15 @@ export class AgentsHub {
   private async createAgent(request: Request, response: Response): Promise<void> {
     const configuration = ConfigManager.load();
     const cwd = request.body?.cwd ?? configuration.activeRepo ?? process.cwd();
-    const title = typeof request.body?.title === 'string' ? request.body.title : undefined;
     const provider = request.body?.provider === 'codex' ? 'codex' : 'claude';
+    // Messaging addressing (§5): every agent gets a short unique name at
+    // spawn — provider + ordinal when none is supplied, 409 on collisions.
+    const requested = typeof request.body?.title === 'string' ? request.body.title : undefined;
+    if (requested !== undefined && isNameTaken(requested, this.manager.list())) {
+      response.status(409).json({ error: `agent name "${requested}" is already taken` });
+      return;
+    }
+    const title = requested ?? nextSpawnName(provider, this.manager.list().map((agent) => agent.title));
     try {
       response.status(201).json(await this.launch({ title, cwd, provider }));
     } catch (error) {
@@ -220,6 +240,10 @@ export class AgentsHub {
     const title = request.body?.title;
     if (typeof title !== 'string') {
       response.status(400).json({ error: 'title is required' });
+      return;
+    }
+    if (isNameTaken(title, this.manager.list(), request.params.agentId)) {
+      response.status(409).json({ error: `agent name "${title}" is already taken` });
       return;
     }
     if (!this.manager.rename(request.params.agentId, title)) {
