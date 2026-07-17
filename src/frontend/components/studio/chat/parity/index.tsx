@@ -5,7 +5,7 @@
 // rail, no attention text, Inter only, no gold.
 import React, { useEffect, useState } from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
-import { sendInput } from '../../../../lib/agentSocket/index.js';
+import { runSessionControl, type SessionControlIntent } from '../../../../lib/sessionControl/index.js';
 import {
   fetchUsage,
   formatCost,
@@ -63,9 +63,9 @@ interface CommandSelectControl {
   /** Providers whose CLI understands this command. */
   providers: AgentInfo['provider'][];
   options: { id: string; label: string }[];
-  /** The exact line written into the live PTY — the same round-trip a
-   * terminal user makes. */
-  command(optionId: string): string;
+  /** The typed SessionControl intent — validated, serialized, and written to
+   * the live PTY by the backend, which answers with an honest receipt. */
+  intent(optionId: string): SessionControlIntent;
 }
 
 interface ReadoutControl {
@@ -90,7 +90,7 @@ export const PARITY_CONTROLS: ParityControl[] = [
       { id: 'sonnet', label: 'Sonnet 5' },
       { id: 'haiku', label: 'Haiku 4.5' },
     ],
-    command: (optionId) => `/model ${optionId}`,
+    intent: (optionId) => ({ kind: 'model', model: optionId }),
   },
   {
     id: 'tokens',
@@ -105,47 +105,56 @@ export const PARITY_CONTROLS: ParityControl[] = [
   },
 ];
 
-/** Writes a parity command into the live session PTY. The carriage return is
- * its own write, matching the composer's proven two-write pattern. */
-export function runParityCommand(agentId: string, command: string): void {
-  sendInput(agentId, command);
-  setTimeout(() => sendInput(agentId, '\r'), 20);
-}
-
-const lastSentKey = (sessionId: string, controlId: string) => `novakai-parity:${controlId}:${sessionId}`;
+const lastAcceptedKey = (sessionId: string, controlId: string) => `novakai-parity:${controlId}:${sessionId}`;
 
 function CommandSelect({ control, agent }: { control: CommandSelectControl; agent: AgentInfo }) {
-  // The select shows the LAST CHOICE SENT to this session — restored per
-  // sessionId so a reload keeps the fact — never a claim read back from the
-  // CLI (there is no read-back seam yet; the PTY echo is the receipt).
-  const [sent, setSent] = useState<string>(() => {
-    try { return localStorage.getItem(lastSentKey(agent.sessionId, control.id)) ?? ''; } catch { return ''; }
+  // The select shows the LAST BACKEND-ACCEPTED choice for this session
+  // (accepted = the validated command reached the live PTY — codex's
+  // SessionControl receipt, never localStorage fiction). Applied
+  // confirmation stays transcript-derived (the next model/usage event).
+  const [accepted, setAccepted] = useState<string>(() => {
+    try { return localStorage.getItem(lastAcceptedKey(agent.sessionId, control.id)) ?? ''; } catch { return ''; }
   });
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   useEffect(() => {
-    try { setSent(localStorage.getItem(lastSentKey(agent.sessionId, control.id)) ?? ''); } catch { setSent(''); }
+    try { setAccepted(localStorage.getItem(lastAcceptedKey(agent.sessionId, control.id)) ?? ''); } catch { setAccepted(''); }
+    setNote(null);
   }, [agent.sessionId, control.id]);
 
-  function choose(optionId: string): void {
-    if (!optionId) return;
-    runParityCommand(agent.agentId, control.command(optionId));
-    setSent(optionId);
-    try { localStorage.setItem(lastSentKey(agent.sessionId, control.id), optionId); } catch { /* projection only */ }
+  async function choose(optionId: string): Promise<void> {
+    if (!optionId || busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const result = await runSessionControl(agent.agentId, control.intent(optionId));
+      if (result.status === 'accepted') {
+        setAccepted(optionId);
+        try { localStorage.setItem(lastAcceptedKey(agent.sessionId, control.id), optionId); } catch { /* display only */ }
+      } else {
+        setNote(result.reason ?? 'rejected');
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <label className="st-parity-item">
       <span className="st-parity-label">{control.label}</span>
       <select
-        aria-label={`${control.label} — sends ${control.command('…')} to the session`}
-        title={sent ? `Sent ${control.command(sent)} to the session` : 'As launched — pick to send the switch into the session'}
-        value={sent}
-        onChange={(change) => choose(change.target.value)}
+        aria-label={`${control.label} — sends a typed control to the session`}
+        title={accepted ? 'Last accepted by the session backend' : 'As launched — pick to send the switch into the session'}
+        value={accepted}
+        disabled={busy}
+        onChange={(change) => void choose(change.target.value)}
       >
         <option value="">as launched</option>
         {control.options.map((option) => (
           <option key={option.id} value={option.id}>{option.label}</option>
         ))}
       </select>
+      {note && <span className="st-parity-note">{note}</span>}
     </label>
   );
 }
