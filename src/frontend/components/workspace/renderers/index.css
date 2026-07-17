@@ -82,9 +82,14 @@
   grid-template-rows: 1fr;
 }
 
-.wt-reveal pre {
+/* The clip layer carries no padding, so the collapsed track hides every
+   pixel of the payload — padding lives on the pre inside it. */
+.wt-reveal-clip {
   min-height: 0;
   overflow: hidden;
+}
+
+.wt-reveal-clip pre {
   margin: 0;
   padding: 4px 0 6px 63px; /* aligns under .wt-line (kind 52px + 11px gap) */
   font: 11px/1.7 var(--st-mono);

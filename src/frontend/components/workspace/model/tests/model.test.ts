@@ -64,6 +64,9 @@ function testGroupKeyAndTimeComeFromFirstEvent() {
 function testEventKindLabel() {
   assert.equal(eventKindLabel(makeEvent('tool', { rawType: 'tool_use' })), 'tool');
   assert.equal(eventKindLabel(makeEvent('tool', { rawType: 'tool_result' })), 'result');
+  assert.equal(eventKindLabel(makeEvent('tool', { rawType: 'custom_tool_call' })), 'tool');
+  assert.equal(eventKindLabel(makeEvent('tool', { rawType: 'custom_tool_call_output' })), 'result');
+  assert.equal(eventKindLabel(makeEvent('tool', { rawType: 'function_call_output' })), 'result');
   assert.equal(eventKindLabel(makeEvent('system', { rawType: 'hook_event' })), 'system');
 }
 

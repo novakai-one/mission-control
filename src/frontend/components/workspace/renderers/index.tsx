@@ -31,7 +31,9 @@ function QuietEvent({ event }: EventRendererProps) {
       </button>
       {dense && (
         <div className="wt-reveal">
-          <pre>{text}</pre>
+          <div className="wt-reveal-clip">
+            <pre>{text}</pre>
+          </div>
         </div>
       )}
     </div>

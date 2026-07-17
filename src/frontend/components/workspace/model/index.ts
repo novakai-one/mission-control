@@ -42,10 +42,11 @@ export function groupTimelineEvents(events: CanonicalEvent[]): TimelineGroup[] {
   return groups;
 }
 
-/** Tiny mono row label for non-speech events. */
+/** Tiny mono row label for non-speech events. Calls and results split on
+ * the provider raw type: claude says tool_result, codex *_output. */
 export function eventKindLabel(event: CanonicalEvent): string {
   if (event.kind !== 'tool') return 'system';
-  return event.rawType === 'tool_result' ? 'result' : 'tool';
+  return event.rawType === 'tool_result' || event.rawType.endsWith('_output') ? 'result' : 'tool';
 }
 
 const SUMMARY_MAX = 96;
