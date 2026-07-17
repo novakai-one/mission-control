@@ -33,12 +33,16 @@ export class PtyDelivery {
     private readonly timings: DeliveryTimings = DEFAULT_TIMINGS,
   ) {}
 
-  async deliver(address: AgentAddress, envelope: MessageEnvelope): Promise<DeliveryReceipt> {
+  async deliver(
+    address: AgentAddress,
+    envelope: MessageEnvelope,
+    line = formatInbound(envelope),
+  ): Promise<DeliveryReceipt> {
     if (envelope.delivery === 'interrupt') {
       this.write(address, this.interruptSequence(address.provider));
       await delay(this.timings.interruptSettleMs);
     }
-    await this.type(address, formatInbound(envelope));
+    await this.type(address, line);
     return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: envelope.delivery };
   }
 

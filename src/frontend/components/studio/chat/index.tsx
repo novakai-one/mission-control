@@ -19,14 +19,16 @@ import { pinObject, useHighlightedObject } from '../../../lib/highlight/index.js
 import {
   approvalItemId,
   buildAttentionQueue,
+  messageItemId,
   updateAttentionQueue,
   useAttention,
+  type AttentionItem,
 } from '../../../lib/attention/index.js';
-import { useTunnelFeed } from '../../../lib/tunnelModel/index.js';
+import { latestChrisQuestion, useTunnelFeed } from '../../../lib/tunnelModel/index.js';
 import { MarkdownText } from '../../../lib/markdown/index.js';
 import { ChatComposer } from './composer.js';
 import { MentionText } from './mention/index.js';
-import { TunnelFeed } from './tunnel/index.js';
+import { TunnelMessenger } from './tunnel/index.js';
 import './index.css';
 
 /** A composer send waiting for its echo on the live stream. */
@@ -270,11 +272,24 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
 
   // Amber engine feed. The tunnel feed lives HERE (not in the Tunnel tab) so
   // a failed delivery claims attention whichever lens is open. Clicking
-  // through a failed send dismisses it — that is its resolution.
-  const tunnelFeed = useTunnelFeed();
+  // through a failed send dismisses it — that is its resolution. A lane whose
+  // newest word asks for Chris joins the queue the same way; opening that
+  // lane in the messenger dismisses it.
+  const { feed: tunnelFeed, loadConversation } = useTunnelFeed();
   const [dismissedNeeds, setDismissedNeeds] = useState<ReadonlySet<string>>(() => new Set<string>());
   useEffect(() => {
-    updateAttentionQueue(buildAttentionQueue(props.projection, tunnelFeed, dismissedNeeds));
+    const queue = buildAttentionQueue(props.projection, tunnelFeed, dismissedNeeds);
+    const question = latestChrisQuestion(tunnelFeed);
+    const questionId = question ? messageItemId(question.envelopeId) : null;
+    if (question && questionId && !dismissedNeeds.has(questionId)
+      && !queue.some((item) => item.id === questionId)) {
+      // A person waiting on Chris outranks failed sends, not an open
+      // approval. (kind reuses 'failed-message' — the engine only reads ids;
+      // the union stays untouched because the attention lib is shared.)
+      const asked: AttentionItem = { id: questionId, kind: 'failed-message', threadId: null, since: question.since };
+      queue.splice(queue[0]?.kind === 'approval' ? 1 : 0, 0, asked);
+    }
+    updateAttentionQueue(queue);
   }, [props.projection, tunnelFeed, dismissedNeeds]);
   function resolveNeed(itemId: string): void {
     setDismissedNeeds((current) => new Set(current).add(itemId));
@@ -304,7 +319,13 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
       )}
       {activeTab === 'context' && <ContextBody {...props} />}
       {activeTab === 'tunnel' && (
-        <TunnelFeed feed={tunnelFeed} agents={props.agents} targets={mentionTargets} onResolve={resolveNeed} />
+        <TunnelMessenger
+          feed={tunnelFeed}
+          agents={props.agents}
+          targets={mentionTargets}
+          onResolve={resolveNeed}
+          onLoadConversation={loadConversation}
+        />
       )}
       {activeTab === 'evidence' && <div className="st-ai-quiet">Nothing captured yet</div>}
 

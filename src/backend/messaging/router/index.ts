@@ -4,8 +4,9 @@
 // outcome lands as a status amendment.
 import { MessageStore } from '../store/index.js';
 import { PtyDelivery } from '../delivery/index.js';
-import { isChannel } from '../types.js';
-import type { AgentAddress, DeliveryReceipt, MessageEnvelope } from '../types.js';
+import { RoomStore } from '../rooms/index.js';
+import { CHRIS_MEMBER, formatRoomInbound, isChannel, isRoom } from '../types.js';
+import type { AgentAddress, DeliveryReceipt, MessageEnvelope, Room } from '../types.js';
 
 /** Recipient not found / not running — the error carries the live roster (§5). */
 export class RecipientNotFoundError extends Error {
@@ -26,6 +27,18 @@ export class InterruptRateLimitError extends Error {
 export class ChannelInterruptError extends Error {
   constructor(channel: string) {
     super(`interrupt delivery is rejected for channel recipients (${channel})`);
+  }
+}
+
+export class RoomNotFoundError extends Error {
+  constructor(roomId: string) {
+    super(`room "${roomId}" was not found`);
+  }
+}
+
+export class NotARoomMemberError extends Error {
+  constructor(sender: string, roomId: string) {
+    super(`sender "${sender}" is not a member of room "${roomId}"`);
   }
 }
 
@@ -55,6 +68,7 @@ export class MessageRouter {
   constructor(
     private readonly store: MessageStore,
     private readonly delivery: PtyDelivery,
+    private readonly rooms: RoomStore,
     private readonly roster: () => AgentAddress[],
     private readonly interruptLimiter = new InterruptRateLimiter(),
   ) {}
@@ -62,7 +76,41 @@ export class MessageRouter {
   async route(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     this.store.append(envelope);
     if (isChannel(envelope.to)) return this.routeChannel(envelope);
+    if (isRoom(envelope.to)) return this.routeRoom(envelope);
     return this.routeDirect(envelope);
+  }
+
+  private async routeRoom(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
+    if (envelope.delivery === 'interrupt') {
+      throw this.fail(envelope, new ChannelInterruptError(envelope.to));
+    }
+    const room = this.rooms.get(envelope.to);
+    if (!room) throw this.fail(envelope, new RoomNotFoundError(envelope.to));
+    if (!room.members.includes(envelope.from)) {
+      throw this.fail(envelope, new NotARoomMemberError(envelope.from, envelope.to));
+    }
+
+    const liveByName = new Map(this.roster().map((address) => [address.name, address]));
+    for (const member of room.members) {
+      if (member === envelope.from || member === CHRIS_MEMBER) continue;
+      const address = liveByName.get(member);
+      if (!address) continue;
+      await this.deliverRoomMember(address, room, envelope);
+    }
+    this.settle(envelope, 'delivered');
+    return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'room' };
+  }
+
+  private async deliverRoomMember(
+    address: AgentAddress,
+    room: Room,
+    envelope: MessageEnvelope,
+  ): Promise<void> {
+    try {
+      await this.delivery.deliver(address, envelope, formatRoomInbound(room, envelope));
+    } catch {
+      // Room delivery is best-effort; history remains available for pulling.
+    }
   }
 
   /** Channel fan-out is record-only: readers pull, nothing is PTY-injected (§4). */

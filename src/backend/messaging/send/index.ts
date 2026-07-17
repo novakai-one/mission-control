@@ -4,7 +4,7 @@
 // via --from / NVK_AGENT).
 import { randomUUID } from 'node:crypto';
 import { MessageRouter, ChannelInterruptError } from '../router/index.js';
-import { isChannel } from '../types.js';
+import { isChannel, isRoom } from '../types.js';
 import type { MessageEnvelope, SendMessage } from '../types.js';
 
 export class InvalidSendError extends Error {}
@@ -38,7 +38,9 @@ export class SendApi {
     const recipient = requireText(message.to, 'to');
     const delivery = requireDelivery(message.delivery);
     requireText(message.body, 'body');
-    if (delivery === 'interrupt' && isChannel(recipient)) throw new ChannelInterruptError(recipient);
+    if (delivery === 'interrupt' && (isChannel(recipient) || isRoom(recipient))) {
+      throw new ChannelInterruptError(recipient);
+    }
     const envelope = this.wrap(sender, recipient, delivery, message);
     await this.router.route(envelope);
     return envelope;

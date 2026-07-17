@@ -13,6 +13,7 @@ import {
   ChannelInterruptError,
 } from './index.js';
 import { MessageStore } from '../store/index.js';
+import { RoomStore } from '../rooms/index.js';
 import { TEAM_CHANNEL } from '../types.js';
 import type { AgentAddress, MessageEnvelope } from '../types.js';
 
@@ -40,14 +41,16 @@ interface Fixture {
 }
 
 function fixture(limiter?: InterruptRateLimiter): Fixture {
-  const store = new MessageStore(join(mkdtempSync(join(tmpdir(), 'nvk-router-')), 'messages.jsonl'));
+  const root = mkdtempSync(join(tmpdir(), 'nvk-router-'));
+  const store = new MessageStore(join(root, 'messages.jsonl'));
+  const rooms = new RoomStore(join(root, 'rooms.jsonl'));
   const writes: Array<{ agentId: string; data: string }> = [];
   const writeOk = { value: true };
   const write = (agentId: string, data: string): boolean => {
     writes.push({ agentId, data });
     return writeOk.value;
   };
-  const router = new MessageRouter(store, new PtyDelivery({ write }, FAST), () => ROSTER, limiter);
+  const router = new MessageRouter(store, new PtyDelivery({ write }, FAST), rooms, () => ROSTER, limiter);
   return { router, store, writes, writeOk };
 }
 

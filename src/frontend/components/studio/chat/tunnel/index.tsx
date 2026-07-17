@@ -1,105 +1,146 @@
-// Tunnel lens — the live agent↔agent feed (DMs + #team posts) inside the AI
-// panel. Rows keep the anti-prose grammar: tiny mono route label ("claude-1 →
-// codex-2"), the body, and delivery state in the meta line. No badges, no
-// pills. The amber engine may grant ONE row gold (a failed send that needs
-// Chris); clicking that row resolves it and the gold releases to sage.
-import React, { useEffect, useRef } from 'react';
+// Tunnel lens — the unified messenger inside the AI panel. Left rail carries
+// presence + every conversation (rooms, DMs, #team as one list); the center
+// is the selected lane's transcript and composer, where Chris posts as
+// 'chris'. Calm grammar throughout: near-monochrome, at most ONE amber across
+// the messenger (the lane whose newest word asks for Chris — selecting it
+// releases the accent), 700ms motion.
+import React, { useEffect, useMemo, useState } from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import { messageItemId, useAttention } from '../../../../lib/attention/index.js';
-import { formatRoute, statusMeta, type TunnelEnvelope } from '../../../../lib/tunnelModel/index.js';
-import { formatChatTime } from '../../../../lib/chatModel/index.js';
+import {
+  CHRIS,
+  buildConversations,
+  conversationIdsFor,
+  latestChrisQuestion,
+  liveRoster,
+  messagesFor,
+  useTunnelRooms,
+  type Conversation,
+  type ConversationId,
+  type TunnelEnvelope,
+  type TunnelRoom,
+} from '../../../../lib/tunnelModel/index.js';
 import type { MentionTarget } from '../../../../lib/mentions/index.js';
-import { MarkdownText } from '../../../../lib/markdown/index.js';
-import { MentionText } from '../mention/index.js';
+import { MessengerRail } from './rail/index.js';
+import { MessengerComposer, Transcript } from './transcript/index.js';
 import './index.css';
 
-interface TunnelFeedProps {
+interface TunnelMessengerProps {
   /** The live feed — owned by the panel so attention works on every lens. */
   feed: TunnelEnvelope[];
-  /** Live agents — names feed the failed-delivery roster hint. */
+  /** Every known agent — presence roster and the failed-send roster hint. */
   agents: AgentInfo[];
   /** Mention universe: object names in bodies become linked mentions. */
   targets: MentionTarget[];
-  /** Clicking through the gold row resolves its attention item. */
+  /** Resolving an attention item releases the app's single amber. */
   onResolve(itemId: string): void;
+  /** Backfills one lane's history when it is opened. */
+  onLoadConversation(id: ConversationId): void;
 }
 
-interface TunnelRowProps {
-  envelope: TunnelEnvelope;
-  liveNames: string[];
-  targets: MentionTarget[];
-  onResolve(itemId: string): void;
+async function postJson(path: string, payload: unknown): Promise<unknown> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const failure = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(failure?.error ?? `HTTP ${response.status}`);
+  }
+  return response.json();
 }
 
-function RouteMeta({ envelope, liveNames }: { envelope: TunnelEnvelope; liveNames: string[] }) {
-  return (
-    <>
-      <b>{formatRoute(envelope)}</b>
-      {' · '}{formatChatTime(envelope.createdAt)}
-      {envelope.delivery === 'interrupt' && ' · interrupt'}
-      {' · '}
-      <span className={`st-tn-status st-tn-${envelope.status}`}>{statusMeta(envelope, liveNames)}</span>
-    </>
-  );
+/** The lane a message-attention item points at (its sender's lane). */
+function laneOf(feed: TunnelEnvelope[], attentionId: string | null): ConversationId | null {
+  if (!attentionId?.startsWith('message:')) return null;
+  const envelopeId = attentionId.slice('message:'.length);
+  const envelope = feed.find((entry) => entry.id === envelopeId);
+  return envelope ? conversationIdsFor(envelope)[0] ?? null : null;
 }
 
-function TunnelRow({ envelope, liveNames, targets, onResolve }: TunnelRowProps) {
+export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConversation }: TunnelMessengerProps) {
+  const { rooms, ingestRoom } = useTunnelRooms();
+  const roster = useMemo(() => liveRoster(agents), [agents]);
+  const conversations = useMemo(() => buildConversations(feed, rooms, roster), [feed, rooms, roster]);
+  const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const attention = useAttention();
-  const itemId = messageItemId(envelope.id);
-  const holdsGold = attention.goldId === itemId;
-  const isSettling = attention.settlingId === itemId;
-  const rowClass = `st-msg${holdsGold ? ' st-tn-gold' : ''}${isSettling ? ' st-tn-settling' : ''}`;
-  // Resolution is an explicit affordance — the gold meta line is a real
-  // button. Nothing resolves by bubbling: clicks on the body or a mention
-  // inside it can never release the amber.
-  return (
-    <div className={rowClass}>
-      {holdsGold ? (
-        <button type="button" className="st-by st-tn-route st-tn-resolve" onClick={() => onResolve(itemId)}>
-          <RouteMeta envelope={envelope} liveNames={liveNames} />
-        </button>
-      ) : (
-        <div className="st-by st-tn-route">
-          <RouteMeta envelope={envelope} liveNames={liveNames} />
-        </div>
-      )}
-      <div className="st-say st-tn-body">
-        <MarkdownText
-          text={envelope.body}
-          renderText={(plain) => <MentionText text={plain} targets={targets} />}
-        />
-      </div>
-    </div>
-  );
-}
 
-const BOTTOM_SLACK_PX = 48;
+  // First open lands on the freshest lane. Selection by default never
+  // resolves anything — only an explicit click may release the amber.
+  useEffect(() => {
+    if (!selectedId && conversations.length > 0) setSelectedId(conversations[0].id);
+  }, [selectedId, conversations]);
 
-export function TunnelFeed({ feed, agents, targets, onResolve }: TunnelFeedProps) {
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const atBottomRef = useRef(true);
-  const liveNames = agents.filter((agent) => agent.status === 'running').map((agent) => agent.title);
-  const lastEnvelope = feed[feed.length - 1];
-  const feedEdge = lastEnvelope ? `${lastEnvelope.id}:${lastEnvelope.status}:${feed.length}` : '';
+  useEffect(() => {
+    if (selectedId) onLoadConversation(selectedId);
+  }, [selectedId, onLoadConversation]);
 
-  function trackScroll(): void {
-    const body = bodyRef.current;
-    if (body) atBottomRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < BOTTOM_SLACK_PX;
+  const selected = conversations.find((entry) => entry.id === selectedId) ?? null;
+  const goldLane = useMemo(() => laneOf(feed, attention.goldId), [feed, attention.goldId]);
+  const settlingLane = useMemo(() => laneOf(feed, attention.settlingId), [feed, attention.settlingId]);
+  const question = useMemo(() => latestChrisQuestion(feed), [feed]);
+
+  function select(conversation: Conversation): void {
+    setSelectedId(conversation.id);
+    // Answering the ask: opening the asking lane IS the resolution. A failed
+    // send keeps its explicit transcript-row resolve instead — seeing the
+    // lane is not the same as dealing with the failure.
+    if (question && attention.goldId === messageItemId(question.envelopeId)
+      && conversation.id === question.conversationId) {
+      onResolve(messageItemId(question.envelopeId));
+    }
   }
 
-  // Follow the live edge only when already reading it — scrolled-up history
-  // reading is never yanked to the bottom by an arriving envelope.
-  useEffect(() => {
-    const body = bodyRef.current;
-    if (body && atBottomRef.current) body.scrollTop = body.scrollHeight;
-  }, [feedEdge]);
+  async function startChat(members: string[], name: string): Promise<void> {
+    const data = (await postJson('/api/rooms', {
+      name,
+      members: [...members, CHRIS],
+      from: CHRIS,
+    })) as { room: TunnelRoom };
+    ingestRoom(data.room);
+    setSelectedId(data.room.roomId);
+  }
 
-  if (feed.length === 0) return <div className="st-ai-quiet">No agent messages yet</div>;
+  async function send(body: string): Promise<void> {
+    if (!selected) return;
+    const recipient = selected.kind === 'dm' ? selected.title : selected.id;
+    await postJson('/api/messages', { from: CHRIS, 'to': recipient, delivery: 'normal', body });
+  }
+
+  const liveNames = roster.map((entry) => entry.name);
+
   return (
-    <div className="st-ai-body st-tunnel" ref={bodyRef} onScroll={trackScroll}>
-      {feed.map((envelope) => (
-        <TunnelRow key={envelope.id} envelope={envelope} liveNames={liveNames} targets={targets} onResolve={onResolve} />
-      ))}
+    <div className="st-ms">
+      <MessengerRail
+        roster={roster}
+        conversations={conversations}
+        selectedId={selectedId}
+        goldId={goldLane}
+        settlingId={settlingLane}
+        onSelect={select}
+        onStartChat={startChat}
+      />
+      <div className="st-ms-main">
+        {selected ? (
+          <>
+            <div className="st-ms-head">
+              <div className="st-ms-title">{selected.title}</div>
+              {selected.members && <div className="st-ms-members">{selected.members.join(' · ')}</div>}
+            </div>
+            <Transcript
+              conversation={selected}
+              messages={messagesFor(feed, selected.id)}
+              liveNames={liveNames}
+              targets={targets}
+              onResolve={onResolve}
+            />
+            <MessengerComposer conversation={selected} onSend={send} />
+          </>
+        ) : (
+          <div className="st-ai-quiet">No conversations yet</div>
+        )}
+      </div>
     </div>
   );
 }

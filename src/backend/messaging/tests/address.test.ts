@@ -47,6 +47,8 @@ function testBriefingNamesProtocolAndEtiquette(): void {
   assert.match(briefing, /codex-1 \(codex\)/, 'briefing lists the live roster');
   assert.match(briefing, /nvk-msg\.mjs send --from claude-2/, 'briefing teaches the send protocol');
   assert.match(briefing, /check #team at natural pauses/, 'briefing teaches channel etiquette');
+  assert.match(briefing, /nvk-live\.mjs room create/, 'briefing teaches room verbs');
+  assert.match(briefing, /nvk-live\.mjs send --to room_/, 'briefing teaches room replies');
   assert.match(briefing, /127\.0\.0\.1:3031\/api\/messages/, 'briefing documents the curl fallback');
   assert.ok(!briefing.includes('\n'), 'briefing is one PTY submission — no raw newlines');
   const empty = composeSpawnBriefing('claude-1', [], 3031);
