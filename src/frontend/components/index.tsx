@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StudioRail, StudioWorkHead, type ViewMode } from './studio/index.js';
 import { StudioChatPanel } from './studio/chat/index.js';
 import { StudioResizeSeams } from './studio/resize.js';
+import { OrganizationLens } from './workspace/organization/index.js';
 import { AgentBoard } from './board/index.js';
 import { buildToolPairs, selKey, visibilityPredicate } from './board/timelineModel.js';
 import { SelectedInspector } from './details/index.js';
@@ -82,7 +83,7 @@ const COL_MIN = 280;
 const COL_MAX = 900;
 const VIEW_MODE_STORAGE_KEY = 'novakai-view-mode';
 const SESSION_STORAGE_KEY = 'novakai-selected-session';
-const VIEW_MODES = new Set<ViewMode>(['workspace', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
+const VIEW_MODES = new Set<ViewMode>(['workspace', 'organization', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
 
 function restoredViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
@@ -424,7 +425,9 @@ export function DashboardShell() {
         )}
         {/* Always mounted so the prototype's shadow DOM survives tab switches. */}
         <DesignView visible={viewMode === 'design'} />
-        {viewMode === 'workspace' ? (
+        {viewMode === 'organization' ? (
+          <OrganizationLens agents={agentsState.agents} />
+        ) : viewMode === 'workspace' ? (
           <WorkspaceTimeline
             project={workspace.selectedProject}
             thread={workspace.selectedThread}
