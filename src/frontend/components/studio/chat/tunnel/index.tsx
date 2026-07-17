@@ -11,14 +11,24 @@ import {
   type TunnelEnvelope,
 } from '../../../../lib/tunnelModel/index.js';
 import { formatChatTime } from '../../../../lib/chatModel/index.js';
+import type { MentionTarget } from '../../../../lib/mentions/index.js';
+import { MentionText } from '../mention/index.js';
 import './index.css';
 
 interface TunnelFeedProps {
   /** Live agents — names feed the failed-delivery roster hint. */
   agents: AgentInfo[];
+  /** Mention universe: object names in bodies become linked mentions. */
+  targets: MentionTarget[];
 }
 
-function TunnelRow({ envelope, liveNames }: { envelope: TunnelEnvelope; liveNames: string[] }) {
+interface TunnelRowProps {
+  envelope: TunnelEnvelope;
+  liveNames: string[];
+  targets: MentionTarget[];
+}
+
+function TunnelRow({ envelope, liveNames, targets }: TunnelRowProps) {
   return (
     <div className="st-msg">
       <div className="st-by st-tn-route">
@@ -28,14 +38,16 @@ function TunnelRow({ envelope, liveNames }: { envelope: TunnelEnvelope; liveName
         {' · '}
         <span className={`st-tn-status st-tn-${envelope.status}`}>{statusMeta(envelope, liveNames)}</span>
       </div>
-      <div className="st-say st-tn-body">{envelope.body}</div>
+      <div className="st-say st-tn-body">
+        <MentionText text={envelope.body} targets={targets} />
+      </div>
     </div>
   );
 }
 
 const BOTTOM_SLACK_PX = 48;
 
-export function TunnelFeed({ agents }: TunnelFeedProps) {
+export function TunnelFeed({ agents, targets }: TunnelFeedProps) {
   const feed = useTunnelFeed();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
@@ -59,7 +71,7 @@ export function TunnelFeed({ agents }: TunnelFeedProps) {
   return (
     <div className="st-ai-body st-tunnel" ref={bodyRef} onScroll={trackScroll}>
       {feed.map((envelope) => (
-        <TunnelRow key={envelope.id} envelope={envelope} liveNames={liveNames} />
+        <TunnelRow key={envelope.id} envelope={envelope} liveNames={liveNames} targets={targets} />
       ))}
     </div>
   );

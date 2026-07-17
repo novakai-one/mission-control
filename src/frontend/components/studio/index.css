@@ -34,6 +34,8 @@
   --st-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --st-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --st-dur: 260ms;
+  /* Structural moments — highlights landing, gold releasing — move slowly. */
+  --st-dur-slow: 700ms;
 
   height: 100vh;
   padding: 16px;
@@ -180,6 +182,25 @@
 
 .studio-here {
   color: var(--st-ink);
+}
+
+/* Lit by a chat mention: a soft greyscale glow that arrives slowly (~700ms)
+   and leaves quickly. Position + light says "this one", no text ever does. */
+.studio-thread.studio-lit {
+  color: var(--st-ink);
+  background: rgba(236, 236, 238, 0.05);
+  transition-duration: var(--st-dur-slow);
+}
+
+.studio-thread.studio-lit .studio-dot {
+  background: var(--st-ink);
+  transition-duration: var(--st-dur-slow);
+}
+
+.studio-sess.studio-lit {
+  color: var(--st-ink);
+  border-color: var(--st-line-3);
+  background: rgba(236, 236, 238, 0.04);
 }
 
 .studio-here::before {
@@ -360,6 +381,7 @@
   border: 1px solid var(--st-line);
   color: var(--st-muted);
   white-space: nowrap;
+  transition: color var(--st-dur-slow) var(--st-ease), border-color var(--st-dur-slow) var(--st-ease), background var(--st-dur-slow) var(--st-ease);
 }
 
 .studio-sess-dot {

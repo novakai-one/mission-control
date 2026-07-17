@@ -5,6 +5,8 @@ import React, { useState } from 'react';
 import { Settings, PanelRight } from 'lucide-react';
 import type { ProjectRecord, ThreadRecord } from '../../../shared/project/schema.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
+import { useHighlightedObject } from '../../lib/highlight/index.js';
+import { agentObjectId, threadObjectId } from '../../lib/mentions/index.js';
 import './index.css';
 
 export type ViewMode = 'workspace' | 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug';
@@ -60,8 +62,12 @@ function ProjectRow({ project, here, onSelect }: { project: ProjectRecord; here:
 }
 
 function ThreadRow({ thread, here, onSelect }: { thread: ThreadRecord; here: boolean; onSelect(): void }) {
+  // A chat mention pointing at this thread lights the row — the chip stays
+  // quiet, the object glows.
+  const isLit = useHighlightedObject() === threadObjectId(thread.id);
+  const rowClass = `studio-thread${here ? ' studio-here' : ''}${isLit ? ' studio-lit' : ''}`;
   return (
-    <button type="button" className={here ? 'studio-thread studio-here' : 'studio-thread'} onClick={onSelect}>
+    <button type="button" className={rowClass} onClick={onSelect}>
       <span className="studio-dot" />
       <span className="studio-thread-name">{thread.title}</span>
       {thread.sessionReferences.length > 0 && <span className="studio-count">{thread.sessionReferences.length}</span>}
@@ -145,6 +151,17 @@ interface StudioWorkHeadProps {
   onToggleViewPanel(): void;
 }
 
+function SessionChip({ agent }: { agent: AgentInfo }) {
+  // Lights when a chat mention names this agent (its title, e.g. claude-1).
+  const isLit = useHighlightedObject() === agentObjectId(agent.title);
+  return (
+    <span className={isLit ? 'studio-sess studio-lit' : 'studio-sess'}>
+      <span className={agent.status === 'running' ? 'studio-sess-dot studio-live' : 'studio-sess-dot'} />
+      {agent.title} · {agent.sessionId.slice(0, 8)}
+    </span>
+  );
+}
+
 export function StudioWorkHead(props: StudioWorkHeadProps) {
   return (
     <div className="studio-work-head">
@@ -162,10 +179,7 @@ export function StudioWorkHead(props: StudioWorkHeadProps) {
       </nav>
       <span className="studio-head-spacer" />
       {props.sessionAgents.map((agent) => (
-        <span key={agent.agentId} className="studio-sess">
-          <span className={agent.status === 'running' ? 'studio-sess-dot studio-live' : 'studio-sess-dot'} />
-          {agent.provider} · {agent.sessionId.slice(0, 8)}
-        </span>
+        <SessionChip key={agent.agentId} agent={agent} />
       ))}
       <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
         <Settings size={14} />

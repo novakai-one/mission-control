@@ -155,6 +155,12 @@
   color: var(--st-ink);
 }
 
+/* This row's object is the lit one — the row itself only shifts ink. */
+.st-srow-lit,
+.st-srow-lit .st-srow-w {
+  color: var(--st-ink);
+}
+
 .st-srow-i {
   font-family: var(--st-mono);
   font-size: 10px;
