@@ -15,3 +15,6 @@ desktop/package-lock.json
 .novakai-command/rooms.jsonl
 .novakai-command/analytics/
 .claude/settings.local.json
+.novakai-command/watchdog-state.json
+.novakai-command/watchdog-events.jsonl
+.novakai-command/watchdog.out
