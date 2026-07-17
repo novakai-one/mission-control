@@ -70,18 +70,36 @@ function connect(engine: CanvasEngine, connection: Connection): string | null {
  * AND the document has content — after React Flow's ResizeObserver has seen
  * the real dimensions — then never again, preserving the user's pan/zoom
  * across tab switches. */
-function FitOnReveal({ visible, nodeCount }: { visible: boolean; nodeCount: number }) {
+function FitOnReveal({ visible, nodeCount, primaryId }: { visible: boolean; nodeCount: number; primaryId: string | null }) {
   const { fitView } = useReactFlow();
   const fitted = useRef(false);
   useEffect(() => {
     if (fitted.current || !visible || nodeCount === 0) return;
     fitted.current = true;
-    // Two frames + a beat: display:none -> block must flow through React
-    // Flow's ResizeObserver before fitView can measure honestly.
-    const timer = window.setTimeout(() => { void fitView({ padding: 0.12, maxZoom: 1 }); }, 120);
+    // A timeout, not useNodesInitialized: a lens born display:none measures
+    // its nodes at zero and React Flow never re-reports initialization after
+    // reveal — verified empirically. The beat lets the ResizeObserver see the
+    // real container. Reveal frames the primary scope at readable zoom —
+    // whole-document fit is soup; the fit control still zooms out to all.
+    const timer = window.setTimeout(() => {
+      void fitView(primaryId
+        ? { nodes: [{ id: primaryId }], padding: 0.08, maxZoom: 0.9 }
+        : { padding: 0.12, maxZoom: 1 });
+    }, 150);
     return () => window.clearTimeout(timer);
-  }, [visible, nodeCount, fitView]);
+  }, [visible, nodeCount, primaryId, fitView]);
   return null;
+}
+
+/** The topmost root scope — documents read top-down, so the overview map
+ * Chris authored first sits highest on the canvas. */
+function primaryScopeId(document: ArchitectureDocument): string | null {
+  const scopes = Object.values(document.nodes).filter((node) => node.kind === 'scope' && !node.parentId);
+  const best = scopes.reduce<CanvasNode | null>(
+    (leader, scope) => (leader && leader.position.y <= scope.position.y ? leader : scope),
+    null,
+  );
+  return best?.id ?? null;
 }
 
 /** The Canvas studio lens. Always mounted so pan/zoom and selection survive
@@ -150,7 +168,9 @@ export function CanvasView({ visible }: { visible: boolean }) {
       <ReactFlowProvider>
         <ReactFlow
           colorMode="dark" deleteKeyCode={['Backspace', 'Delete']} edgeTypes={edgeTypes} edges={edges}
-          elementsSelectable fitView fitViewOptions={{ padding: 0.12, maxZoom: 1 }} minZoom={0.35}
+          // No fitView prop: it re-fires when nodes initialize and would race
+          // FitOnReveal's deliberate primary-scope framing.
+          elementsSelectable minZoom={0.1}
           nodeTypes={nodeTypes} nodes={nodes} nodesConnectable nodesDraggable
           onConnect={(connection) => { const id = connect(engine, connection); if (id) select({ kind: 'wire', id }); }}
           onEdgeClick={(_event, edge) => select({ kind: 'wire', id: edge.id })}
@@ -159,7 +179,7 @@ export function CanvasView({ visible }: { visible: boolean }) {
           selectionOnDrag snapGrid={[preferences.canvas.gridSize, preferences.canvas.gridSize]}
           snapToGrid={preferences.canvas.snapToGrid}
         >
-          <FitOnReveal visible={visible} nodeCount={Object.keys(document.nodes).length} />
+          <FitOnReveal visible={visible} nodeCount={Object.keys(document.nodes).length} primaryId={primaryScopeId(document)} />
           {preferences.canvas.showGrid && <Background color="#26262b" gap={preferences.canvas.gridSize * 2} variant={BackgroundVariant.Dots} />}
           {preferences.canvas.showControls && <Controls position="bottom-left" showInteractive={false} />}
         </ReactFlow>
