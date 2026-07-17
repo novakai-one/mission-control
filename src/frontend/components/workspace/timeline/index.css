@@ -1,21 +1,85 @@
-.workspace-timeline { display:flex; flex-direction:column; min-width:0; background:#0e0e0f; overflow:hidden; }
-.workspace-empty { align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; }
-.workspace-timeline-header { display:flex; justify-content:space-between; align-items:center; min-height:54px; padding:0 22px; border-bottom:1px solid var(--border-color); color:var(--text-muted); font-size:11px; }
-.workspace-state { display:flex; gap:7px; align-items:center; }
-.workspace-state i { width:5px; height:5px; border-radius:50%; background:var(--status-active); }
-.workspace-thread-summary { padding:52px 56px 30px; border-bottom:1px solid var(--border-color); }
-.workspace-thread-summary>span { color:var(--text-muted); font-size:10px; letter-spacing:.09em; text-transform:uppercase; }
-.workspace-thread-summary h1 { margin:11px 0 8px; font-size:30px; font-weight:600; letter-spacing:-.02em; }
-.workspace-thread-summary p { color:var(--text-secondary); font-size:13px; }
-.workspace-provider-strip { display:flex; gap:8px; flex-wrap:wrap; margin-top:22px; }
-.workspace-provider-strip span { padding:6px 9px; border:1px solid var(--border-color); border-radius:4px; color:var(--text-muted); font:10px var(--font-mono); }
-.workspace-event-stream { display:flex; flex-direction:column; gap:10px; padding:24px 56px 60px; overflow:auto; }
-.workspace-event { max-width:720px; padding:13px 15px; border:1px solid var(--border-color); border-radius:7px; background:color-mix(in srgb,var(--theme-ink) 2%,transparent); }
-.workspace-event>div { display:flex; justify-content:space-between; margin-bottom:7px; color:var(--text-muted); font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
-.workspace-event p { color:var(--text-secondary); font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
-.workspace-event-user { margin-left:auto; border-color:color-mix(in srgb,var(--status-active) 28%,transparent); }
-.workspace-event-assistant p { color:var(--text-primary); }
-.workspace-event-tool { opacity:.72; }
-.workspace-event-empty { padding:50px 0; color:var(--text-muted); text-align:center; font-size:12px; }
-.workspace-notice { margin:16px 56px 0; padding:10px 12px; border:1px solid var(--border-color); color:var(--text-secondary); font-size:11px; }
-.workspace-notice-error { border-color:color-mix(in srgb,var(--kind-error) 40%,transparent); }
+/* Workspace timeline — studio grammar (docs/messaging-studio.html): the
+   dominant column sits on the stage, content in a centered 660px stack,
+   speaker runs separated by hairlines. Near-monochrome; the amber engine
+   owns any gold that appears below. */
+.workspace-timeline {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--st-stage);
+  overflow: hidden;
+}
+
+.wt-quiet {
+  align-items: center;
+  justify-content: center;
+  color: var(--st-faintest);
+  font-size: 12px;
+}
+
+.wt-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 26px 34px 30px;
+}
+
+.wt-stack {
+  max-width: 660px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wt-label {
+  font-family: var(--st-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--st-faintest);
+}
+
+/* Session issues / errors: a quiet line, not a box — nothing shouts here. */
+.wt-notice {
+  font-size: 11.5px;
+  color: var(--st-faint);
+  overflow-wrap: anywhere;
+}
+
+.wt-empty {
+  padding: 40px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--st-faintest);
+}
+
+/* One speaker label per run; hairlines separate runs, never rows. */
+.wt-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wt-group + .wt-group {
+  border-top: 1px solid var(--st-line);
+  padding-top: 14px;
+}
+
+/* Speaker labels: tiny mono uppercase, matching the chat panel's grammar. */
+.wt-by {
+  font-family: var(--st-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--st-faintest);
+}
+
+.wt-by b {
+  font-weight: 500;
+  color: var(--st-muted);
+}
+
+.wt-by-you b {
+  color: var(--st-faint);
+}

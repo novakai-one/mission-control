@@ -1,65 +1,91 @@
-import React from 'react';
+// Per-kind renderers for canonical workspace events, in the studio's calm
+// grammar: speech is plain ink, tool/system rows are quiet mono one-liners
+// that reveal their payload on click (~700ms), tasks are a dotted list, and
+// an approval is the one bordered object — gold only while the amber engine
+// says it is THE thing needing Chris, sage for a breath once it resolves.
+import React, { useState } from 'react';
 import type { CanonicalEvent, CanonicalEventKind } from '../../../../shared/provider/schema.js';
+import { approvalItemId, useAttention } from '../../../lib/attention/index.js';
+import { eventKindLabel, isDense, summaryLine } from '../model/index.js';
 import './index.css';
 
 interface EventRendererProps {
   event: CanonicalEvent;
 }
 
-function EventFrame({ event, children }: EventRendererProps & { children?: React.ReactNode }) {
+function SpeechEvent({ event }: EventRendererProps) {
+  return <p className={event.kind === 'user' ? 'wt-say wt-say-you' : 'wt-say'}>{event.text || event.rawType}</p>;
+}
+
+/** Tool and system rows: one quiet mono line; dense payloads expand on click. */
+function QuietEvent({ event }: EventRendererProps) {
+  const [open, setOpen] = useState(false);
+  const text = event.text || event.rawType;
+  const dense = isDense(text);
   return (
-    <article className={`workspace-event workspace-event-${event.kind}`}>
-      <div><span>{event.provider}</span><time>{event.timestamp ? new Date(event.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}</time></div>
-      {children ?? <p>{event.text || event.rawType}</p>}
-    </article>
+    <div className={open ? 'wt-row wt-row-open' : 'wt-row'}>
+      <button type="button" className="wt-row-line" disabled={!dense} onClick={() => setOpen(!open)}>
+        <span className="wt-kind">{eventKindLabel(event)}</span>
+        <span className="wt-line">{summaryLine(text)}</span>
+        {dense && <span className="wt-more">{open ? '−' : '+'}</span>}
+      </button>
+      {dense && (
+        <div className="wt-reveal">
+          <div className="wt-reveal-clip">
+            <pre>{text}</pre>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-function DefaultEvent({ event }: EventRendererProps) {
-  return <EventFrame event={event} />;
+function approvalStateLabel(holdsGold: boolean, settling: boolean): string {
+  if (holdsGold) return 'Needs you';
+  return settling ? 'Done' : 'Permission';
 }
 
 function ApprovalEvent({ event }: EventRendererProps) {
-  const approval = event.approval;
+  // Gold is granted by the amber engine, never claimed locally.
+  const attention = useAttention();
+  const holdsGold = attention.goldId === approvalItemId(event.id);
+  const settling = attention.settlingId === approvalItemId(event.id);
+  const writes = event.approval?.writes ?? [];
+  const blockClass = `wt-decide${holdsGold ? ' wt-decide-needs' : ''}${settling ? ' wt-decide-settling' : ''}`;
   return (
-    <EventFrame event={event}>
-      <span className="workspace-event-label">Permission</span>
-      <h2>{event.text || 'Provider approval requested'}</h2>
-      {approval?.command && <code>{approval.command}</code>}
-      <dl>
-        <dt>Writes</dt>
-        <dd>{approval?.writes.length ? approval.writes.join(' · ') : 'No declared workspace writes'}</dd>
-        <dt>Does not</dt>
-        <dd>Publish, message, or leave this workspace</dd>
-      </dl>
-      <p>Review and decide in the active provider terminal.</p>
-    </EventFrame>
+    <div className={blockClass}>
+      <div className="wt-decide-head">
+        <span className="wt-decide-k">{approvalStateLabel(holdsGold, settling)}</span>
+        {writes.length > 0 && <span className="wt-decide-g">writes {writes.length} {writes.length === 1 ? 'file' : 'files'}</span>}
+      </div>
+      <div className="wt-decide-cmd">
+        {event.approval?.command || event.text || 'Provider approval requested'}
+        {event.approval?.reason && <span> — {event.approval.reason}</span>}
+      </div>
+    </div>
   );
 }
 
 function TaskEvent({ event }: EventRendererProps) {
-  const tasks = event.tasks ?? [];
   return (
-    <EventFrame event={event}>
-      <span className="workspace-event-label">Tasks</span>
-      <ul className="workspace-task-list">
-        {tasks.map((task) => (
-          <li key={task.id} data-status={task.status}>
-            <i />{task.status === 'in_progress' ? (task.activeForm || task.subject) : task.subject}
-          </li>
-        ))}
-      </ul>
-    </EventFrame>
+    <div className="wt-tasks">
+      {(event.tasks ?? []).map((task) => (
+        <div key={task.id} className="wt-task" data-status={task.status}>
+          <i />
+          {task.status === 'in_progress' ? (task.activeForm || task.subject) : task.subject}
+        </div>
+      ))}
+    </div>
   );
 }
 
 const renderers: Record<CanonicalEventKind, React.ComponentType<EventRendererProps>> = {
-  user: DefaultEvent,
-  assistant: DefaultEvent,
-  tool: DefaultEvent,
+  user: SpeechEvent,
+  assistant: SpeechEvent,
+  tool: QuietEvent,
   approval: ApprovalEvent,
   task: TaskEvent,
-  system: DefaultEvent,
+  system: QuietEvent,
 };
 
 // One malformed event must cost one timeline row, never the whole app —
@@ -77,19 +103,13 @@ class EventBoundary extends React.Component<EventRendererProps & { children: Rea
 
   render() {
     if (!this.state.failed) return this.props.children;
-    const { event } = this.props;
-    return (
-      <article className="workspace-event workspace-event-failed">
-        <div><span>{event.provider}</span></div>
-        <p>Unrenderable {event.rawType} event</p>
-      </article>
-    );
+    return <p className="wt-failed">Unrenderable {this.props.event.rawType} event</p>;
   }
 }
 
 /** Render one canonical event through its lifecycle-owned renderer. */
 export function WorkspaceEvent({ event }: EventRendererProps) {
-  const Renderer = renderers[event.kind] ?? DefaultEvent; // unknown kinds degrade, not crash
+  const Renderer = renderers[event.kind] ?? SpeechEvent; // unknown kinds degrade, not crash
   return (
     <EventBoundary event={event}>
       <Renderer event={event} />
