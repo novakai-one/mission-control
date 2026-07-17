@@ -14,7 +14,18 @@ import {
   type AgentActivity,
   type ChatMessage,
 } from '../../../lib/chatModel/index.js';
+import { buildTargets, type MentionTarget } from '../../../lib/mentions/index.js';
+import { pinObject, useHighlightedObject } from '../../../lib/highlight/index.js';
+import {
+  approvalItemId,
+  buildAttentionQueue,
+  updateAttentionQueue,
+  useAttention,
+} from '../../../lib/attention/index.js';
+import { useTunnelFeed } from '../../../lib/tunnelModel/index.js';
 import { ChatComposer } from './composer.js';
+import { MentionText } from './mention/index.js';
+import { TunnelFeed } from './tunnel/index.js';
 import './index.css';
 
 /** A composer send waiting for its echo on the live stream. */
@@ -29,42 +40,66 @@ export interface StudioChatPanelProps {
   thread: ThreadRecord | null;
   projection: ThreadProjection | null;
   runtimeAgent: AgentInfo | null;
+  /** Every known agent — the tunnel's roster hint and mention targets. */
+  agents: AgentInfo[];
   onLaunch(provider: ProviderId): Promise<unknown>;
   onAttach(provider: ProviderId, sessionId: string, cwd?: string): Promise<void>;
   onOpenAgent(agentId: string): void;
 }
 
-type ChatTabId = 'context' | 'conversation' | 'evidence';
+type ChatTabId = 'context' | 'conversation' | 'tunnel' | 'evidence';
 
 const CHAT_TABS: { id: ChatTabId; label: string }[] = [
   { id: 'context', label: 'Context' },
   { id: 'conversation', label: 'Conversation' },
+  { id: 'tunnel', label: 'Tunnel' },
   { id: 'evidence', label: 'Evidence' },
 ];
+
+function StateRow({ stateRow, index }: { stateRow: ChatMessage['rows'][number]; index: number }) {
+  const highlighted = useHighlightedObject();
+  const isLit = stateRow.objectId !== null && highlighted === stateRow.objectId;
+  return (
+    <button
+      type="button"
+      className={isLit ? 'st-srow st-srow-lit' : 'st-srow'}
+      onClick={() => { if (stateRow.objectId) pinObject(stateRow.objectId); }}
+    >
+      <span className="st-srow-i">{String(index + 1).padStart(2, '0')}</span>
+      {stateRow.mono && <span className="st-srow-o">{stateRow.mono}</span>}
+      <span className="st-srow-w">{stateRow.text}</span>
+      {stateRow.state && <span className={stateRow.settled ? 'st-srow-chip st-ok' : 'st-srow-chip'}>{stateRow.state}</span>}
+    </button>
+  );
+}
 
 function StateRows({ message }: { message: ChatMessage }) {
   return (
     <div className="st-rows">
       {message.rows.map((stateRow, index) => (
-        <button key={stateRow.id} type="button" className="st-srow" data-object-id={stateRow.objectId ?? undefined}>
-          <span className="st-srow-i">{String(index + 1).padStart(2, '0')}</span>
-          {stateRow.mono && <span className="st-srow-o">{stateRow.mono}</span>}
-          <span className="st-srow-w">{stateRow.text}</span>
-          {stateRow.state && <span className={stateRow.settled ? 'st-srow-chip st-ok' : 'st-srow-chip'}>{stateRow.state}</span>}
-        </button>
+        <StateRow key={stateRow.id} stateRow={stateRow} index={index} />
       ))}
     </div>
   );
 }
 
-function ChatMessageBlock({ message }: { message: ChatMessage }) {
+function ChatMessageBlock({ message, targets }: { message: ChatMessage; targets: MentionTarget[] }) {
+  // Gold is granted by the amber engine, never claimed locally: this approval
+  // reads gold only while it is THE thing needing Chris, and reads sage for a
+  // breath right after it resolves.
+  const attention = useAttention();
+  const holdsGold = message.needsYou && attention.goldId === approvalItemId(message.id);
+  const isSettling = attention.settlingId === approvalItemId(message.id);
+  const blockClass = `st-msg${holdsGold ? ' st-msg-needs' : ''}${isSettling ? ' st-msg-settling' : ''}`;
   return (
-    <div className={message.needsYou ? 'st-msg st-msg-needs' : 'st-msg'}>
+    <div className={blockClass}>
       <div className={message.fromYou ? 'st-by st-by-you' : 'st-by'}>
         <b>{message.author}</b>
         {message.time && <> · {message.time}</>}
       </div>
-      <div className={message.fromYou ? 'st-say st-say-you' : 'st-say'}>{message.caption}</div>
+      <div className={message.fromYou ? 'st-say st-say-you' : 'st-say'}>
+        <MentionText text={message.caption} targets={targets} />
+      </div>
       {message.rows.length > 0 && <StateRows message={message} />}
     </div>
   );
@@ -86,10 +121,11 @@ interface ConversationBodyProps {
   projection: ThreadProjection | null;
   thread: ThreadRecord | null;
   pendingSends: PendingSend[];
+  targets: MentionTarget[];
 }
 
-function ConversationBody({ projection, thread, pendingSends }: ConversationBodyProps) {
-  const messages = useMemo(() => buildChatMessages(projection), [projection]);
+function ConversationBody({ projection, thread, pendingSends, targets }: ConversationBodyProps) {
+  const messages = useMemo(() => buildChatMessages(projection, undefined, targets), [projection, targets]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const lastMessageId = pendingSends[pendingSends.length - 1]?.id ?? messages[messages.length - 1]?.id;
 
@@ -103,7 +139,7 @@ function ConversationBody({ projection, thread, pendingSends }: ConversationBody
   if (messages.length === 0 && pendingSends.length === 0) return <div className="st-ai-quiet">No conversation yet</div>;
   return (
     <div className="st-ai-body" ref={bodyRef}>
-      {messages.map((message) => <ChatMessageBlock key={message.id} message={message} />)}
+      {messages.map((message) => <ChatMessageBlock key={message.id} message={message} targets={targets} />)}
       {pendingSends.map((pending) => <PendingSendBlock key={pending.id} pending={pending} />)}
     </div>
   );
@@ -222,6 +258,24 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
     nowMs,
   );
 
+  // The resolvable mention universe: agent names + this project's threads.
+  const mentionTargets = useMemo(
+    () => buildTargets(props.agents, props.project?.threads ?? []),
+    [props.agents, props.project],
+  );
+
+  // Amber engine feed. The tunnel feed lives HERE (not in the Tunnel tab) so
+  // a failed delivery claims attention whichever lens is open. Clicking
+  // through a failed send dismisses it — that is its resolution.
+  const tunnelFeed = useTunnelFeed();
+  const [dismissedNeeds, setDismissedNeeds] = useState<ReadonlySet<string>>(() => new Set<string>());
+  useEffect(() => {
+    updateAttentionQueue(buildAttentionQueue(props.projection, tunnelFeed, dismissedNeeds));
+  }, [props.projection, tunnelFeed, dismissedNeeds]);
+  function resolveNeed(itemId: string): void {
+    setDismissedNeeds((current) => new Set(current).add(itemId));
+  }
+
   return (
     <aside className="studio-ai">
       <div className="st-ai-head">
@@ -242,9 +296,12 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
       </div>
 
       {activeTab === 'conversation' && (
-        <ConversationBody projection={props.projection} thread={props.thread} pendingSends={pendingSends} />
+        <ConversationBody projection={props.projection} thread={props.thread} pendingSends={pendingSends} targets={mentionTargets} />
       )}
       {activeTab === 'context' && <ContextBody {...props} />}
+      {activeTab === 'tunnel' && (
+        <TunnelFeed feed={tunnelFeed} agents={props.agents} targets={mentionTargets} onResolve={resolveNeed} />
+      )}
       {activeTab === 'evidence' && <div className="st-ai-quiet">Nothing captured yet</div>}
 
       {activeTab === 'conversation' && (

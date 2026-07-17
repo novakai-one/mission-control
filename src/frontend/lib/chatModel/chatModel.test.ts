@@ -124,6 +124,21 @@ assert.equal(agentActivity('running', [freshAssistant], false, NOW_MS), 'replyin
 assert.equal(agentActivity('running', [oldAssistant], false, NOW_MS), 'ready');
 assert.equal(agentActivity('running', [], false, NOW_MS), 'ready');
 
+// Mention targets fill the row objectId seam: a task row naming an agent
+// points at that agent's object; unresolvable rows stay null.
+const mentionTargets = [{ objectId: 'agent:codex-1', label: 'codex-1', kind: 'agent' as const }];
+const linkedRows = buildChatMessages(projection([event({
+  id: 'l1',
+  kind: 'task',
+  text: '',
+  tasks: [
+    { id: 'one', subject: 'waiting on codex-1', status: 'in_progress' },
+    { id: 'two', subject: 'port the shell', status: 'completed' },
+  ],
+})]), undefined, mentionTargets);
+assert.equal(linkedRows[0].rows[0].objectId, 'agent:codex-1');
+assert.equal(linkedRows[0].rows[1].objectId, null);
+
 // Idle-session system heartbeats carry fresh timestamps; they must neither
 // hold Replying open nor mask an unanswered user turn.
 const freshSystem = event({ id: 'v4', kind: 'system', text: 'auto', timestamp: '2026-07-17T21:31:09.000Z' });

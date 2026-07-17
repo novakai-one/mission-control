@@ -98,14 +98,21 @@
 .st-by b {
   font-weight: 500;
   color: var(--st-muted);
+  transition: color var(--st-dur-slow) var(--st-ease);
 }
 
 .st-by-you b {
   color: var(--st-faint);
 }
 
+/* Granted by the amber engine: THE open approval reads gold... */
 .st-msg-needs .st-by b {
   color: var(--st-gold);
+}
+
+/* ...and exhales to sage for a breath once resolved. */
+.st-msg-settling .st-by b {
+  color: var(--st-sage);
 }
 
 /* Optimistic send — quiet until its echo lands; the queued state lives in
@@ -152,6 +159,12 @@
 }
 
 .st-srow:hover {
+  color: var(--st-ink);
+}
+
+/* This row's object is the lit one — the row itself only shifts ink. */
+.st-srow-lit,
+.st-srow-lit .st-srow-w {
   color: var(--st-ink);
 }
 
