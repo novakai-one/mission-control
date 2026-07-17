@@ -26,7 +26,9 @@
   const isGold = (c) => c && c.a > 0.25 && GOLD.some((g) => near(c, g));
   const inPalette = (c) => !c || c.a <= 0.05 || PALETTE.some((p) => near(c, p));
   const isWordmark = (el) =>
-    !!el.closest('[data-wordmark]') || />_\s*novakai/i.test((el.textContent || '').slice(0, 40));
+    !!el.closest('[data-wordmark]') || />_\s*novakai/i.test((el.textContent || '').slice(0, 40)) ||
+    // the ">_" glyph is often its own span — test the parent's assembled text too
+    (el.parentElement && />_\s*novakai/i.test((el.parentElement.textContent || '').slice(0, 40)));
 
   const all = [...document.querySelectorAll('*')];
   const goldEls = [];
@@ -34,7 +36,8 @@
   const badRadius = [];
   const badFonts = new Set();
   // Chris ruling (M3): mono ONLY in the wordmark — terminal/diff/evidence included.
-  const MONO_OK = (el) => !!el.closest('[data-wordmark],.wordmark,.brand');
+  const MONO_OK = (el) => !!el.closest('[data-wordmark],.wordmark,.brand') ||
+    (el.parentElement && />_\s*novakai/i.test((el.parentElement.textContent || '').slice(0, 40)));
 
   for (const el of all) {
     const cs = getComputedStyle(el);
@@ -190,6 +193,21 @@
     })
     .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`);
 
+  // Strict bg-token census (codex Drop-1 lesson: #2b2b30 vs ratified #29292d is
+  // 2/channel — invisible at TOL 14). Panel SURFACES must use exact ramp tokens.
+  const RAMP = [[13, 13, 15], [18, 18, 20], [27, 27, 30], [37, 37, 41], [41, 41, 45]];
+  const offRamp = new Set();
+  for (const el of all) {
+    const c = parse(getComputedStyle(el).backgroundColor);
+    if (!c || c.a <= 0.9 || !isGray(c)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 40 || r.height < 24) continue; // surfaces, not hairlines/glyph boxes
+    if (lum(c) > 80) continue; // ink-on-light exceptions stay C12's job
+    if (!RAMP.some((t) => Math.abs(c.r - t[0]) <= 2 && Math.abs(c.g - t[1]) <= 2 && Math.abs(c.b - t[2]) <= 2)) {
+      offRamp.add(`rgb(${c.r},${c.g},${c.b}) ${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`);
+    }
+  }
+
   const body = getComputedStyle(document.body);
   return JSON.stringify({
     url: location.href,
@@ -206,6 +224,7 @@
     C12_badRadius: badRadius.slice(0, 8),
     C12_badFonts: [...badFonts].slice(0, 8),
     C16_directiveCopy: directiveHits.slice(0, 8),
+    C12_offRampSurfaces: [...offRamp].slice(0, 10),
     C22_pageBgExposure: pageBgExposure,
     C22_flatZoneCount: flatZones.length,
     C22_flatZones: flatZones.slice(0, 8).map((e) =>
