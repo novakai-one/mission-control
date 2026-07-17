@@ -10,13 +10,14 @@ import { useAttention } from '../../lib/attention/index.js';
 import { agentObjectId, threadObjectId } from '../../lib/mentions/index.js';
 import './index.css';
 
-export type ViewMode = 'workspace' | 'files' | 'canvas' | 'analytics' | 'agents' | 'transcript' | 'ruleset' | 'debug';
+export type ViewMode = 'workspace' | 'files' | 'canvas' | 'analytics' | 'design' | 'agents' | 'transcript' | 'ruleset' | 'debug';
 
 const VIEW_TABS: { mode: ViewMode; label: string }[] = [
   { mode: 'workspace', label: 'Workspace' },
   { mode: 'files', label: 'Files' },
   { mode: 'canvas', label: 'Canvas' },
   { mode: 'analytics', label: 'Analytics' },
+  { mode: 'design', label: 'Design' },
   { mode: 'agents', label: 'Agents' },
   { mode: 'transcript', label: 'Transcript' },
   { mode: 'ruleset', label: 'Ruleset' },

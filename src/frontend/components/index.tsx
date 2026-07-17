@@ -14,6 +14,7 @@ import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
 import { CanvasView, CANVAS_CHANGED_EVENT } from './canvas/index.js';
 import { AnalyticsView, ANALYTICS_CHANGED_EVENT } from './analytics/index.js';
+import { DesignView, DESIGN_CHANGED_EVENT } from './design/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { WorkspaceTimeline } from './workspace/timeline/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
@@ -80,7 +81,7 @@ const COL_MIN = 280;
 const COL_MAX = 900;
 const VIEW_MODE_STORAGE_KEY = 'novakai-view-mode';
 const SESSION_STORAGE_KEY = 'novakai-selected-session';
-const VIEW_MODES = new Set<ViewMode>(['workspace', 'files', 'analytics', 'agents', 'transcript', 'ruleset', 'debug']);
+const VIEW_MODES = new Set<ViewMode>(['workspace', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
 
 function restoredViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
@@ -295,6 +296,10 @@ export function DashboardShell() {
       } else if (message.event === 'watch-started' || message.event === 'message-envelope') {
         // Watch acks and tunnel envelopes (consumed via the agentSocket
         // singleton) must not fall through to the debug message list.
+      } else if (message.event === 'design-event') {
+        // External design commit (bounded CLI, html-builder app) — the always-
+        // mounted DesignView listens for this and refetches the accepted revision.
+        window.dispatchEvent(new CustomEvent(DESIGN_CHANGED_EVENT, { detail: message.payload }));
       } else if (message.event === 'canvas-event') {
         // External canvas write (the ./canvas CLI, an editor) — the always-
         // mounted CanvasView listens for this and reloads its document.
@@ -413,6 +418,8 @@ export function DashboardShell() {
         {viewMode === 'analytics' && (
           <AnalyticsView repoPath={workspace.selectedProject?.rootPath ?? activeRepo} />
         )}
+        {/* Always mounted so the prototype's shadow DOM survives tab switches. */}
+        <DesignView visible={viewMode === 'design'} />
         {viewMode === 'workspace' ? (
           <WorkspaceTimeline
             project={workspace.selectedProject}
