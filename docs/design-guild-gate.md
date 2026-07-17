@@ -1,4 +1,4 @@
-# Design Guild Rigor Gate — C1–C21
+# Design Guild Rigor Gate — C1–C23
 
 Binding acceptance criteria for `docs/design-guild-workspace.html` (Map = world, Thread = memory,
 Director = camera). Owner: Design Guild · fable. No milestone reports "done" until the gate is
@@ -134,8 +134,30 @@ is a C1 fail.
   item may hold the one global gold. **[mech: open thread, census cursor unchanged;
   scroll items into view, cursor advances; reload, cursor + anchor identical]**
 
+## Frame law (Chris ruling 2026-07-17 ~20:28, via WGT lead — binding)
+
+- **C22 — Frame everything.** Codex's variant B (`organizationStudioPrototype`) is the
+  north star for surface treatment. Every primary zone — center canvas/workspace, chat
+  panel, rails, header regions that carry content — sits in its OWN framed surface
+  (panel background from the panel ramp, distinct from page `#0d0d0f`, with the drawer
+  hierarchy rule: children lighter than parent). Any primary zone rendered flat on the
+  page background = FAIL. Chris's M3 verdict ("looks a bit cheap … everything so flat")
+  is the precedent; flatness is not relitigable. **[mech: for each primary zone root,
+  computed background must differ from the page bg and resolve to a panel-ramp value]**
+
+## Terminal parity (nailed acceptance contract — Chris ruling 2026-07-17)
+
+- **C23 — Terminal parity in Conversation.** "Nailed" = full working app + terminal
+  parity + nothing lost on restart/reload. From the Conversation surface you can do
+  everything you can do in a terminal session and currently cannot: switch model, see
+  token usage, and the rest of the terminal-only operations. Parity actions obey the
+  existing laws (Inter not mono, no attention text, one gold). Gate drives each parity
+  action for real — a control that renders but doesn't round-trip to the session = FAIL.
+
 ## Procedure
 
 Each codex milestone: I drive it with `tools/browse` (goto/click/scroll/shot + eval for [mech]
 counts), post screenshots + per-criterion verdict (pass / fail / n-a-yet) in the room. Gate
-green = all 16 pass in-browser. Passing by code-read does not count — house rule.
+green = all criteria pass in-browser. Passing by code-read does not count — house rule.
+Current target: Guild Lead · opus's variant-B port of the real messaging surface
+(codex = design authority, no browser; this gate is the driven truth).
