@@ -22,8 +22,8 @@ class FakeProvider implements BrowserProvider {
   }
 }
 
-function registryPath(): string {
-  return join(mkdtempSync(join(tmpdir(), 'mc-browser-')), 'sessions.json');
+function registryDir(): string {
+  return mkdtempSync(join(tmpdir(), 'mc-browser-'));
 }
 
 function fixedClock(iso: string): () => Date {
@@ -32,7 +32,7 @@ function fixedClock(iso: string): () => Date {
 
 async function testGetOrCreateReuses(): Promise<void> {
   const provider = new FakeProvider();
-  const broker = new SessionBroker({ provider, registryPath: registryPath(), now: fixedClock('2026-07-17T00:00:00Z'), isAlive: () => true });
+  const broker = new SessionBroker({ provider, registryDir: registryDir(), now: fixedClock('2026-07-17T00:00:00Z'), isAlive: () => true });
   const first = await broker.acquire('s1', 'a1');
   const second = await broker.acquire('s1', 'a1');
   assert.equal(provider.launches, 1, 'second acquire of same id reuses the instance');
@@ -41,7 +41,7 @@ async function testGetOrCreateReuses(): Promise<void> {
 
 async function testDistinctIdsAreIsolated(): Promise<void> {
   const provider = new FakeProvider();
-  const broker = new SessionBroker({ provider, registryPath: registryPath(), isAlive: () => true });
+  const broker = new SessionBroker({ provider, registryDir: registryDir(), isAlive: () => true });
   const a = await broker.acquire('alpha', 'a1');
   const b = await broker.acquire('bravo', 'a2');
   assert.equal(provider.launches, 2, 'each id gets its own instance');
@@ -49,35 +49,35 @@ async function testDistinctIdsAreIsolated(): Promise<void> {
 }
 
 async function testReconnectAcrossProcesses(): Promise<void> {
-  const path = registryPath();
+  const path = registryDir();
   const provider1 = new FakeProvider();
-  const broker1 = new SessionBroker({ provider: provider1, registryPath: path, isAlive: () => true });
+  const broker1 = new SessionBroker({ provider: provider1, registryDir: path, isAlive: () => true });
   await broker1.acquire('s1', 'a1');
   // A fresh broker over the same registry file (simulating a new CLI process) reuses.
   const provider2 = new FakeProvider();
-  const broker2 = new SessionBroker({ provider: provider2, registryPath: path, isAlive: () => true });
+  const broker2 = new SessionBroker({ provider: provider2, registryDir: path, isAlive: () => true });
   await broker2.acquire('s1', 'a1');
   assert.equal(provider2.launches, 0, 'reconnecting broker reuses the persisted instance');
 }
 
 async function testExpiredLeaseRelaunches(): Promise<void> {
-  const path = registryPath();
+  const path = registryDir();
   const provider = new FakeProvider();
-  const broker1 = new SessionBroker({ provider, registryPath: path, now: fixedClock('2026-07-17T00:00:00Z'), ttlMs: 1000, isAlive: () => true });
+  const broker1 = new SessionBroker({ provider, registryDir: path, now: fixedClock('2026-07-17T00:00:00Z'), ttlMs: 1000, isAlive: () => true });
   await broker1.acquire('s1', 'a1');
   // 10s later — well past the 1s TTL.
-  const broker2 = new SessionBroker({ provider, registryPath: path, now: fixedClock('2026-07-17T00:00:10Z'), ttlMs: 1000, isAlive: () => true });
+  const broker2 = new SessionBroker({ provider, registryDir: path, now: fixedClock('2026-07-17T00:00:10Z'), ttlMs: 1000, isAlive: () => true });
   await broker2.acquire('s1', 'a1');
   assert.equal(provider.launches, 2, 'expired lease forces a relaunch');
   assert.equal(provider.disposed.length, 1, 'old instance disposed');
 }
 
 async function testDeadInstanceRelaunches(): Promise<void> {
-  const path = registryPath();
+  const path = registryDir();
   const provider = new FakeProvider();
-  const broker1 = new SessionBroker({ provider, registryPath: path, isAlive: () => true });
+  const broker1 = new SessionBroker({ provider, registryDir: path, isAlive: () => true });
   await broker1.acquire('s1', 'a1');
-  const broker2 = new SessionBroker({ provider, registryPath: path, isAlive: () => false });
+  const broker2 = new SessionBroker({ provider, registryDir: path, isAlive: () => false });
   await broker2.acquire('s1', 'a1');
   assert.equal(provider.launches, 2, 'dead instance forces a relaunch');
   assert.equal(provider.disposed.length, 1, 'dead instance disposed');
@@ -85,7 +85,7 @@ async function testDeadInstanceRelaunches(): Promise<void> {
 
 async function testReleaseDisposesAndDrops(): Promise<void> {
   const provider = new FakeProvider();
-  const broker = new SessionBroker({ provider, registryPath: registryPath(), isAlive: () => true });
+  const broker = new SessionBroker({ provider, registryDir: registryDir(), isAlive: () => true });
   await broker.acquire('s1', 'a1');
   await broker.release('s1');
   assert.equal(provider.disposed.length, 1, 'release disposes the instance');

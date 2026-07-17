@@ -3,7 +3,7 @@
 // across runs. Contention is eliminated by partition (one session ⇢ one
 // instance), not by locking a shared tab. Impure work (spawning Chrome) lives
 // behind the injected BrowserProvider port.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { isLeaseExpired, leaseExpiresAt } from './lease.js';
 import { decideAllocation } from './policy.js';
@@ -17,7 +17,9 @@ export interface BrowserProvider {
 
 export interface BrokerDeps {
   provider: BrowserProvider;
-  registryPath: string;
+  /** Directory holding one JSON file per session. One-file-per-session keeps
+   *  concurrent CLI processes for different sessions from clobbering each other. */
+  registryDir: string;
   now?: () => Date;
   ttlMs?: number;
   isAlive?: (pid: number) => boolean;
@@ -36,7 +38,7 @@ function defaultIsAlive(pid: number): boolean {
 
 export class SessionBroker {
   private readonly provider: BrowserProvider;
-  private readonly registryPath: string;
+  private readonly registryDir: string;
   private readonly now: () => Date;
   private readonly ttlMs: number;
   private readonly isAlive: (pid: number) => boolean;
@@ -44,7 +46,7 @@ export class SessionBroker {
 
   constructor(deps: BrokerDeps) {
     this.provider = deps.provider;
-    this.registryPath = deps.registryPath;
+    this.registryDir = deps.registryDir;
     this.now = deps.now ?? (() => new Date());
     this.ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
     this.isAlive = deps.isAlive ?? defaultIsAlive;
@@ -61,7 +63,7 @@ export class SessionBroker {
     if (decision.kind === 'reuse' && decision.session) {
       const renewed: Session = { ...decision.session, leaseExpiresAt: leaseExpiresAt(this.now(), this.ttlMs) };
       this.sessions.set(sessionId, renewed);
-      this.save();
+      this.persist(renewed);
       return this.toHandle(renewed);
     }
 
@@ -77,7 +79,7 @@ export class SessionBroker {
       leaseExpiresAt: leaseExpiresAt(this.now(), this.ttlMs),
     };
     this.sessions.set(sessionId, session);
-    this.save();
+    this.persist(session);
     return this.toHandle(session);
   }
 
@@ -87,21 +89,19 @@ export class SessionBroker {
     if (!session) return;
     await this.provider.dispose(session.instance);
     this.sessions.delete(sessionId);
-    this.save();
+    this.forget(sessionId);
   }
 
   /** Reclaim every expired or dead session's instance. */
   async sweep(): Promise<void> {
     const now = this.now();
-    let changed = false;
     for (const [id, session] of this.sessions) {
       if (isLeaseExpired(session, now) || !this.isAlive(session.instance.pid)) {
         await this.provider.dispose(session.instance);
         this.sessions.delete(id);
-        changed = true;
+        this.forget(id);
       }
     }
-    if (changed) this.save();
   }
 
   /** Live roster — the seam a future mirror viewer consumes. */
@@ -114,25 +114,37 @@ export class SessionBroker {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     session.lastUrl = url;
-    this.save();
+    this.persist(session);
   }
 
   private toHandle(session: Session): SessionHandle {
     return { sessionId: session.sessionId, cdpEndpoint: session.instance.cdpEndpoint, pageUrl: session.lastUrl ?? null };
   }
 
+  private sessionFile(sessionId: string): string {
+    const safe = sessionId.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return path.join(this.registryDir, `${safe}.json`);
+  }
+
   private load(): void {
-    if (!existsSync(this.registryPath)) return;
-    try {
-      const raw = JSON.parse(readFileSync(this.registryPath, 'utf8')) as Session[];
-      this.sessions = new Map(raw.map((s) => [s.sessionId, s]));
-    } catch {
-      this.sessions = new Map();
+    if (!existsSync(this.registryDir)) return;
+    for (const file of readdirSync(this.registryDir)) {
+      if (!file.endsWith('.json')) continue;
+      try {
+        const session = JSON.parse(readFileSync(path.join(this.registryDir, file), 'utf8')) as Session;
+        this.sessions.set(session.sessionId, session);
+      } catch {
+        // skip a corrupt entry rather than fail the whole load
+      }
     }
   }
 
-  private save(): void {
-    mkdirSync(path.dirname(this.registryPath), { recursive: true });
-    writeFileSync(this.registryPath, JSON.stringify([...this.sessions.values()], null, 2));
+  private persist(session: Session): void {
+    mkdirSync(this.registryDir, { recursive: true });
+    writeFileSync(this.sessionFile(session.sessionId), JSON.stringify(session, null, 2));
+  }
+
+  private forget(sessionId: string): void {
+    rmSync(this.sessionFile(sessionId), { force: true });
   }
 }
