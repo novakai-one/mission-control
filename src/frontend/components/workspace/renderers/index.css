@@ -1,19 +1,200 @@
-.workspace-event-approval { max-width:760px; padding:28px 30px; border-color:color-mix(in srgb,var(--status-active) 34%,transparent); background:#11100e; }
-.workspace-event-approval .workspace-event-label { color:var(--status-active); font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
-.workspace-event-approval h2 { margin:9px 0 15px; font-size:20px; font-weight:600; }
-.workspace-event-approval code { display:block; padding:11px 0; border-top:1px solid var(--border-color); border-bottom:1px solid var(--border-color); color:var(--text-primary); font-size:11px; overflow-wrap:anywhere; }
-.workspace-event-approval dl { display:grid; grid-template-columns:70px 1fr; gap:9px; margin:16px 0; color:var(--text-secondary); font-size:11px; }
-.workspace-event-approval dt { color:var(--text-muted); text-transform:uppercase; }
-.workspace-event-approval dd { margin:0; }
-.workspace-event-approval>p { color:var(--text-muted); }
+/* Calm event grammar — no boxes or borders on ordinary rows; ink hierarchy
+   (ink / muted / faint) carries importance. The only bordered object is the
+   approval decision, and only the amber engine may make it gold. */
 
-.workspace-event-task .workspace-event-label { color:var(--text-muted); font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
-.workspace-task-list { margin:9px 0 0; padding:0; list-style:none; display:grid; gap:6px; font-size:12px; color:var(--text-secondary); }
-.workspace-task-list li { display:flex; align-items:center; gap:8px; }
-.workspace-task-list li i { width:6px; height:6px; border-radius:50%; background:var(--text-muted); flex:none; }
-.workspace-task-list li[data-status="in_progress"] { color:var(--text-primary); }
-.workspace-task-list li[data-status="in_progress"] i { background:var(--status-active); }
-.workspace-task-list li[data-status="completed"] { color:var(--text-muted); text-decoration:line-through; }
+/* Speech: assistant in primary ink, Chris one step quieter. */
+.wt-say {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--st-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
-.workspace-event-failed { border-style:dashed; }
-.workspace-event-failed p { color:var(--text-muted); font-style:italic; }
+.wt-say-you {
+  color: var(--st-muted);
+}
+
+/* Tool / system rows: a quiet mono one-liner behind a tiny kind label. */
+.wt-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.wt-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  text-align: left;
+  color: var(--st-faint);
+  cursor: pointer;
+  transition: color var(--st-dur) var(--st-ease);
+}
+
+.wt-row-line:disabled {
+  cursor: default;
+}
+
+.wt-row-line:hover:not(:disabled),
+.wt-row-open .wt-row-line {
+  color: var(--st-muted);
+}
+
+.wt-kind {
+  flex: 0 0 auto;
+  width: 52px;
+  font-family: var(--st-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--st-faintest);
+}
+
+.wt-line {
+  flex: 1 1 auto;
+  font-family: var(--st-mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wt-more {
+  flex: 0 0 auto;
+  font-family: var(--st-mono);
+  font-size: 11px;
+  color: var(--st-faintest);
+}
+
+/* Reveal-on-click: the payload unfolds slowly (~700ms) — calm, not snappy. */
+.wt-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--st-dur-slow) var(--st-ease);
+}
+
+.wt-row-open .wt-reveal {
+  grid-template-rows: 1fr;
+}
+
+.wt-reveal pre {
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 4px 0 6px 63px; /* aligns under .wt-line (kind 52px + 11px gap) */
+  font: 11px/1.7 var(--st-mono);
+  color: var(--st-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Task list: dots carry status — in-progress ink, settled sage. */
+.wt-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--st-muted);
+}
+
+.wt-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wt-task i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--st-faintest);
+  flex: 0 0 auto;
+}
+
+.wt-task[data-status='in_progress'] {
+  color: var(--st-ink);
+}
+
+.wt-task[data-status='in_progress'] i {
+  background: var(--st-ink);
+}
+
+.wt-task[data-status='completed'] {
+  color: var(--st-faint);
+}
+
+.wt-task[data-status='completed'] i {
+  background: var(--st-sage);
+}
+
+/* The decision object — the one element allowed a border. Quiet by default;
+   the amber engine grants gold, and release exhales through sage (~700ms). */
+.wt-decide {
+  border: 1px solid var(--st-line-2);
+  border-radius: var(--st-r);
+  background: var(--st-panel);
+  overflow: hidden;
+  transition: border-color var(--st-dur-slow) var(--st-ease), background var(--st-dur-slow) var(--st-ease);
+}
+
+.wt-decide-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--st-line);
+}
+
+.wt-decide-k {
+  font-family: var(--st-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--st-muted);
+  transition: color var(--st-dur-slow) var(--st-ease);
+}
+
+.wt-decide-g {
+  margin-left: auto;
+  font-family: var(--st-mono);
+  font-size: 10px;
+  color: var(--st-faint);
+}
+
+.wt-decide-cmd {
+  padding: 12px 14px;
+  font-family: var(--st-mono);
+  font-size: 12px;
+  color: var(--st-ink);
+  overflow-wrap: anywhere;
+}
+
+.wt-decide-cmd span {
+  color: var(--st-faint);
+}
+
+.wt-decide-needs {
+  border-color: var(--st-gold-line);
+  background: var(--st-gold-wash);
+}
+
+.wt-decide-needs .wt-decide-k {
+  color: var(--st-gold);
+}
+
+.wt-decide-settling .wt-decide-k {
+  color: var(--st-sage);
+}
+
+/* A row that failed to render costs one quiet line, nothing more. */
+.wt-failed {
+  margin: 0;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--st-faintest);
+}
