@@ -162,6 +162,25 @@ is a C1 fail.
   attention text, one gold). Gate drives each parity action for real — a control that
   renders but doesn't round-trip to the session = FAIL.
 
+## Index + persistence (codex IA audit, 2026-07-17 evening)
+
+- **C24 — One conversation index.** Per Chris's one-index ruling: the rail presents a
+  SINGLE conversation index (Needs you / Unread / Recent / All), not parallel
+  Projects/Rooms/People indexes competing for the same job. Other zones may exist as
+  destinations, but there is one place conversations are found.
+- **C19/C21 persistence scope (clarified):** reload persistence covers ALL typed
+  ThreadItems — received messages, WorkUpdates, decisions and resolutions — not only
+  the sent-message append log. A store that survives only "what I sent" = FAIL.
+
+## Port-entry known-reds (M3 state, carried into the variant-B port drive)
+
+Codex IA audit: four current hard fails that survive a reskin — (1) parallel rail
+indexes [C24], (2) bespoke Mission events renderer [C20], (3) persistence limited to
+sent-message append log [C19/C21 scope], (4) no ReadCursor/scroll-anchor model [C21].
+Design-authority ruling: a cosmetic variant-B coat over these four = NO-MATCH.
+Green carried in: stable id/delivery/retry, Direct/Room shared renderer, composer
+real-keystroke typing.
+
 ## Procedure
 
 Each codex milestone: I drive it with `tools/browse` (goto/click/scroll/shot + eval for [mech]
