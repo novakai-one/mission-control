@@ -295,6 +295,62 @@
   color: var(--text-primary);
 }
 
+/* Popover: quiet glyph trigger + floating panel, anchored under the trigger.
+   Replaces the old right drawer; used in the transcript header and Agents view. */
+.vp-pop-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.vp-pop-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.25rem;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: color var(--anim);
+}
+
+.vp-pop-trigger:hover,
+.vp-pop-trigger-on {
+  color: var(--text-primary);
+}
+
+.vp-pop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.vp-pop-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 41;
+  width: 280px;
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.8rem;
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--theme-ink) 16%, transparent), 0 0 0 1px var(--border-color);
+  animation: vp-pop-in var(--anim) backwards;
+}
+
+@keyframes vp-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
 /* Cost section */
 .vp-cost-input {
   width: 4.5rem;

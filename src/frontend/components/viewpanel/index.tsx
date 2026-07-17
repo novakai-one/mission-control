@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import type { TranscriptEvent } from '../index.js';
 import type { FilterKeyUpdate, TimelineVariant } from '../board/timelineModel.js';
 import {
@@ -11,15 +12,13 @@ import {
   masterToggleUpdate,
   storeVariant,
 } from '../board/timelineModel.js';
-import { AgentCostSection, CostSection } from './costSection.js';
+import { AgentCostSection, CostSection, PanelPopover } from './costSection.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
 import type { CostSettings, SessionUsage } from '../../lib/cost/index.js';
 import { FONTS, THEMES, applyFont, applyTheme, currentFont, currentTheme } from '../../lib/theme/index.js';
-import { TimezonePicker } from './timezone/index.js';
 import './index.css';
 
 const HIDDEN_EVENTS_KEY = 'mc-hidden-events';
-const PANEL_OPEN_KEY = 'mc-view-panel-open';
 
 // Persisted hidden "category/child" filter keys; anything malformed resets to
 // the default (empty = everything visible).
@@ -36,13 +35,12 @@ function loadHiddenEvents(): Set<string> {
 }
 
 /**
- * Panel state hook, called from DashboardShell so hiddenEvents/variant can be
- * passed down to the board. Return names line up with ViewPanel props so the
- * shell can spread the whole object.
+ * Filter/layout state hook, called from DashboardShell so hiddenEvents/variant
+ * feed the board and the relocated transcript-tools popover. (The old right
+ * drawer is gone; these controls now live in the transcript column header.)
  */
 export function useViewPanelState() {
   const [hiddenEvents, setHiddenEvents] = useState<Set<string>>(loadHiddenEvents);
-  const [open, setOpen] = useState(() => localStorage.getItem(PANEL_OPEN_KEY) === 'true');
   const [variant, setVariant] = useState<TimelineVariant>(loadStoredVariant);
 
   function onToggle(update: FilterKeyUpdate): void {
@@ -53,17 +51,12 @@ export function useViewPanelState() {
     setHiddenEvents(next);
   }
 
-  function toggleOpen(): void {
-    localStorage.setItem(PANEL_OPEN_KEY, String(!open));
-    setOpen(!open);
-  }
-
   function onVariantChange(next: TimelineVariant): void {
     storeVariant(next);
     setVariant(next);
   }
 
-  return { hiddenEvents, open, variant, onToggle, toggleOpen, onVariantChange };
+  return { hiddenEvents, variant, onToggle, onVariantChange };
 }
 
 interface ChildEntry {
@@ -77,20 +70,6 @@ interface CategoryEntry {
   section: string;
   children: ChildEntry[];
   total: number;
-}
-
-interface ViewPanelProps {
-  open: boolean;
-  viewMode: string;
-  events: TranscriptEvent[];
-  hiddenEvents: Set<string>;
-  onToggle: (update: FilterKeyUpdate) => void;
-  variant: TimelineVariant;
-  onVariantChange: (variant: TimelineVariant) => void;
-  sessionUsage: SessionUsage | null;
-  costSettings: CostSettings;
-  onCostSettingsChange: (next: CostSettings) => void;
-  activeAgent: AgentInfo | null;
 }
 
 function toCategoryEntry(category: string, childCounts: Map<string, number>): CategoryEntry {
@@ -237,8 +216,8 @@ const FONT_FAMILIES: Record<string, string> = {
   plex: "'IBM Plex Sans', sans-serif",
 };
 
-/** App-wide theme + font picker; present in every view's panel. */
-function AppearanceSection() {
+/** App-wide theme + font picker; now hosted in the Settings modal. */
+export function AppearanceSection() {
   const [theme, setTheme] = useState(currentTheme);
   const [font, setFont] = useState(currentFont);
   const activeName = THEMES.find((entry) => entry.id === theme)?.name ?? theme;
@@ -307,39 +286,41 @@ function EventVisibility({ events, hiddenEvents, onToggle }: { events: Transcrip
   );
 }
 
-/** Right-hand collapsible settings panel. Stays mounted so open/close is a
- * smooth width ease (the drawer mask clips the fixed-width body). */
-export function ViewPanel({ open, viewMode, events, hiddenEvents, onToggle, variant, onVariantChange, sessionUsage, costSettings, onCostSettingsChange, activeAgent }: ViewPanelProps) {
+interface TranscriptToolsProps {
+  events: TranscriptEvent[];
+  hiddenEvents: Set<string>;
+  onToggle: (update: FilterKeyUpdate) => void;
+  variant: TimelineVariant;
+  onVariantChange: (variant: TimelineVariant) => void;
+  sessionUsage: SessionUsage | null;
+  costSettings: CostSettings;
+  onCostSettingsChange: (next: CostSettings) => void;
+}
+
+/** Transcript-column header control: layout variant, event visibility, session cost. */
+export function TranscriptToolsPopover({ events, hiddenEvents, onToggle, variant, onVariantChange, sessionUsage, costSettings, onCostSettingsChange }: TranscriptToolsProps) {
   return (
-    <div className={`shell-drawer-right vp-drawer${open ? ' shell-drawer-right-open' : ''}`}>
-      <div className="shell-drawer-body" aria-hidden={!open}>
-        <div className="vp-panel">
-          {viewMode === 'transcript' && (
-            <>
-              <VpSection title="Layout" defaultOpen>
-                <OptionList options={VARIANT_OPTIONS} active={variant} onSelect={onVariantChange} />
-              </VpSection>
-              <VpSection title="Events">
-                <EventVisibility events={events} hiddenEvents={hiddenEvents} onToggle={onToggle} />
-              </VpSection>
-              <VpSection title="Cost">
-                <CostSection usage={sessionUsage} settings={costSettings} onSettingsChange={onCostSettingsChange} />
-              </VpSection>
-            </>
-          )}
-          {viewMode === 'agents' && (
-            <VpSection title="Cost" defaultOpen>
-              <AgentCostSection agent={activeAgent} settings={costSettings} onSettingsChange={onCostSettingsChange} />
-            </VpSection>
-          )}
-          <VpSection title="User Settings">
-            <TimezonePicker />
-          </VpSection>
-          <VpSection title="Appearance" defaultOpen={viewMode !== 'transcript' && viewMode !== 'agents'}>
-            <AppearanceSection />
-          </VpSection>
-        </div>
-      </div>
-    </div>
+    <PanelPopover icon={<SlidersHorizontal size={13} />} label="Transcript options">
+      <VpSection title="Layout" defaultOpen>
+        <OptionList options={VARIANT_OPTIONS} active={variant} onSelect={onVariantChange} />
+      </VpSection>
+      <VpSection title="Events">
+        <EventVisibility events={events} hiddenEvents={hiddenEvents} onToggle={onToggle} />
+      </VpSection>
+      <VpSection title="Cost">
+        <CostSection usage={sessionUsage} settings={costSettings} onSettingsChange={onCostSettingsChange} />
+      </VpSection>
+    </PanelPopover>
+  );
+}
+
+/** Agents-view header control: usage + pricing for the active agent. */
+export function AgentCostPopover({ agent, settings, onSettingsChange }: { agent: AgentInfo | null; settings: CostSettings; onSettingsChange: (next: CostSettings) => void }) {
+  return (
+    <PanelPopover icon={<SlidersHorizontal size={13} />} label="Agent cost">
+      <VpSection title="Cost" defaultOpen>
+        <AgentCostSection agent={agent} settings={settings} onSettingsChange={onSettingsChange} />
+      </VpSection>
+    </PanelPopover>
   );
 }

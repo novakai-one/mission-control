@@ -27,6 +27,45 @@ interface CostSectionProps {
   onSettingsChange: (next: CostSettings) => void;
 }
 
+/**
+ * Quiet glyph trigger that opens a small floating panel anchored under it.
+ * Replaces the old always-present right drawer — cost/filters/layout now live
+ * in these popovers so the shell shows at most rail + workspace + chat.
+ * Outside click / Escape closes.
+ */
+export function PanelPopover({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(keyEvent: KeyboardEvent): void {
+      if (keyEvent.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  return (
+    <div className="vp-pop-wrap">
+      <button
+        type="button"
+        className={open ? 'vp-pop-trigger vp-pop-trigger-on' : 'vp-pop-trigger'}
+        title={label}
+        aria-label={label}
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+      >
+        {icon}
+      </button>
+      {open && (
+        <>
+          <div className="vp-pop-backdrop" onClick={() => setOpen(false)} />
+          <div className="vp-pop-menu">{children}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ModelRows({ usage, settings }: { usage: AgentUsage; settings: CostSettings }) {
   return (
     <>
