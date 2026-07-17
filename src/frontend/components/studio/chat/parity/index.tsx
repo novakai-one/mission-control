@@ -16,6 +16,7 @@ import {
   type CostSettings,
   type SessionUsage,
 } from '../../../../lib/cost/index.js';
+import { appliedModelOption } from './model.js';
 import './index.css';
 
 /** The shell's usage state follows the Transcript tab's selection; the parity
@@ -45,7 +46,10 @@ function useAgentUsage(agent: AgentInfo | null, shellUsage: SessionUsage | null)
     }
     void tick();
     const timer = setInterval(() => { void tick(); }, 15_000);
-    return () => { alive = false; clearInterval(timer); };
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
   }, [sessionId, shellUsage === null]);
   return shellUsage ?? resolved;
 }
@@ -105,22 +109,28 @@ export const PARITY_CONTROLS: ParityControl[] = [
   },
 ];
 
-const lastAcceptedKey = (sessionId: string, controlId: string) => `novakai-parity:${controlId}:${sessionId}`;
-
-function CommandSelect({ control, agent }: { control: CommandSelectControl; agent: AgentInfo }) {
-  // The select shows the LAST BACKEND-ACCEPTED choice for this session
-  // (accepted = the validated command reached the live PTY — codex's
-  // SessionControl receipt, never localStorage fiction). Applied
-  // confirmation stays transcript-derived (the next model/usage event).
-  const [accepted, setAccepted] = useState<string>(() => {
-    try { return localStorage.getItem(lastAcceptedKey(agent.sessionId, control.id)) ?? ''; } catch { return ''; }
-  });
+function CommandSelect({
+  control,
+  agent,
+  usage,
+}: {
+  control: CommandSelectControl;
+  agent: AgentInfo;
+  usage: SessionUsage | null;
+}) {
+  const applied = appliedModelOption(usage?.main.latestModel, control.options);
+  const [pending, setPending] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => {
-    try { setAccepted(localStorage.getItem(lastAcceptedKey(agent.sessionId, control.id)) ?? ''); } catch { setAccepted(''); }
+    setPending('');
     setNote(null);
   }, [agent.sessionId, control.id]);
+  useEffect(() => {
+    if (!pending || applied !== pending) return;
+    setPending('');
+    setNote(null);
+  }, [applied, pending]);
 
   async function choose(optionId: string): Promise<void> {
     if (!optionId || busy) return;
@@ -129,8 +139,8 @@ function CommandSelect({ control, agent }: { control: CommandSelectControl; agen
     try {
       const result = await runSessionControl(agent.agentId, control.intent(optionId));
       if (result.status === 'accepted') {
-        setAccepted(optionId);
-        try { localStorage.setItem(lastAcceptedKey(agent.sessionId, control.id), optionId); } catch { /* display only */ }
+        setPending(optionId);
+        setNote('accepted · awaiting provider');
       } else {
         setNote(result.reason ?? 'rejected');
       }
@@ -144,8 +154,12 @@ function CommandSelect({ control, agent }: { control: CommandSelectControl; agen
       <span className="st-parity-label">{control.label}</span>
       <select
         aria-label={`${control.label} — sends a typed control to the session`}
-        title={accepted ? 'Last accepted by the session backend' : 'As launched — pick to send the switch into the session'}
-        value={accepted}
+        title={pending
+          ? 'Command accepted by the session backend; awaiting provider confirmation'
+          : applied
+            ? `Provider-confirmed from transcript: ${usage?.main.latestModel ?? applied}`
+            : 'As launched — pick to send the switch into the session'}
+        value={pending || applied}
         disabled={busy}
         onChange={(change) => void choose(change.target.value)}
       >
@@ -174,7 +188,7 @@ export function ParityStrip({ agent, usage }: { agent: AgentInfo | null; usage: 
   return (
     <div className="st-parity">
       {commandControls.map((control) => (
-        <CommandSelect key={control.id} control={control} agent={agent} />
+        <CommandSelect key={control.id} control={control} agent={agent} usage={liveUsage} />
       ))}
       {readouts.map((control) => {
         const value = control.project(context);
