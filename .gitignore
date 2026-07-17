@@ -5,6 +5,9 @@ dist/
 release/
 desktop/package-lock.json
 .novakai-command/agents.json
+.novakai-command/agents-*.json
+.novakai-command/messages.jsonl
+.novakai-command/terminal-host/
 .mission-control/
 .novakai/
 .novakai-command/messages.jsonl

@@ -77,6 +77,14 @@ export interface TranscriptEvent {
 
 const COL_MIN = 280;
 const COL_MAX = 900;
+const VIEW_MODE_STORAGE_KEY = 'novakai-view-mode';
+const SESSION_STORAGE_KEY = 'novakai-selected-session';
+const VIEW_MODES = new Set<ViewMode>(['workspace', 'files', 'agents', 'transcript', 'ruleset', 'debug']);
+
+function restoredViewMode(): ViewMode {
+  const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+  return VIEW_MODES.has(stored as ViewMode) ? stored as ViewMode : 'workspace';
+}
 
 /** Invisible 6px strip between columns; highlights on hover, drag resizes the column to its right. */
 function ResizeHandle({ width, onWidthChange }: { width: number; onWidthChange(width: number): void }) {
@@ -114,11 +122,13 @@ function ResizeHandle({ width, onWidthChange }: { width: number; onWidthChange(w
 
 export function DashboardShell() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
-  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<string | null>(
+    () => localStorage.getItem(SESSION_STORAGE_KEY)
+  );
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
   const [selectedEventKey, setSelectedEventKey] = useState<string | null>(null);
   const [selectedSubKey, setSelectedSubKey] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('workspace');
+  const [viewMode, setViewMode] = useState<ViewMode>(restoredViewMode);
   const agentsState = useAgentsState();
   const workspace = useProjectWorkspace(agentsState.setActiveAgentId);
   // Live agents belonging to the selected thread: chips in the work head, and
@@ -147,6 +157,15 @@ export function DashboardShell() {
   useTimeZone();
   const [sessionUsage, setSessionUsage] = useState<SessionUsage | null>(null);
   const [costSettings, setCostSettings] = useCostSettings();
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (selectedSession) localStorage.setItem(SESSION_STORAGE_KEY, selectedSession);
+    else localStorage.removeItem(SESSION_STORAGE_KEY);
+  }, [selectedSession]);
 
   const webSocketRef = useRef<WebSocket | null>(null);
   // Mirrors for the ws onmessage closure, which only mounts once.
@@ -201,7 +220,11 @@ export function DashboardShell() {
         if (cancelled) return;
         setSessions(data);
         // Auto-select most recent; clear when the repo has no matches
-        setSelectedSession(data[0]?.sessionId ?? null);
+        setSelectedSession((current) =>
+          data.some((session) => session.sessionId === current)
+            ? current
+            : data[0]?.sessionId ?? null
+        );
       })
       .catch(() => {});
     return () => { cancelled = true; };

@@ -5,11 +5,11 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "dev:backend": "tsx src/backend/index.ts",
+    "dev:backend": "tsx watch src/backend/index.ts",
     "dev:frontend": "vite --port 3030 --host",
     "prototype:messaging": "python3 -m http.server 3040 --bind 127.0.0.1 --directory docs",
     "predev": "lsof -ti:3031 | xargs kill 2>/dev/null || true",
-    "dev": "concurrently -k \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently --restart-tries -1 --restart-after 1000 -n backend,frontend \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "vite build",
     "lint": "node tools/gates/standards.mjs",
     "app": "electron desktop",

@@ -3,6 +3,7 @@ import { AgentCoordinator } from './agent/index.js';
 import { AgentExecutor } from './agent/executor/index.js';
 import { StateManager } from './state/index.js';
 import { ConfigManager } from './config/index.js';
+import { createTerminalRuntime } from './terminal/host/launch/index.js';
 
 export async function bootstrapBackend(): Promise<ServerController> {
   const configuration = ConfigManager.load();
@@ -11,8 +12,9 @@ export async function bootstrapBackend(): Promise<ServerController> {
   const stateManager = new StateManager(configuration.workspacePath);
   const processExecutor = new AgentExecutor();
   const coordinator = new AgentCoordinator(processExecutor, stateManager);
+  const terminals = await createTerminalRuntime();
 
-  const server = new ServerController(serverPort, coordinator, stateManager);
+  const server = new ServerController(serverPort, coordinator, stateManager, terminals);
   
   await server.start();
   console.log(`[Novakai Command Backend] Server listening on port ${serverPort}`);

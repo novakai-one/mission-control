@@ -6,6 +6,7 @@ import { CalmView } from './calm/index.js';
 import './index.css';
 
 const COLLAPSE_STORAGE_KEY = 'mc-sidepanel-collapsed';
+const ACTIVE_AGENT_STORAGE_KEY = 'novakai-active-agent';
 
 export interface AgentsState {
   agents: AgentInfo[];
@@ -21,7 +22,10 @@ export interface AgentsState {
 
 export function useAgentsState(): AgentsState {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const [activeAgentId, setActiveAgentState] = useState<string | null>(
+    () => localStorage.getItem(ACTIVE_AGENT_STORAGE_KEY)
+  );
+  const [agentsLoaded, setAgentsLoaded] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(
     () => localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true'
   );
@@ -30,18 +34,28 @@ export function useAgentsState(): AgentsState {
     fetch('/api/agents')
       .then(res => res.json())
       .then(data => setAgents(data.agents ?? []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setAgentsLoaded(true));
     agentSocket.connect();
-    return agentSocket.onAgentsChanged(setAgents);
+    return agentSocket.onAgentsChanged((nextAgents) => {
+      setAgents(nextAgents);
+      setAgentsLoaded(true);
+    });
+  }, []);
+
+  const setActiveAgentId = useCallback((agentId: string | null) => {
+    setActiveAgentState(agentId);
+    if (agentId) localStorage.setItem(ACTIVE_AGENT_STORAGE_KEY, agentId);
+    else localStorage.removeItem(ACTIVE_AGENT_STORAGE_KEY);
   }, []);
 
   // Archived agents drop out of `agents` via the ws broadcast — if the active
   // agent was the one archived, clear the selection so nothing points at a gone pane.
   useEffect(() => {
-    if (activeAgentId && !agents.some(agent => agent.agentId === activeAgentId)) {
+    if (agentsLoaded && activeAgentId && !agents.some(agent => agent.agentId === activeAgentId)) {
       setActiveAgentId(null);
     }
-  }, [agents, activeAgentId]);
+  }, [agents, agentsLoaded, activeAgentId, setActiveAgentId]);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {
@@ -59,7 +73,7 @@ export function useAgentsState(): AgentsState {
     });
     const created: AgentInfo = await response.json();
     setActiveAgentId(created.agentId);
-  }, []);
+  }, [setActiveAgentId]);
 
   // These three only fire the request — the resulting agent list arrives
   // through the existing agents-changed ws broadcast (onAgentsChanged above).

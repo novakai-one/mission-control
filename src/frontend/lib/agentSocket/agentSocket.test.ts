@@ -102,10 +102,17 @@ assert.equal(unwatchFrames.length, 1);
 assert.deepEqual(unwatchFrames[0], { type: 'unwatch-session', projectDir: 'proj-dir', sessionId: 'sess-1' });
 
 socketTwo.triggerClose();
+sendInput('agent-x', 'during-backend-restart');
+connect();
+connect(); // scheduled reconnect and eager callers must still create one socket
 await new Promise(resolve => setTimeout(resolve, 60));
 assert.equal(FakeSocket.instances.length, 3);
 const socketThree = FakeSocket.instances[2];
 socketThree.triggerOpen();
+assert.deepEqual(
+  framesOf(socketThree, 'agent-input').map(frame => frame.data),
+  ['during-backend-restart'],
+);
 const resentWatchAfterUnwatch = framesOf(socketThree, 'watch-session');
 assert.equal(resentWatchAfterUnwatch.length, 0); // unwatched target must not resurrect on reconnect
 

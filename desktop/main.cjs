@@ -18,6 +18,8 @@ const REPO_DIR = app.isPackaged
 
 let devServer = null;
 let win = null;
+let quitting = false;
+let recovery = null;
 
 function probe() {
   return new Promise((resolve) => {
@@ -37,9 +39,13 @@ function startDevServer() {
   devServer = spawn('/bin/zsh', ['-lc', 'exec npm run dev'], {
     cwd: REPO_DIR,
     detached: true, // own process group, so quit can tree-kill it
+    env: { ...process.env, NOVAKAI_DESKTOP_PID: String(process.pid) },
     stdio: ['ignore', log, log],
   });
-  devServer.on('exit', () => { devServer = null; });
+  devServer.on('exit', () => {
+    devServer = null;
+    if (!quitting) void recover();
+  });
 }
 
 function stopDevServer() {
@@ -70,6 +76,20 @@ async function waitForServer() {
   return false;
 }
 
+async function recover() {
+  if (quitting || recovery) return recovery;
+  recovery = (async () => {
+    if (win && !win.isDestroyed()) await win.loadURL(splashHtml('Reconnecting&hellip;'));
+    if (!devServer) startDevServer();
+    if (await waitForServer()) {
+      if (win && !win.isDestroyed()) await win.loadURL(APP_URL);
+    } else if (win && !win.isDestroyed()) {
+      await win.loadURL(splashHtml(`Servers did not recover. See ${LOG_FILE}`));
+    }
+  })().finally(() => { recovery = null; });
+  return recovery;
+}
+
 async function launch() {
   win = new BrowserWindow({
     width: 1512,
@@ -82,19 +102,21 @@ async function launch() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+  win.webContents.on('did-fail-load', (_event, _code, _description, url, mainFrame) => {
+    if (mainFrame && url.startsWith(APP_URL)) void recover();
+  });
+  win.webContents.on('render-process-gone', () => void recover());
 
   if (await probe()) {
-    await win.loadURL(APP_URL); // attach to an already-running `npm run dev`
+    try {
+      await win.loadURL(APP_URL); // attach to an already-running `npm run dev`
+    } catch {
+      await recover();
+    }
     return;
   }
 
-  await win.loadURL(splashHtml('Starting dev servers&hellip;'));
-  startDevServer();
-  if (await waitForServer()) {
-    if (win && !win.isDestroyed()) await win.loadURL(APP_URL);
-  } else if (win && !win.isDestroyed()) {
-    await win.loadURL(splashHtml(`Servers did not come up. See ${LOG_FILE}`));
-  }
+  await recover();
 }
 
 app.whenReady().then(launch);
@@ -104,4 +126,7 @@ app.on('activate', () => {
 });
 
 app.on('window-all-closed', () => app.quit());
-app.on('will-quit', stopDevServer);
+app.on('will-quit', () => {
+  quitting = true;
+  stopDevServer();
+});

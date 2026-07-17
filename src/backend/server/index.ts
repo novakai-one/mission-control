@@ -18,6 +18,7 @@ import { AgentsHub } from './agents.js';
 import { ProjectsHub } from './projects/index.js';
 import { CanvasHub } from './canvas/index.js';
 import { MessagingHub } from '../messaging/index.js';
+import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -61,9 +62,10 @@ export class ServerController {
   constructor(
     private readonly port: number,
     private readonly coordinator: AgentCoordinator,
-    private readonly stateManager: StateManager
+    private readonly stateManager: StateManager,
+    terminals: TerminalRuntime,
   ) {
-    this.agentsHub = new AgentsHub(this.activeSockets);
+    this.agentsHub = new AgentsHub(this.activeSockets, terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     this.canvasHub = new CanvasHub((event, payload) => this.broadcastEvent(event, payload));
     this.messagingHub = this.buildMessagingHub();
