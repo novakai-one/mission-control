@@ -17,6 +17,12 @@ interface MessagesViewProps {
   agents: AgentInfo[];
   projects: ProjectRecord[];
   project: ProjectRecord | null;
+  openRequest?: MessagesOpenRequest | null;
+}
+
+export interface MessagesOpenRequest {
+  id: string;
+  nonce: number;
 }
 
 function initials(value: string): string {
@@ -24,7 +30,7 @@ function initials(value: string): string {
     .map((word) => word[0]?.toUpperCase() ?? '').join('');
 }
 
-export function MessagesView({ agents, projects, project }: MessagesViewProps) {
+export function MessagesView({ agents, projects, project, openRequest }: MessagesViewProps) {
   const { feed, loadConversation } = useTunnelFeed();
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const targets = useMemo(
@@ -60,6 +66,7 @@ export function MessagesView({ agents, projects, project }: MessagesViewProps) {
         targets={targets}
         onResolve={(itemId) => setDismissed((current) => new Set(current).add(itemId))}
         onLoadConversation={loadConversation}
+        openRequest={openRequest}
       />
 
       <aside className="messages-inspector">

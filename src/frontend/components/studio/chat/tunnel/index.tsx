@@ -43,6 +43,9 @@ interface TunnelMessengerProps {
   onResolve(itemId: string): void;
   /** Backfills one lane's history when it is opened. */
   onLoadConversation(id: ConversationId): void;
+  /** Product-view navigation may ask the messenger to open a canonical lane.
+   * The nonce lets the same lane be requested again after local navigation. */
+  openRequest?: { id: ConversationId; nonce: number } | null;
 }
 
 async function postJson(path: string, payload: unknown): Promise<unknown> {
@@ -66,7 +69,14 @@ function laneOf(feed: TunnelEnvelope[], attentionId: string | null): Conversatio
   return envelope ? conversationIdsFor(envelope)[0] ?? null : null;
 }
 
-export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConversation }: TunnelMessengerProps) {
+export function TunnelMessenger({
+  feed,
+  agents,
+  targets,
+  onResolve,
+  onLoadConversation,
+  openRequest,
+}: TunnelMessengerProps) {
   const { rooms, ingestRoom } = useTunnelRooms();
   const roster = useMemo(() => liveRoster(agents), [agents]);
   const conversations = useMemo(() => buildConversations(feed, rooms, roster), [feed, rooms, roster]);
@@ -91,6 +101,12 @@ export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConver
     const restored = remembered && conversations.find((lane) => lane.id === remembered);
     setSelectedId(restored ? restored.id : conversations[0].id);
   }, [selectedId, conversations]);
+
+  useEffect(() => {
+    if (!openRequest || !conversations.some((lane) => lane.id === openRequest.id)) return;
+    setSelectedId(openRequest.id);
+    saveLane(openRequest.id);
+  }, [openRequest?.nonce, conversations]);
 
   useEffect(() => {
     if (selectedId) onLoadConversation(selectedId);

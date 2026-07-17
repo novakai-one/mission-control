@@ -18,10 +18,11 @@ import { CanvasView, CANVAS_CHANGED_EVENT } from './canvas/index.js';
 import { AnalyticsView, ANALYTICS_CHANGED_EVENT } from './analytics/index.js';
 import { DesignView, DESIGN_CHANGED_EVENT } from './design/index.js';
 import { useViewPanelState } from './viewpanel/index.js';
-import { MessagesView } from './workspace/messages/index.js';
+import { MessagesView, type MessagesOpenRequest } from './workspace/messages/index.js';
 import { MissionControl } from './workspace/missionControl/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
 import { useAttention } from '../lib/attention/index.js';
+import { CHRIS, dmId, type TunnelRoom } from '../lib/tunnelModel/index.js';
 import { mergeEvents, upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 import { useTimeZone } from '../lib/timezone/index.js';
@@ -135,6 +136,7 @@ export function DashboardShell() {
   const [selectedEventKey, setSelectedEventKey] = useState<string | null>(null);
   const [selectedSubKey, setSelectedSubKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(restoredViewMode);
+  const [messagesOpenRequest, setMessagesOpenRequest] = useState<MessagesOpenRequest | null>(null);
   const agentsState = useAgentsState();
   const workspace = useProjectWorkspace(agentsState.setActiveAgentId);
   const attention = useAttention();
@@ -150,6 +152,52 @@ export function DashboardShell() {
   function openAgent(agentId: string): void {
     agentsState.setActiveAgentId(agentId);
     setViewMode('agents');
+  }
+
+  function enterMessageLane(id: string): void {
+    setMessagesOpenRequest({ id, nonce: Date.now() });
+    setViewMode('messages');
+  }
+
+  function openMissionPerson(agentId: string): void {
+    const agent = agentsState.agents.find((candidate) => candidate.agentId === agentId);
+    if (!agent) return;
+    agentsState.setActiveAgentId(agentId);
+    enterMessageLane(dmId(agent.title));
+  }
+
+  async function openMissionThread(threadId: string): Promise<void> {
+    workspace.selectThread(threadId);
+    setViewMode('messages');
+    const thread = workspace.selectedProject?.threads.find((candidate) => candidate.id === threadId);
+    if (!thread) return;
+    try {
+      const listed = await fetch('/api/rooms');
+      const payload = await listed.json() as { rooms?: TunnelRoom[] };
+      let room = (payload.rooms ?? []).find((candidate) => !candidate.archived && candidate.name === thread.title);
+      if (!room) {
+        const attached = agentsState.agents
+          .filter((agent) => agent.status === 'running' && agent.threadId === threadId)
+          .map((agent) => agent.title);
+        const fallback = agentsState.agents
+          .filter((agent) => agent.status === 'running')
+          .map((agent) => agent.title);
+        const created = await fetch('/api/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: thread.title,
+            members: [...new Set([...(attached.length > 0 ? attached : fallback), CHRIS])],
+            from: CHRIS,
+          }),
+        });
+        if (!created.ok) return;
+        room = (await created.json() as { room: TunnelRoom }).room;
+      }
+      enterMessageLane(room.roomId);
+    } catch {
+      // Messages remains open on its most recent lane; navigation never lies.
+    }
   }
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
@@ -434,6 +482,7 @@ export function DashboardShell() {
             agents={agentsState.agents}
             projects={workspace.projects}
             project={workspace.selectedProject}
+            openRequest={messagesOpenRequest}
           />
         ) : viewMode === 'organization' ? (
           <OrganizationLens agents={agentsState.agents} />
@@ -446,8 +495,11 @@ export function DashboardShell() {
             attention={attention}
             usage={sessionUsage}
             selectedAgentId={agentsState.activeAgentId}
-            onSelectAgent={agentsState.setActiveAgentId}
-            onSelectThread={workspace.selectThread}
+            onSelectAgent={openMissionPerson}
+            onSelectThread={(threadId) => { void openMissionThread(threadId); }}
+            onReviewAttention={attention.goldThreadId
+              ? () => { void openMissionThread(attention.goldThreadId!); }
+              : undefined}
           />
         ) : viewMode === 'files' ? (
           <FilesPanel
