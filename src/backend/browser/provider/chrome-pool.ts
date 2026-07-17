@@ -47,7 +47,9 @@ function chromeArgs(port: number, userDataDir: string, headless: boolean): strin
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
   ];
-  if (headless) args.unshift('--headless=new');
+  // Headless windows default to ~800x600, which collapses responsive layouts;
+  // UI verification needs a real desktop viewport.
+  if (headless) args.unshift('--headless=new', `--window-size=${process.env.NVK_BROWSER_SIZE ?? '1560,960'}`);
   return args;
 }
 
