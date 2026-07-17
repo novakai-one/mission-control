@@ -98,7 +98,10 @@ export function AgentTerminal({ agent, visible }: AgentTerminalProps) {
   // Hidden panes use display:none, which reports zero size — do all sizing
   // work in a frame after the browser has actually laid the container out.
   useEffect(() => {
-    if (!visible) return undefined;
+    if (!visible) {
+      if (openedRef.current) agentSocket.unsubscribeAgent(agent.agentId);
+      return undefined;
+    }
     const frame = requestAnimationFrame(() => {
       const fitAddon = fitRef.current;
       const term = termRef.current;
@@ -111,17 +114,17 @@ export function AgentTerminal({ agent, visible }: AgentTerminalProps) {
         openedRef.current = true;
         fitAddon.fit();
         agentSocket.sendResize(agent.agentId, term.cols, term.rows);
-        agentSocket.subscribeAgent(agent.agentId, {
-          onReplay: data => { term.reset(); term.write(data); },
-          onData: data => term.write(data),
-          onExit: code => term.write('\r\n[agent exited ' + code + ']\r\n'),
-        });
       } else {
         fitAddon.fit();
         agentSocket.sendResize(agent.agentId, term.cols, term.rows);
         // Repaint rows written while the pane was display:none.
         term.refresh(0, term.rows - 1);
       }
+      agentSocket.subscribeAgent(agent.agentId, {
+        onReplay: data => { term.reset(); term.write(data); },
+        onData: data => term.write(data),
+        onExit: code => term.write('\r\n[agent exited ' + code + ']\r\n'),
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, [visible, agent.agentId]);

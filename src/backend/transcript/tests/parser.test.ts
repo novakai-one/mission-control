@@ -1,8 +1,10 @@
 // Parser regression tests. Run with `npx tsx src/backend/transcript/tests/parser.test.ts`.
 import assert from 'node:assert/strict';
+import nodeFs from 'node:fs';
 import { appendFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { SessionWatcher, parseJsonlLine, readSession, stampEventKeys, type TranscriptEvent } from '../parser.js';
 
 const tmpFile = path.join(tmpdir(), `parser-test-${Date.now()}.jsonl`);
@@ -70,6 +72,30 @@ async function testReplayFromStart() {
   );
   assert.ok(events.some((event: any) => event.text === 'the prompt'), 'the pre-watcher prompt must be emitted');
   watcher.stop();
+}
+
+// Slow storage must not let the 100ms timer start overlapping reads from the
+// same offset. Each historical line is observable exactly once.
+async function testSlowReplayDoesNotDuplicateEvents() {
+  writeFileSync(tmpFile, userLine('slow replay') + '\n');
+  const originalCreateReadStream = nodeFs.createReadStream;
+  (nodeFs as any).createReadStream = (...args: Parameters<typeof nodeFs.createReadStream>) => {
+    const delayed = new PassThrough();
+    setTimeout(() => originalCreateReadStream(...args).pipe(delayed), 150);
+    return delayed;
+  };
+
+  try {
+    const watcher = new SessionWatcher(tmpFile);
+    const events: TranscriptEvent[] = [];
+    watcher.on('event', (event: TranscriptEvent) => events.push(event));
+    watcher.start();
+    await new Promise((resolve) => setTimeout(resolve, 480));
+    watcher.stop();
+    assert.equal(events.length, 1, 'slow replay must emit each event exactly once');
+  } finally {
+    (nodeFs as any).createReadStream = originalCreateReadStream;
+  }
 }
 
 // Sibling content blocks within one line get distinct, re-emit-stable eventKeys.
@@ -238,6 +264,8 @@ async function main() {
   await testTailPartialLine();
   unlinkSync(tmpFile);
   await testReplayFromStart();
+  unlinkSync(tmpFile);
+  await testSlowReplayDoesNotDuplicateEvents();
   unlinkSync(tmpFile);
   testStampEventKeys();
   testSystemSubtype();

@@ -18,7 +18,7 @@ import { DesignView, DESIGN_CHANGED_EVENT } from './design/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { WorkspaceTimeline } from './workspace/timeline/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
-import { upsertEvent } from '../lib/upsertEvents.js';
+import { mergeEvents, upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 import { useTimeZone } from '../lib/timezone/index.js';
 import './index.css';
@@ -260,9 +260,9 @@ export function DashboardShell() {
         // Live ws frames may have landed while the fetch was in flight; upsert
         // them over the file snapshot instead of clobbering them (the watcher
         // emits each appended line exactly once).
-        setEvents(prev => prev.reduce(
-          (merged, liveEvent) => upsertEvent(merged, liveEvent),
+        setEvents(prev => mergeEvents(
           data.filter(event => event.kind !== 'usage'),
+          prev,
         ));
       })
       .catch(() => {});

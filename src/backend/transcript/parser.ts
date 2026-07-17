@@ -213,6 +213,7 @@ export class SessionWatcher extends EventEmitter {
   // upsert dedupes the overlap.
   private lastSize = 0;
   private interval: NodeJS.Timeout | null = null;
+  private readInFlight = false;
   // Mirrors readSession's line index so uuid-less lines (mode, summary)
   // produce identical synthetic keys and dedupe too.
   private liveLineCount = 0;
@@ -236,6 +237,7 @@ export class SessionWatcher extends EventEmitter {
   }
 
   private check(): void {
+    if (this.readInFlight) return;
     let stat: fs.Stats;
     try {
       stat = fs.statSync(this.filePath);
@@ -254,15 +256,24 @@ export class SessionWatcher extends EventEmitter {
     }
 
     const start = this.lastSize;
-    const stream = fs.createReadStream(this.filePath, {
-      start,
-      end: stat.size,
-    });
+    this.readInFlight = true;
+    let stream: fs.ReadStream;
+    try {
+      stream = fs.createReadStream(this.filePath, {
+        start,
+        end: stat.size,
+      });
+    } catch (error) {
+      this.readInFlight = false;
+      if (this.listenerCount('error') > 0) this.emit('error', error);
+      return;
+    }
     const chunks: Buffer[] = [];
     stream.on('data', (chunk) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
     stream.on('end', () => {
+      this.readInFlight = false;
       const data = Buffer.concat(chunks);
       // Only advance past complete lines; an in-progress final line (no
       // trailing '\n' yet) is left for the next poll so it isn't dropped.
@@ -273,6 +284,7 @@ export class SessionWatcher extends EventEmitter {
       this.emitParsedLines(complete.toString('utf8'));
     });
     stream.on('error', (err) => {
+      this.readInFlight = false;
       // An 'error' emit with no listener is fatal to the whole backend, and
       // most watch call sites only attach 'event' — don't let a transient
       // read failure (file swapped/deleted mid-poll) crash the process.

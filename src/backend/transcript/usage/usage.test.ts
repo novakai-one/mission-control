@@ -1,7 +1,11 @@
 // Run with `npx tsx src/backend/transcript/usage/usage.test.ts`.
 import assert from 'node:assert/strict';
+import nodeFs from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { parseJsonlLine, type TranscriptEvent } from '../parser.js';
-import { aggregateUsage } from './index.js';
+import { aggregateUsage, sessionUsage } from './index.js';
 
 function assistantLine(msgId: string, blocks: any[], usage: any, uuid = `u-${msgId}`): any {
   return {
@@ -62,6 +66,27 @@ const USAGE = {
   assert.equal(totals.input, 105);           // 100 + 5, not 205
   assert.equal(totals.cacheRead, 1000);
   assert.equal(totals.output, 25);
+}
+
+// Repeated usage reads for an unchanged transcript reuse parsed totals.
+{
+  const directory = mkdtempSync(path.join(tmpdir(), 'usage-cache-'));
+  const mainFile = path.join(directory, 'session.jsonl');
+  writeFileSync(mainFile, JSON.stringify(assistantLine('cached', [], USAGE)) + '\n');
+  const originalReadFileSync = nodeFs.readFileSync;
+  let reads = 0;
+  (nodeFs as any).readFileSync = (...args: Parameters<typeof nodeFs.readFileSync>) => {
+    if (args[0] === mainFile) reads++;
+    return originalReadFileSync(...args);
+  };
+  try {
+    sessionUsage(mainFile, 'missing-project', 'missing-session');
+    sessionUsage(mainFile, 'missing-project', 'missing-session');
+    assert.equal(reads, 1, 'unchanged usage source should parse once');
+  } finally {
+    (nodeFs as any).readFileSync = originalReadFileSync;
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 console.log('usage tests passed');

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { AgentBuffer } from '../buffer.js';
 
-const CAP_BYTES = 2 * 1024 * 1024;
+const CAP_BYTES = 512 * 1024;
 
 function testPushSnapshotOrdering(): void {
   const buffer = new AgentBuffer();
@@ -29,7 +29,7 @@ function testCapDropsOldestChunks(): void {
   const snapshot = buffer.snapshot();
   assert.ok(snapshot.length <= CAP_BYTES, `snapshot length ${snapshot.length} must be <= cap ${CAP_BYTES}`);
   assert.ok(!snapshot.includes('a'), 'oldest chunk must have been dropped');
-  assert.ok(snapshot.endsWith(third), 'snapshot must retain the newest data');
+  assert.ok(snapshot.endsWith('c'.repeat(CAP_BYTES)), 'snapshot must retain the newest tail');
 }
 
 function testSnapshotAfterOverflowContainsNewest(): void {
@@ -44,11 +44,30 @@ function testSnapshotAfterOverflowContainsNewest(): void {
   assert.ok(!snapshot.includes('1'), 'oldest chunk must be evicted after overflow');
 }
 
+function testCapMeasuresUtf8Bytes(): void {
+  const buffer = new AgentBuffer();
+  buffer.push('🙂'.repeat(CAP_BYTES));
+  const snapshot = buffer.snapshot();
+  assert.ok(Buffer.byteLength(snapshot) <= CAP_BYTES, 'multibyte replay must respect the byte cap');
+  assert.ok(snapshot.endsWith('🙂'), 'multibyte trimming must preserve complete newest characters');
+}
+
+function testOverflowTrimsOnlyRequiredPrefix(): void {
+  const buffer = new AgentBuffer();
+  buffer.push('a'.repeat(CAP_BYTES));
+  buffer.push('b');
+  const snapshot = buffer.snapshot();
+  assert.equal(Buffer.byteLength(snapshot), CAP_BYTES, 'small append should retain a full replay window');
+  assert.ok(snapshot.endsWith('b'), 'small append must remain newest');
+}
+
 function main(): void {
   testPushSnapshotOrdering();
   testEmptySnapshot();
   testCapDropsOldestChunks();
   testSnapshotAfterOverflowContainsNewest();
+  testCapMeasuresUtf8Bytes();
+  testOverflowTrimsOnlyRequiredPrefix();
   console.log('PASS');
 }
 

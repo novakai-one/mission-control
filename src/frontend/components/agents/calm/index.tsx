@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { GitBranch, Radio } from 'lucide-react';
 import * as agentSocket from '../../../lib/agentSocket/index.js';
 import type { SubagentSummary } from '../../../lib/agentSocket/index.js';
-import { upsertEvent } from '../../../lib/upsertEvents.js';
+import { mergeEvents } from '../../../lib/upsertEvents.js';
 import { currentTimeZone } from '../../../lib/timezone/index.js';
 import { getEventLabel } from '../../board/index.js';
 import { EmptyState, KIND_META } from '../../ui/index.js';
@@ -140,6 +140,8 @@ export function CalmView({ agent, visible }: CalmViewProps): React.JSX.Element {
   const [subagents, setSubagents] = useState<Record<string, SubagentEntry>>({});
   const feedRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
+  const pendingEventsRef = useRef<CalmEvent[]>([]);
+  const eventFrameRef = useRef<number | null>(null);
 
   // Mount once per agent (this component stays mounted for the agent's lifetime,
   // hidden via CSS — see AgentsView). Listeners stay live for that whole lifetime;
@@ -147,7 +149,13 @@ export function CalmView({ agent, visible }: CalmViewProps): React.JSX.Element {
   useEffect(() => {
     const unsubTranscript = agentSocket.onTranscriptEvent((sessionId, event) => {
       if (sessionId !== agent.sessionId) return;
-      setEvents(previous => upsertEvent(previous, event as CalmEvent));
+      pendingEventsRef.current.push(event as CalmEvent);
+      if (eventFrameRef.current !== null) return;
+      eventFrameRef.current = requestAnimationFrame(() => {
+        eventFrameRef.current = null;
+        const pending = pendingEventsRef.current.splice(0);
+        setEvents(previous => mergeEvents(previous, pending));
+      });
     });
 
     const unsubSubagentsChanged = agentSocket.onSubagentsChanged((sessionId, summaries) => {
@@ -161,22 +169,22 @@ export function CalmView({ agent, visible }: CalmViewProps): React.JSX.Element {
     });
 
     return () => {
+      if (eventFrameRef.current !== null) cancelAnimationFrame(eventFrameRef.current);
+      eventFrameRef.current = null;
+      pendingEventsRef.current = [];
       unsubTranscript();
       unsubSubagentsChanged();
       unsubSubagentEvent();
     };
   }, [agent.sessionId]);
 
-  // Watcher hygiene: only hold a server-side watcher open while it's earning its
-  // keep — the agent is still running (so Raw/other viewers need live updates to
-  // stay in sync) or this pane is actually visible. Otherwise unwatch; re-watching
-  // later replays from offset 0 and upsertEvent's dedupe absorbs the repeats.
+  // Hidden calm panes do not render live data, so only the visible pane earns
+  // a server-side transcript watcher. Rewatch replay merges in one frame batch.
   useEffect(() => {
-    const shouldWatch = agent.status === 'running' || visible;
-    if (!shouldWatch) return undefined;
+    if (!visible) return undefined;
     agentSocket.watchSession(agent.projectDir, agent.sessionId);
     return () => agentSocket.unwatchSession(agent.projectDir, agent.sessionId);
-  }, [agent.projectDir, agent.sessionId, agent.status, visible]);
+  }, [agent.projectDir, agent.sessionId, visible]);
 
   // Auto-scroll to newest only when visible and the viewer was already near the bottom.
   useEffect(() => {
