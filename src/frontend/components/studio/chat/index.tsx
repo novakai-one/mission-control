@@ -23,6 +23,7 @@ import {
   useAttention,
 } from '../../../lib/attention/index.js';
 import { useTunnelFeed } from '../../../lib/tunnelModel/index.js';
+import { MarkdownText } from '../../../lib/markdown/index.js';
 import { ChatComposer } from './composer.js';
 import { MentionText } from './mention/index.js';
 import { TunnelFeed } from './tunnel/index.js';
@@ -98,7 +99,10 @@ function ChatMessageBlock({ message, targets }: { message: ChatMessage; targets:
         {message.time && <> · {message.time}</>}
       </div>
       <div className={message.fromYou ? 'st-say st-say-you' : 'st-say'}>
-        <MentionText text={message.caption} targets={targets} />
+        <MarkdownText
+          text={message.caption}
+          renderText={(plain) => <MentionText text={plain} targets={targets} />}
+        />
       </div>
       {message.rows.length > 0 && <StateRows message={message} />}
     </div>
@@ -112,7 +116,7 @@ function PendingSendBlock({ pending }: { pending: PendingSend }) {
   return (
     <div className="st-msg st-msg-pending">
       <div className="st-by st-by-you"><b>You</b> · {pending.time} · queued</div>
-      <div className="st-say st-say-you">{pending.text}</div>
+      <div className="st-say st-say-you"><MarkdownText text={pending.text} /></div>
     </div>
   );
 }

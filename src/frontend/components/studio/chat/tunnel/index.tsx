@@ -9,6 +9,7 @@ import { messageItemId, useAttention } from '../../../../lib/attention/index.js'
 import { formatRoute, statusMeta, type TunnelEnvelope } from '../../../../lib/tunnelModel/index.js';
 import { formatChatTime } from '../../../../lib/chatModel/index.js';
 import type { MentionTarget } from '../../../../lib/mentions/index.js';
+import { MarkdownText } from '../../../../lib/markdown/index.js';
 import { MentionText } from '../mention/index.js';
 import './index.css';
 
@@ -63,7 +64,10 @@ function TunnelRow({ envelope, liveNames, targets, onResolve }: TunnelRowProps) 
         </div>
       )}
       <div className="st-say st-tn-body">
-        <MentionText text={envelope.body} targets={targets} />
+        <MarkdownText
+          text={envelope.body}
+          renderText={(plain) => <MentionText text={plain} targets={targets} />}
+        />
       </div>
     </div>
   );
