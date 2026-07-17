@@ -36,7 +36,14 @@
   --st-r-sm: 5px;
   --st-r-lg: 8px; /* panel frames — the 8px brand ceiling */
   --st-sans: 'Inter', -apple-system, system-ui, 'Segoe UI', sans-serif;
-  --st-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* C12 strict (codex ruling): the ONLY mono glyphs in the app are the
+     >_ wordmark. Everything else — code, logs, raw output — is Inter with
+     tabular numerals; --st-mono and the legacy --font-mono alias to Inter so
+     no descendant can opt back into terminal cosplay. (The xterm PTY view
+     keeps its own grid font in JS: it IS the terminal, not a label.) */
+  --st-wordmark: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --st-mono: var(--st-sans);
+  --font-mono: var(--st-sans);
   --st-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --st-dur: 260ms;
   /* Structural moments — highlights landing, gold releasing — move slowly. */
@@ -88,7 +95,7 @@
 }
 
 .studio-glyph {
-  font-family: var(--st-mono);
+  font-family: var(--st-wordmark);
   font-size: 12px;
   font-weight: 500;
   color: var(--st-gold);

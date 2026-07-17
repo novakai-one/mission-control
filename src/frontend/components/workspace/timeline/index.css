@@ -1,13 +1,13 @@
-/* Workspace timeline — studio grammar (docs/messaging-studio.html): the
-   dominant column sits on the stage, content in a centered 660px stack,
-   speaker runs separated by hairlines. Near-monochrome; the amber engine
-   owns any gold that appears below. */
+/* Workspace timeline — studio grammar: a raised child inside the framed work
+   panel (stage color never appears inside a zone — C22), content in a
+   centered 660px stack, speaker runs separated by hairlines. Near-monochrome;
+   the amber engine owns any gold that appears below. */
 .workspace-timeline {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--st-stage);
+  background: var(--st-panel-2);
   overflow: hidden;
 }
 
