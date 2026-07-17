@@ -15,6 +15,7 @@ import {
   type ChatMessage,
 } from '../../../lib/chatModel/index.js';
 import { ChatComposer } from './composer.js';
+import { TunnelFeed } from './tunnel/index.js';
 import './index.css';
 
 /** A composer send waiting for its echo on the live stream. */
@@ -29,16 +30,19 @@ export interface StudioChatPanelProps {
   thread: ThreadRecord | null;
   projection: ThreadProjection | null;
   runtimeAgent: AgentInfo | null;
+  /** Every known agent — the tunnel's roster hint and mention targets. */
+  agents: AgentInfo[];
   onLaunch(provider: ProviderId): Promise<unknown>;
   onAttach(provider: ProviderId, sessionId: string, cwd?: string): Promise<void>;
   onOpenAgent(agentId: string): void;
 }
 
-type ChatTabId = 'context' | 'conversation' | 'evidence';
+type ChatTabId = 'context' | 'conversation' | 'tunnel' | 'evidence';
 
 const CHAT_TABS: { id: ChatTabId; label: string }[] = [
   { id: 'context', label: 'Context' },
   { id: 'conversation', label: 'Conversation' },
+  { id: 'tunnel', label: 'Tunnel' },
   { id: 'evidence', label: 'Evidence' },
 ];
 
@@ -245,6 +249,7 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
         <ConversationBody projection={props.projection} thread={props.thread} pendingSends={pendingSends} />
       )}
       {activeTab === 'context' && <ContextBody {...props} />}
+      {activeTab === 'tunnel' && <TunnelFeed agents={props.agents} />}
       {activeTab === 'evidence' && <div className="st-ai-quiet">Nothing captured yet</div>}
 
       {activeTab === 'conversation' && (

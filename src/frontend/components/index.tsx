@@ -267,8 +267,9 @@ export function DashboardShell() {
           if (message.event?.kind === 'usage') refetchUsage(1500);
           if (message.subagentId && message.event) subagentLiveRef.current?.(message.subagentId, message.event);
         }
-      } else if (message.event === 'watch-started') {
-        // Watch acknowledgement — must not fall through to the debug message list.
+      } else if (message.event === 'watch-started' || message.event === 'message-envelope') {
+        // Watch acks and tunnel envelopes (consumed via the agentSocket
+        // singleton) must not fall through to the debug message list.
       } else if (message.event === 'build-session' && message.payload?.sessionId && message.payload?.projectDir) {
         const { sessionId, projectDir } = message.payload;
         setSessions(prev => prev.some(session => session.sessionId === sessionId)
@@ -469,6 +470,7 @@ export function DashboardShell() {
           thread={workspace.selectedThread}
           projection={workspace.projection}
           runtimeAgent={runtimeAgent}
+          agents={agentsState.agents}
           onLaunch={workspace.launchProvider}
           onAttach={workspace.attachSession}
           onOpenAgent={openAgent}

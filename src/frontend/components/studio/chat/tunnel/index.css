@@ -1,0 +1,20 @@
+/* Tunnel lens — agent↔agent feed. Everything rides the panel's existing
+   message grammar (.st-msg/.st-by/.st-say); only the delivery state gets
+   tunnel-specific tone. Ordinary rows stay monochrome: queued/delivered are
+   meta-quiet, failed lifts to muted ink so it reads without shouting — the
+   amber engine (not this file) decides if it is THE thing needing Chris. */
+.st-tn-route b {
+  letter-spacing: 0.08em;
+}
+
+.st-tn-status {
+  color: var(--st-faintest);
+}
+
+.st-tn-failed {
+  color: var(--st-muted);
+}
+
+.st-tn-body {
+  color: var(--st-muted);
+}
