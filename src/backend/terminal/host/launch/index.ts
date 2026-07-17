@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   appendFileSync,
+  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -10,6 +11,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { TerminalManager } from '../../manager.js';
 import type { TerminalRuntime } from '../../runtime/index.js';
 import { TerminalHostClient } from '../client/index.js';
@@ -55,21 +57,44 @@ function snapshotPath(workspace: string, snapshotId: string): string {
   );
 }
 
-function spawnHost(workspace: string, socketPath: string): void {
+function spawnHost(workspace: string, socketPath: string, registryPath: string): void {
   const snapshot = snapshotSource(workspace);
   const entry = path.join(snapshot, 'src', 'backend', 'terminal', 'host', 'process.ts');
   const tsxCli = path.join(workspace, 'node_modules', 'tsx', 'dist', 'cli.mjs');
-  const hostDir = path.dirname(socketPath);
-  mkdirSync(hostDir, { recursive: true });
-  const logPath = path.join(hostDir, 'host.log');
-  appendFileSync(logPath, `\n--- launch ${new Date().toISOString()} snapshot ${path.basename(snapshot)} ---\n`);
-  const logFile = openSync(logPath, 'a');
-  const child = spawn(process.execPath, [tsxCli, entry, '--workspace', workspace, '--socket', socketPath], {
+  mkdirSync(path.dirname(socketPath), { recursive: true });
+  const logFile = openHostLog(workspace, snapshot);
+  const child = spawn(process.execPath, [
+    tsxCli,
+    entry,
+    '--workspace', workspace,
+    '--socket', socketPath,
+    '--registry', registryPath,
+  ], {
     cwd: workspace,
     detached: true,
     stdio: ['ignore', logFile, logFile],
   });
+  closeSync(logFile);
   child.unref();
+}
+
+function openHostLog(workspace: string, snapshot: string): number {
+  const hostDir = path.join(workspace, '.novakai-command', 'terminal-host');
+  mkdirSync(hostDir, { recursive: true });
+  const logPath = path.join(hostDir, 'host.log');
+  appendFileSync(logPath, `\n--- launch ${new Date().toISOString()} snapshot ${path.basename(snapshot)} ---\n`);
+  return openSync(logPath, 'a');
+}
+
+export function terminalSocketPath(workspace: string, safePort?: string): string {
+  if (process.env.NOVAKAI_HOST_SOCKET) return process.env.NOVAKAI_HOST_SOCKET;
+  const workspaceId = createHash('sha256').update(workspace).digest('hex').slice(0, 10);
+  const userId = process.getuid?.() ?? 'user';
+  const portSuffix = safePort ? `-${safePort}` : '';
+  return path.join(
+    tmpdir(),
+    `novakai-${userId}-${workspaceId}-v${TERMINAL_HOST_PROTOCOL}${portSuffix}.sock`,
+  );
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -92,22 +117,18 @@ async function connectEventually(socketPath: string): Promise<TerminalHostClient
 /** Production uses the detached host; scratch-port rigs stay isolated in-process. */
 export async function createTerminalRuntime(workspace = process.cwd()): Promise<TerminalRuntime> {
   const scratchPort = process.env.NOVAKAI_SERVER_PORT;
-  if (scratchPort) {
-    const safePort = scratchPort.replace(/[^0-9A-Za-z_-]/g, '_');
-    const registry = path.join(workspace, '.novakai-command', `agents-${safePort}.json`);
-    return new TerminalManager(registry);
+  const safePort = scratchPort?.replace(/[^0-9A-Za-z_-]/g, '_');
+  const stateDir = path.join(workspace, '.novakai-command');
+  const registryPath = path.join(stateDir, safePort ? `agents-${safePort}.json` : 'agents.json');
+  if (safePort && process.env.NOVAKAI_TERMINAL_RUNTIME !== 'host') {
+    return new TerminalManager(registryPath);
   }
 
-  const socketPath = path.join(
-    workspace,
-    '.novakai-command',
-    'terminal-host',
-    `host-v${TERMINAL_HOST_PROTOCOL}.sock`,
-  );
+  const socketPath = terminalSocketPath(workspace, safePort);
   try {
     return await TerminalHostClient.connect(socketPath);
   } catch {
-    spawnHost(workspace, socketPath);
+    spawnHost(workspace, socketPath, registryPath);
     return connectEventually(socketPath);
   }
 }

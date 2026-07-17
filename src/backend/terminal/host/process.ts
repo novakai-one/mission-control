@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { TerminalManager } from '../manager.js';
 import { watchDesktopOwner } from './owner/index.js';
 import { TerminalHostServer } from './server/index.js';
@@ -12,7 +11,7 @@ function option(name: string): string {
 
 const workspace = option('--workspace');
 const socketPath = option('--socket');
-const registryPath = path.join(workspace, '.novakai-command', 'agents.json');
+const registryPath = option('--registry');
 const host = new TerminalHostServer(socketPath, new TerminalManager(registryPath));
 
 await host.listen();

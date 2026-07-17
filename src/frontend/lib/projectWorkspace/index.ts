@@ -13,6 +13,8 @@ interface LaunchResult {
   sessionId?: string;
 }
 
+const SELECTED_PROJECT_STORAGE_KEY = 'novakai-selected-project';
+
 async function requestJson<T>(resource: string, options?: RequestInit): Promise<T> {
   const response = await fetch(resource, options);
   const body = await response.json();
@@ -28,20 +30,37 @@ function jsonRequest(method: string, body: object): RequestInit {
   };
 }
 
-function useProjectRecords() {
-  const [projects, setProjects] = useState<ProjectRecord[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+function useLoadProjects(
+  setProjects: Dispatch<SetStateAction<ProjectRecord[]>>,
+  setSelected: Dispatch<SetStateAction<string | null>>,
+  setError: Dispatch<SetStateAction<string | null>>,
+  setLoading: Dispatch<SetStateAction<boolean>>,
+): void {
   useEffect(() => {
     requestJson<{ projects: ProjectRecord[] }>('/api/projects')
       .then((result) => {
         setProjects(result.projects);
-        setSelectedProjectId(result.projects[0]?.id ?? null);
+        setSelected((current) => result.projects.some(({ id }) => id === current)
+          ? current
+          : result.projects[0]?.id ?? null);
       })
       .catch((failure) => setError(failure instanceof Error ? failure.message : String(failure)))
       .finally(() => setLoading(false));
   }, []);
+}
+
+function useProjectRecords() {
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    () => localStorage.getItem(SELECTED_PROJECT_STORAGE_KEY)
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useLoadProjects(setProjects, setSelectedProjectId, setError, setLoading);
+  useEffect(() => {
+    if (selectedProjectId) localStorage.setItem(SELECTED_PROJECT_STORAGE_KEY, selectedProjectId);
+    else localStorage.removeItem(SELECTED_PROJECT_STORAGE_KEY);
+  }, [selectedProjectId]);
   return { projects, setProjects, selectedProjectId, setSelectedProjectId, loading, error, setError };
 }
 

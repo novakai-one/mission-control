@@ -34,6 +34,7 @@ export class TerminalHostClient implements TerminalRuntime {
   private readonly agents = new Map<string, CachedAgent>();
   private readonly pendingCreates = new Map<string, PendingCreate>();
   private socket: Socket | null = null;
+  private connectedHostPid: number | null = null;
   private dataCallback: ((agentId: string, data: string) => void) | null = null;
   private exitCallback: ((agentId: string, exitCode: number | null) => void) | null = null;
   private sessionCallback: ((info: AgentInfo) => void) | null = null;
@@ -106,6 +107,10 @@ export class TerminalHostClient implements TerminalRuntime {
     this.socket = null;
   }
 
+  hostPid(): number | null {
+    return this.connectedHostPid;
+  }
+
   private open(): Promise<TerminalHostClient> {
     const socket = connect(this.socketPath);
     this.socket = socket;
@@ -172,6 +177,7 @@ export class TerminalHostClient implements TerminalRuntime {
       return;
     }
     this.replaceSnapshots(frame.agents);
+    this.connectedHostPid = frame.hostPid;
     resolve(this);
   }
 

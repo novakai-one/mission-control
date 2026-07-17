@@ -60,6 +60,7 @@ const subagentEventListeners: Array<(sessionId: string, subagentId: string, even
 let backoffInitialMs = 500;
 let backoffMs = 500;
 let backoffMaxMs = 8000;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Test seam: resolved lazily so a fake class installed on globalThis before
 // connect() runs is picked up instead of the real browser WebSocket.
@@ -139,15 +140,21 @@ function resubscribeAll(): void {
 }
 
 function handleOpen(): void {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
   backoffMs = backoffInitialMs;
   flushQueue();
   resubscribeAll();
 }
 
 function scheduleReconnect(): void {
+  if (reconnectTimer) return;
   const delay = backoffMs;
   backoffMs = Math.min(backoffMs * 2, backoffMaxMs);
-  setTimeout(openSocket, delay);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    openSocket();
+  }, delay);
 }
 
 function handleClose(): void {
@@ -156,6 +163,8 @@ function handleClose(): void {
 }
 
 function openSocket(): void {
+  const busy = socket && (socket.readyState === READY_CONNECTING || socket.readyState === READY_OPEN);
+  if (busy) return;
   const Ctor = getWebSocketCtor();
   socket = new Ctor(socketUrl());
   socket.onopen = handleOpen;
