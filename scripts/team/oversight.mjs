@@ -21,6 +21,14 @@ export function inferSubagentState(parentEvents, subagent, now = Date.now(), sta
     })
     : Boolean(launchResult);
   if (done) return 'done';
+  const reaped = parentEvents.some((event) => {
+    const payload = event.content ?? event.text ?? '';
+    const identities = [subagent.agentId, asyncMatch?.[1]]
+      .filter(Boolean)
+      .flatMap((identity) => [identity, `agent-${identity}`]);
+    return identities.some((identity) => payload.split('\n').includes(`reaped ${identity}`));
+  });
+  if (reaped) return 'stopped';
   return now - subagent.modified > staleMs ? 'stale' : 'running';
 }
 
@@ -83,7 +91,7 @@ export function renderOversight(snapshot) {
     const counts = stateCounts(agent.subagents);
     const summary = agent.subagents.length === 0
       ? 'no subagents'
-      : `${counts.running ?? 0} running, ${counts.done ?? 0} done, ${counts.stale ?? 0} stale`;
+      : `${counts.running ?? 0} running, ${counts.done ?? 0} done${counts.stopped ? `, ${counts.stopped} stopped` : ''}, ${counts.stale ?? 0} stale`;
     lines.push(`- ${agent.title} · ${agent.provider ?? 'unknown'} · ${summary}`);
     for (const subagent of agent.subagents.filter((entry) => entry.state === 'stale')) {
       lines.push(`  ! ${subagent.description || subagent.agentId} quiet ${subagent.quietSeconds}s`);

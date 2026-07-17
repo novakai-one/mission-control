@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import type { CanonicalEvent, CanonicalEventKind } from '../../../../shared/provider/schema.js';
 import { approvalItemId, useAttention } from '../../../lib/attention/index.js';
+import { MarkdownText } from '../../../lib/markdown/index.js';
 import { eventKindLabel, isDense, summaryLine } from '../model/index.js';
 import './index.css';
 
@@ -14,7 +15,11 @@ interface EventRendererProps {
 }
 
 function SpeechEvent({ event }: EventRendererProps) {
-  return <p className={event.kind === 'user' ? 'wt-say wt-say-you' : 'wt-say'}>{event.text || event.rawType}</p>;
+  return (
+    <div className={event.kind === 'user' ? 'wt-say wt-say-you' : 'wt-say'}>
+      <MarkdownText text={event.text || event.rawType} />
+    </div>
+  );
 }
 
 /** Tool and system rows: one quiet mono line; dense payloads expand on click. */
