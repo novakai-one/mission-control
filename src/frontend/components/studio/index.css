@@ -551,3 +551,90 @@
     transition-duration: 0s !important;
   }
 }
+
+/* ---------------------------------------------------------------- hero */
+/* Variant B's compiler-header grammar on live data: kicker, big title,
+   fact line; the running fleet as quiet avatar squares on the right.
+   Weight-only hierarchy — no permanent gold (codex ruling). */
+.studio-kicker {
+  font-family: var(--st-sans);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--st-faintest);
+}
+
+.studio-hero {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 22px 16px;
+  border-bottom: 1px solid var(--st-line);
+}
+
+.studio-hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.studio-hero h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  color: var(--st-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-hero p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--st-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-hero-presence {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.studio-hero-avatars {
+  display: flex;
+}
+
+.studio-hero-avatar {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--st-r-lg);
+  background: var(--st-panel-3);
+  border: 1px solid var(--st-line-2);
+  color: var(--st-muted);
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: -5px;
+}
+
+.studio-hero-avatar:first-child {
+  margin-left: 0;
+}
+
+.studio-hero-live {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--st-faint);
+  white-space: nowrap;
+}

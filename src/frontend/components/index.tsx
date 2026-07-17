@@ -387,6 +387,9 @@ export function DashboardShell() {
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             sessionAgents={threadAgents}
+            agents={agentsState.agents}
+            project={workspace.selectedProject}
+            thread={workspace.selectedThread}
             onOpenSettings={() => setSettingsOpen(true)}
           />
           <div className="studio-work-body">

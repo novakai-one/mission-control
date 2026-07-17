@@ -156,7 +156,49 @@ interface StudioWorkHeadProps {
   onViewModeChange(mode: ViewMode): void;
   /** Live agents tied to the selected thread — rendered as session chips. */
   sessionAgents: AgentInfo[];
+  /** The whole fleet — the hero's presence cluster. */
+  agents: AgentInfo[];
+  project: ProjectRecord | null;
+  thread: ThreadRecord | null;
   onOpenSettings(): void;
+}
+
+const initialsOf = (title: string): string =>
+  title.split(/[\s·]+/).filter(Boolean).slice(0, 2).map((word) => word[0]!).join('').toUpperCase();
+
+/** Variant B's hero grammar on live data: kicker · big title · fact line on
+ * the left, the running fleet as quiet avatar squares on the right. No gold
+ * — hierarchy is scale and weight (codex ruling: no permanent CTA gold). */
+function WorkHero({ project, thread, agents }: { project: ProjectRecord | null; thread: ThreadRecord | null; agents: AgentInfo[] }) {
+  const running = agents.filter((agent) => agent.status === 'running');
+  const shown = running.slice(0, 8);
+  const title = thread?.title ?? project?.name ?? 'Novakai Command';
+  const facts: string[] = [];
+  if (thread) facts.push(`${thread.sessionReferences.length} session${thread.sessionReferences.length === 1 ? '' : 's'} attached`);
+  if (project) facts.push(project.rootPath);
+  return (
+    <div className="studio-hero">
+      <div className="studio-hero-main">
+        <span className="studio-kicker">
+          {project && project.name.toLowerCase() !== 'novakai command'
+            ? `Novakai Command · ${project.name}`
+            : 'Novakai Command'}
+        </span>
+        <h1>{title}</h1>
+        {facts.length > 0 && <p>{facts.join(' · ')}</p>}
+      </div>
+      <div className="studio-hero-presence" title={running.map((agent) => agent.title).join(', ')}>
+        <span className="studio-hero-avatars">
+          {shown.map((agent) => (
+            <span key={agent.agentId} className="studio-hero-avatar">{initialsOf(agent.title)}</span>
+          ))}
+        </span>
+        <span className="studio-hero-live">
+          {running.length > shown.length ? `+${running.length - shown.length} · ` : ''}{running.length} live
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function SessionChip({ agent }: { agent: AgentInfo }) {
@@ -172,26 +214,31 @@ function SessionChip({ agent }: { agent: AgentInfo }) {
 
 export function StudioWorkHead(props: StudioWorkHeadProps) {
   return (
-    <div className="studio-work-head">
-      <nav className="studio-view-tabs" aria-label="Views">
-        {VIEW_TABS.map((entry) => (
-          <button
-            key={entry.mode}
-            type="button"
-            className={entry.mode === props.viewMode ? 'studio-tab studio-tab-on' : 'studio-tab'}
-            onClick={() => props.onViewModeChange(entry.mode)}
-          >
-            {entry.label}
-          </button>
+    <>
+      <div className="studio-work-head">
+        <nav className="studio-view-tabs" aria-label="Views">
+          {VIEW_TABS.map((entry) => (
+            <button
+              key={entry.mode}
+              type="button"
+              className={entry.mode === props.viewMode ? 'studio-tab studio-tab-on' : 'studio-tab'}
+              onClick={() => props.onViewModeChange(entry.mode)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </nav>
+        <span className="studio-head-spacer" />
+        {props.sessionAgents.map((agent) => (
+          <SessionChip key={agent.agentId} agent={agent} />
         ))}
-      </nav>
-      <span className="studio-head-spacer" />
-      {props.sessionAgents.map((agent) => (
-        <SessionChip key={agent.agentId} agent={agent} />
-      ))}
-      <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
-        <Settings size={14} />
-      </button>
-    </div>
+        <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
+          <Settings size={14} />
+        </button>
+      </div>
+      {props.viewMode === 'workspace' && (
+        <WorkHero project={props.project} thread={props.thread} agents={props.agents} />
+      )}
+    </>
   );
 }
