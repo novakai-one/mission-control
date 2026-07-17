@@ -16,6 +16,10 @@ assert.equal(inferSubagentState([
   asyncLaunch,
   { kind: 'user_text', text: '<task-notification><task-id>task-42</task-id><status>completed</status></task-notification>' },
 ], subagent, now, 120_000), 'done');
+assert.equal(inferSubagentState([
+  asyncLaunch,
+  { kind: 'tool_result', content: 'reaped agent-sub-1' },
+], { ...subagent, modified: now - 130_000 }, now, 120_000), 'stopped');
 
 const snapshot = {
   generatedAt: new Date(now).toISOString(),
@@ -26,6 +30,12 @@ assert.match(renderOversight(snapshot), /1\/1 agents running/);
 assert.match(renderOversight(snapshot), /1 stale/);
 assert.match(renderNotification(snapshot), /1 agents running; 1 subagents; 0 done; 1 stale/);
 assert.match(renderNotification(snapshot), /Fable \/ Verify browser quiet 130s/);
+const stoppedSnapshot = {
+  ...snapshot,
+  agents: [{ ...snapshot.agents[0], subagents: [{ ...subagent, state: 'stopped', quietSeconds: 130 }] }],
+};
+assert.match(renderOversight(stoppedSnapshot), /1 stopped/);
+assert.doesNotMatch(renderNotification(stoppedSnapshot), /Attention:/);
 assert.equal(oversightFingerprint(snapshot), oversightFingerprint({ ...snapshot, generatedAt: 'later' }));
 const reordered = {
   ...snapshot,
