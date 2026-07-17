@@ -3,7 +3,7 @@
 // the meta line. History comes from GET /api/messages; live envelopes ride
 // the shared ws as { event: 'message-envelope', payload } frames. Status
 // amendments reuse the envelope id — the feed folds by id, later wins.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { connect, onMessageEnvelope, onRoomsChanged, type AgentInfo } from '../agentSocket/index.js';
 
 /** Frontend mirror of src/backend/messaging/types.ts MessageEnvelope. */
@@ -87,8 +87,12 @@ export function conversationIdsFor(envelope: TunnelEnvelope): ConversationId[] {
   return [...new Set(parties)].map(dmId);
 }
 
+/** One lane's transcript, oldest first — lane loads can interleave arrival
+ * order, so time (not arrival) owns the reading order. */
 export function messagesFor(feed: TunnelEnvelope[], id: ConversationId): TunnelEnvelope[] {
-  return feed.filter((envelope) => conversationIdsFor(envelope).includes(id));
+  return feed
+    .filter((envelope) => conversationIdsFor(envelope).includes(id))
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
 }
 
 export interface RosterEntry {
@@ -119,41 +123,43 @@ function byRecency(left: Conversation, right: Conversation): number {
   return left.title.localeCompare(right.title);
 }
 
-/** The unified chats list: #team + non-archived rooms + one DM lane per live
- * agent (plus lanes only history knows about, so exited agents' words stay
- * reachable). */
+/** Latest envelope per lane — recency for sorting, candidacy for the amber. */
+function latestByLane(feed: TunnelEnvelope[]): Map<ConversationId, TunnelEnvelope> {
+  const latest = new Map<ConversationId, TunnelEnvelope>();
+  for (const envelope of feed) {
+    for (const id of conversationIdsFor(envelope)) {
+      const seen = latest.get(id);
+      if (!seen || envelope.createdAt >= seen.createdAt) latest.set(id, envelope);
+    }
+  }
+  return latest;
+}
+
+/** One DM lane per live agent, plus lanes only history knows about — exited
+ * agents' words stay reachable. */
+function dmLanes(latest: Map<ConversationId, TunnelEnvelope>, roster: RosterEntry[]): string[] {
+  const names = new Set(roster.map((entry) => entry.name));
+  for (const id of latest.keys()) {
+    if (id.startsWith('dm:')) names.add(id.slice(3));
+  }
+  return [...names];
+}
+
+/** The unified chats list: #team + non-archived rooms + DM lanes. */
 export function buildConversations(
   feed: TunnelEnvelope[],
   rooms: TunnelRoom[],
   roster: RosterEntry[],
 ): Conversation[] {
-  const lastAt = new Map<ConversationId, string>();
-  for (const envelope of feed) {
-    for (const id of conversationIdsFor(envelope)) {
-      const seen = lastAt.get(id);
-      if (!seen || envelope.createdAt >= seen) lastAt.set(id, envelope.createdAt);
-    }
-  }
-  const dmNames = new Set(roster.map((entry) => entry.name));
-  for (const id of lastAt.keys()) {
-    if (id.startsWith('dm:')) dmNames.add(id.slice(3));
-  }
+  const latest = latestByLane(feed);
+  const lastAt = (id: ConversationId): string | undefined => latest.get(id)?.createdAt;
   const conversations: Conversation[] = [
-    { id: TEAM_CHANNEL, kind: 'channel', title: TEAM_CHANNEL, lastMessageAt: lastAt.get(TEAM_CHANNEL) },
-    ...rooms
-      .filter((room) => !room.archived)
-      .map((room): Conversation => ({
-        id: room.roomId,
-        kind: 'room',
-        title: room.name,
-        members: room.members,
-        lastMessageAt: lastAt.get(room.roomId),
-      })),
-    ...[...dmNames].map((name): Conversation => ({
-      id: dmId(name),
-      kind: 'dm',
-      title: name,
-      lastMessageAt: lastAt.get(dmId(name)),
+    { id: TEAM_CHANNEL, kind: 'channel', title: TEAM_CHANNEL, lastMessageAt: lastAt(TEAM_CHANNEL) },
+    ...rooms.filter((room) => !room.archived).map((room): Conversation => ({
+      id: room.roomId, kind: 'room', title: room.name, members: room.members, lastMessageAt: lastAt(room.roomId),
+    })),
+    ...dmLanes(latest, roster).map((name): Conversation => ({
+      id: dmId(name), kind: 'dm', title: name, lastMessageAt: lastAt(dmId(name)),
     })),
   ];
   return conversations.sort(byRecency);
@@ -172,15 +178,8 @@ export interface ChrisQuestion {
  * that lane. A later message in the lane supersedes it (the need passed); an
  * agent↔agent DM lights only the sender's lane. */
 export function latestChrisQuestion(feed: TunnelEnvelope[]): ChrisQuestion | null {
-  const latest = new Map<ConversationId, TunnelEnvelope>();
-  for (const envelope of feed) {
-    for (const id of conversationIdsFor(envelope)) {
-      const seen = latest.get(id);
-      if (!seen || envelope.createdAt >= seen.createdAt) latest.set(id, envelope);
-    }
-  }
   let winner: ChrisQuestion | null = null;
-  for (const [id, envelope] of latest) {
+  for (const [id, envelope] of latestByLane(feed)) {
     if (envelope.from === CHRIS || !CHRIS_MENTION.test(envelope.body)) continue;
     if (conversationIdsFor(envelope)[0] !== id) continue;
     if (!winner || envelope.createdAt > winner.since) {
@@ -196,30 +195,52 @@ function isEnvelope(payload: unknown): payload is TunnelEnvelope {
     && typeof candidate.to === 'string' && typeof candidate.createdAt === 'string';
 }
 
+/** Server-side history filter for one lane; #team stays a full pull. */
+function historyPath(id: ConversationId): string {
+  if (isRoomId(id)) return `/api/messages?withRoom=${encodeURIComponent(id)}`;
+  if (id.startsWith('dm:')) return `/api/messages?withAgent=${encodeURIComponent(id.slice(3))}`;
+  return '/api/messages';
+}
+
+function fetchMessages(path: string, apply: (messages: TunnelEnvelope[]) => void): void {
+  fetch(path)
+    .then((response) => response.json())
+    .then((data: { messages?: TunnelEnvelope[] }) => apply(data.messages ?? []))
+    .catch(() => {});
+}
+
 /** Live tunnel feed: one fetch of history on mount, then ws frames upserted
  * over it. The agentSocket singleton carries the frames; connect() is
- * idempotent so this hook never races the rest of the app. */
-export function useTunnelFeed(): TunnelEnvelope[] {
-  const [feed, setFeed] = useState<TunnelEnvelope[]>([]);
+ * idempotent so this hook never races the rest of the app. loadConversation
+ * (stable identity) pulls one lane's history in under the live frames —
+ * selecting a lane in the messenger backfills anything the mount fetch or a
+ * dropped socket missed. */
+type FeedUpdater = (updater: (current: TunnelEnvelope[]) => TunnelEnvelope[]) => void;
 
-  useEffect(() => {
-    let cancelled = false; connect();
-    fetch('/api/messages')
-      .then((response) => response.json())
-      .then((data: { messages?: TunnelEnvelope[] }) => {
-        if (!cancelled) setFeed((live) => mergeFeed(data.messages ?? [], live));
-      })
-      .catch(() => {});
-    const unsubscribe = onMessageEnvelope((payload) => {
-      if (!cancelled && isEnvelope(payload)) setFeed((current) => upsertEnvelope(current, payload));
+function subscribeFeed(setFeed: FeedUpdater, isLive: () => boolean): () => void {
+  return onMessageEnvelope((payload) => {
+    if (isLive() && isEnvelope(payload)) setFeed((current) => upsertEnvelope(current, payload));
+  });
+}
+
+export function useTunnelFeed(): { feed: TunnelEnvelope[]; loadConversation: (id: ConversationId) => void } {
+  const [feed, setFeed] = useState<TunnelEnvelope[]>([]);
+  const mounted = useRef(true);
+  const loadConversation = useCallback((id: ConversationId): void => {
+    fetchMessages(historyPath(id), (messages) => {
+      if (mounted.current) setFeed((live) => mergeFeed(messages, live));
     });
+  }, []);
+  useEffect(() => {
+    mounted.current = true; connect();
+    loadConversation(TEAM_CHANNEL);
+    const unsubscribe = subscribeFeed(setFeed, () => mounted.current);
     return () => {
-      cancelled = true;
+      mounted.current = false;
       unsubscribe();
     };
-  }, []);
-
-  return feed;
+  }, [loadConversation]);
+  return { feed, loadConversation };
 }
 
 function isTunnelRoom(candidate: unknown): candidate is TunnelRoom {
@@ -227,45 +248,59 @@ function isTunnelRoom(candidate: unknown): candidate is TunnelRoom {
   return typeof room?.roomId === 'string' && typeof room.name === 'string' && Array.isArray(room.members);
 }
 
-/** Live room roster: one fetch on mount, then `rooms-changed` snapshots over
- * the shared ws. Resilience fallback: a post addressed to a room this client
- * has never seen means the roster moved while we weren't looking — refetch.
- * ingestRoom folds a POST /api/rooms response in without waiting for the ws. */
+function fetchRooms(apply: (rooms: TunnelRoom[]) => void): void {
+  fetch('/api/rooms')
+    .then((response) => response.json())
+    .then((data: { rooms?: unknown[] }) => apply((data.rooms ?? []).filter(isTunnelRoom)))
+    .catch(() => {});
+}
+
+/** One fetch now, `rooms-changed` snapshots after. Resilience fallback: a
+ * post addressed to a room this client has never seen means the roster moved
+ * while we weren't looking — refetch. Returns the unwatch. */
+function watchRooms(apply: (rooms: TunnelRoom[]) => void, knows: (roomId: string) => boolean): () => void {
+  fetchRooms(apply);
+  const unsubscribeRooms = onRoomsChanged((payload) => {
+    if (Array.isArray(payload)) apply(payload.filter(isTunnelRoom));
+  });
+  const unsubscribeEnvelopes = onMessageEnvelope((payload) => {
+    if (isEnvelope(payload) && isRoomId(payload.to) && !knows(payload.to)) fetchRooms(apply);
+  });
+  return () => {
+    unsubscribeRooms();
+    unsubscribeEnvelopes();
+  };
+}
+
+/** Live room roster for the messenger. ingestRoom folds a POST /api/rooms
+ * response in without waiting for the ws echo. */
+function roomsApplier(
+  known: { current: Set<string> },
+  setRooms: (rooms: TunnelRoom[]) => void,
+  isLive: () => boolean,
+): (next: TunnelRoom[]) => void {
+  return (next) => {
+    if (!isLive()) return;
+    known.current = new Set(next.map((entry) => entry.roomId));
+    setRooms(next);
+  };
+}
+
 export function useTunnelRooms(): { rooms: TunnelRoom[]; ingestRoom: (room: TunnelRoom) => void } {
   const [rooms, setRooms] = useState<TunnelRoom[]>([]);
   const known = useRef(new Set<string>());
-
   useEffect(() => {
     let cancelled = false; connect();
-    const apply = (next: TunnelRoom[]): void => {
-      if (cancelled) return;
-      known.current = new Set(next.map((entry) => entry.roomId));
-      setRooms(next);
-    };
-    const refresh = (): void => {
-      fetch('/api/rooms')
-        .then((response) => response.json())
-        .then((data: { rooms?: unknown[] }) => apply((data.rooms ?? []).filter(isTunnelRoom)))
-        .catch(() => {});
-    };
-    refresh();
-    const unsubscribeRooms = onRoomsChanged((payload) => {
-      if (Array.isArray(payload)) apply(payload.filter(isTunnelRoom));
-    });
-    const unsubscribeEnvelopes = onMessageEnvelope((payload) => {
-      if (isEnvelope(payload) && isRoomId(payload.to) && !known.current.has(payload.to)) refresh();
-    });
+    const apply = roomsApplier(known, setRooms, () => !cancelled);
+    const unwatch = watchRooms(apply, (roomId) => known.current.has(roomId));
     return () => {
       cancelled = true;
-      unsubscribeRooms();
-      unsubscribeEnvelopes();
+      unwatch();
     };
   }, []);
-
   function ingestRoom(room: TunnelRoom): void {
     known.current.add(room.roomId);
     setRooms((current) => upsertRoom(current, room));
   }
-
   return { rooms, ingestRoom };
 }

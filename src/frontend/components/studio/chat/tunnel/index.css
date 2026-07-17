@@ -1,47 +1,35 @@
-/* Tunnel lens — agent↔agent feed. Everything rides the panel's existing
-   message grammar (.st-msg/.st-by/.st-say); only the delivery state gets
-   tunnel-specific tone. Ordinary rows stay monochrome: queued/delivered are
-   meta-quiet, failed lifts to muted ink so it reads without shouting — the
-   amber engine (not this file) decides if it is THE thing needing Chris. */
-.st-tn-route b {
-  letter-spacing: 0.08em;
-  transition: color var(--st-dur-slow) var(--st-ease);
+/* Tunnel lens — unified messenger frame inside the AI panel: compact rail |
+   conversation column. Structure carried by hairlines and surface shades,
+   never boxes; the amber engine (not this file) decides what needs Chris. */
+.st-ms {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
 }
 
-.st-tn-status {
-  color: var(--st-faintest);
-  transition: color var(--st-dur-slow) var(--st-ease);
+.st-ms-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.st-tn-failed {
-  color: var(--st-muted);
+.st-ms-head {
+  flex: 0 0 auto;
+  padding: 12px 18px 10px;
+  border-bottom: 1px solid var(--st-line);
 }
 
-.st-tn-body {
-  color: var(--st-muted);
-}
-
-/* The ONE row the amber engine granted gold: route + state read gold, the
-   body lifts to ink, and the meta line becomes the explicit resolve action. */
-.st-tn-resolve {
-  background: none;
-  border: 0;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-}
-
-.st-tn-gold .st-tn-route b,
-.st-tn-gold .st-tn-status {
-  color: var(--st-gold);
-}
-
-.st-tn-gold .st-tn-body {
+.st-ms-title {
+  font-size: 13px;
   color: var(--st-ink);
 }
 
-/* Just resolved: gold releases to sage for a breath, then goes quiet. */
-.st-tn-settling .st-tn-route b,
-.st-tn-settling .st-tn-status {
-  color: var(--st-sage);
+.st-ms-members {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--st-faintest);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
