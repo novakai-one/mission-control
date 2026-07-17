@@ -18,9 +18,10 @@ import { CanvasView, CANVAS_CHANGED_EVENT } from './canvas/index.js';
 import { AnalyticsView, ANALYTICS_CHANGED_EVENT } from './analytics/index.js';
 import { DesignView, DESIGN_CHANGED_EVENT } from './design/index.js';
 import { useViewPanelState } from './viewpanel/index.js';
-import { WorkspaceTimeline } from './workspace/timeline/index.js';
 import { MessagesView } from './workspace/messages/index.js';
+import { MissionControl } from './workspace/missionControl/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
+import { useAttention } from '../lib/attention/index.js';
 import { mergeEvents, upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 import { useTimeZone } from '../lib/timezone/index.js';
@@ -136,6 +137,8 @@ export function DashboardShell() {
   const [viewMode, setViewMode] = useState<ViewMode>(restoredViewMode);
   const agentsState = useAgentsState();
   const workspace = useProjectWorkspace(agentsState.setActiveAgentId);
+  const attention = useAttention();
+  const immersiveView = viewMode === 'workspace' || viewMode === 'organization' || viewMode === 'messages';
   // Live agents belonging to the selected thread: chips in the work head, and
   // the newest one is the chat panel's runtime (same rule the old Projects
   // view used).
@@ -374,8 +377,8 @@ export function DashboardShell() {
 
   return (
     <div className="studio-stage">
-      <div className={viewMode === 'messages' ? 'studio-app studio-app-immersive' : 'studio-app'}>
-        {viewMode !== 'messages' && <StudioRail
+      <div className={immersiveView ? 'studio-app studio-app-immersive' : 'studio-app'}>
+        {!immersiveView && <StudioRail
           projects={workspace.projects}
           selectedProject={workspace.selectedProject}
           selectedThread={workspace.selectedThread}
@@ -435,12 +438,16 @@ export function DashboardShell() {
         ) : viewMode === 'organization' ? (
           <OrganizationLens agents={agentsState.agents} />
         ) : viewMode === 'workspace' ? (
-          <WorkspaceTimeline
+          <MissionControl
+            agents={agentsState.agents}
             project={workspace.selectedProject}
             thread={workspace.selectedThread}
             projection={workspace.projection}
-            loading={workspace.loading}
-            error={workspace.error}
+            attention={attention}
+            usage={sessionUsage}
+            selectedAgentId={agentsState.activeAgentId}
+            onSelectAgent={agentsState.setActiveAgentId}
+            onSelectThread={workspace.selectThread}
           />
         ) : viewMode === 'files' ? (
           <FilesPanel
@@ -519,7 +526,7 @@ export function DashboardShell() {
         ) : null}
           </div>
         </main>
-        {viewMode !== 'messages' && <StudioChatPanel
+        {!immersiveView && <StudioChatPanel
           project={workspace.selectedProject}
           thread={workspace.selectedThread}
           projection={workspace.projection}
@@ -530,7 +537,7 @@ export function DashboardShell() {
           onAttach={workspace.attachSession}
           onOpenAgent={openAgent}
         />}
-        {viewMode !== 'messages' && <StudioResizeSeams />}
+        {!immersiveView && <StudioResizeSeams />}
       </div>
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

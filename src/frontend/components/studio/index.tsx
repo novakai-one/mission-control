@@ -13,7 +13,7 @@ import './index.css';
 export type ViewMode = 'workspace' | 'organization' | 'messages' | 'files' | 'canvas' | 'analytics' | 'design' | 'agents' | 'transcript' | 'ruleset' | 'debug';
 
 const VIEW_TABS: { mode: ViewMode; label: string }[] = [
-  { mode: 'workspace', label: 'Workspace' },
+  { mode: 'workspace', label: 'Mission Control' },
   { mode: 'organization', label: 'Organization' },
   { mode: 'messages', label: 'Messages' },
   { mode: 'files', label: 'Files' },
@@ -165,44 +165,6 @@ interface StudioWorkHeadProps {
   onOpenSettings(): void;
 }
 
-const initialsOf = (title: string): string =>
-  title.split(/[\s·]+/).filter(Boolean).slice(0, 2).map((word) => word[0]!).join('').toUpperCase();
-
-/** Variant B's hero grammar on live data: kicker · big title · fact line on
- * the left, the running fleet as quiet avatar squares on the right. No gold
- * — hierarchy is scale and weight (codex ruling: no permanent CTA gold). */
-function WorkHero({ project, thread, agents }: { project: ProjectRecord | null; thread: ThreadRecord | null; agents: AgentInfo[] }) {
-  const running = agents.filter((agent) => agent.status === 'running');
-  const shown = running.slice(0, 8);
-  const title = thread?.title ?? project?.name ?? 'Novakai Command';
-  const facts: string[] = [];
-  if (thread) facts.push(`${thread.sessionReferences.length} session${thread.sessionReferences.length === 1 ? '' : 's'} attached`);
-  if (project) facts.push(project.rootPath);
-  return (
-    <div className="studio-hero">
-      <div className="studio-hero-main">
-        <span className="studio-kicker">
-          {project && project.name.toLowerCase() !== 'novakai command'
-            ? `Novakai Command · ${project.name}`
-            : 'Novakai Command'}
-        </span>
-        <h1>{title}</h1>
-        {facts.length > 0 && <p>{facts.join(' · ')}</p>}
-      </div>
-      <div className="studio-hero-presence" title={running.map((agent) => agent.title).join(', ')}>
-        <span className="studio-hero-avatars">
-          {shown.map((agent) => (
-            <span key={agent.agentId} className="studio-hero-avatar">{initialsOf(agent.title)}</span>
-          ))}
-        </span>
-        <span className="studio-hero-live">
-          {running.length > shown.length ? `+${running.length - shown.length} · ` : ''}{running.length} live
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function SessionChip({ agent }: { agent: AgentInfo }) {
   // Lights when a chat mention names this agent (its title, e.g. claude-1).
   const isLit = useHighlightedObject() === agentObjectId(agent.title);
@@ -238,9 +200,6 @@ export function StudioWorkHead(props: StudioWorkHeadProps) {
           <Settings size={14} />
         </button>
       </div>
-      {props.viewMode === 'workspace' && (
-        <WorkHero project={props.project} thread={props.thread} agents={props.agents} />
-      )}
     </>
   );
 }
