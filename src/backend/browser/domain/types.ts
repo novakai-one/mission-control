@@ -35,7 +35,7 @@ export interface LaunchSpec {
   headless: boolean;
 }
 
-export type CommandKind = 'goto' | 'click' | 'type' | 'press' | 'text' | 'shot';
+export type CommandKind = 'goto' | 'click' | 'type' | 'press' | 'text' | 'eval' | 'shot';
 
 /** One imperative action against a session's current page. */
 export interface BrowserCommand {
@@ -43,6 +43,7 @@ export interface BrowserCommand {
   href?: string;
   selector?: string;
   text?: string;
+  script?: string;
   shotPath?: string;
 }
 

@@ -53,6 +53,10 @@ async function applyCommand(page: Page, command: BrowserCommand): Promise<Action
     const text = await page.evaluate(() => document.body.innerText);
     return { success: true, pageUrl: page.url(), title: await safeTitle(page), text };
   }
+  if (command.kind === 'eval') {
+    const value = await page.evaluate(command.script ?? '');
+    return { success: true, pageUrl: page.url(), title: await safeTitle(page), text: JSON.stringify(value) };
+  }
   if (command.kind === 'shot') {
     await page.waitForTimeout(SHOT_SETTLE_MS);
     await page.screenshot({ path: command.shotPath });

@@ -4,7 +4,7 @@
 //
 //   NVK_SESSION=<id> npx tsx src/backend/browser/cli.ts goto <url>
 //   ... click <selector> | type <selector> <text...> | press <key>
-//   ... text | shot <path> | release
+//   ... text | eval <js...> | shot <path> | release
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { SessionBroker } from './broker.js';
@@ -53,8 +53,9 @@ function parseCommand(verb: string, args: string[]): BrowserCommand {
     case 'type': return { kind: 'type', selector: args[0], text: args.slice(1).join(' ') };
     case 'press': return { kind: 'press', text: args[0] };
     case 'text': return { kind: 'text' };
+    case 'eval': return { kind: 'eval', script: args.join(' ') };
     case 'shot': return { kind: 'shot', shotPath: args[0] ?? path.join(process.cwd(), 'browse-shot.png') };
-    default: throw new Error(`unknown verb "${verb}". Use: goto|click|type|press|text|shot|release`);
+    default: throw new Error(`unknown verb "${verb}". Use: goto|click|type|press|text|eval|shot|release`);
   }
 }
 
