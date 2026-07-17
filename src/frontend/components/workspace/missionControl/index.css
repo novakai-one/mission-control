@@ -1,11 +1,28 @@
 .mc-mission {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--mc-left-width, 224px) minmax(0, 1fr) var(--mc-right-width, 304px);
   background: var(--st-stage, #0d0d0f);
   color: var(--st-ink, #ececee);
   font-family: var(--st-sans, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  transition: grid-template-columns var(--st-dur, 260ms) var(--st-ease, ease);
+}
+
+.mc-mission.mc-left-closed {
+  grid-template-columns: 32px minmax(0, 1fr) var(--mc-right-width, 304px);
+}
+
+.mc-mission.mc-right-closed {
+  grid-template-columns: var(--mc-left-width, 224px) minmax(0, 1fr) 32px;
+}
+
+.mc-mission.mc-left-closed.mc-right-closed {
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
 }
 
 .mc-mission button {
@@ -16,9 +33,98 @@
 .mc-mission-rail {
   min-height: 0;
   overflow-y: auto;
-  padding: 22px 13px;
   border-right: 1px solid var(--st-frame, #26262a);
   background: var(--st-panel, #121214);
+}
+
+.mc-rail-brand,
+.mc-evidence-head {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 13px 0 18px;
+  border-bottom: 1px solid var(--st-frame, #26262a);
+}
+
+.mc-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.mc-brand b {
+  overflow: hidden;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+}
+
+.mc-brand b span {
+  color: var(--st-faintest, #626269);
+  font-weight: 400;
+}
+
+.mc-rail-toggle,
+.mc-rail-reopen {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--st-faint, #8b8b94);
+  cursor: pointer;
+}
+
+.mc-rail-toggle:hover,
+.mc-rail-reopen:hover {
+  color: var(--st-ink, #ececee);
+}
+
+.mc-rail-reopen {
+  width: 31px;
+  height: 48px;
+}
+
+.mc-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 10px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.mc-resize-left {
+  left: var(--mc-left-width, 224px);
+}
+
+.mc-resize-right {
+  left: calc(100% - var(--mc-right-width, 304px));
+}
+
+.mc-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.mc-resize-handle:hover::after,
+.mc-resize-handle[data-dragging]::after {
+  background: var(--st-line-3, #36363b);
 }
 
 .mc-section-label,
@@ -31,7 +137,7 @@
 }
 
 .mc-section-label {
-  padding: 0 10px 8px;
+  padding: 20px 23px 8px;
 }
 
 .mc-section-spaced {
@@ -42,6 +148,7 @@
 .mc-rail-agents {
   display: flex;
   flex-direction: column;
+  padding: 0 13px;
 }
 
 .mc-room {
@@ -270,12 +377,6 @@
   white-space: nowrap;
 }
 
-.mc-mission-columns {
-  display: grid;
-  grid-template-columns: minmax(430px, 1.45fr) minmax(250px, 0.55fr);
-  gap: 15px;
-}
-
 .mc-panel {
   border: 1px solid var(--st-frame, #26262a);
   border-radius: var(--st-r-lg, 8px);
@@ -366,19 +467,27 @@
 }
 
 .mc-evidence-column {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  overflow-y: auto;
+  border-left: 1px solid var(--st-frame, #26262a);
+  background: var(--st-panel, #121214);
+}
+
+.mc-evidence-head {
+  flex: 0 0 auto;
 }
 
 .mc-squad {
-  padding: 15px 10px 9px;
+  padding: 15px 10px 12px;
+  border-bottom: 1px solid var(--st-frame, #26262a);
 }
 
 .mc-squad > header {
-  display: flex;
-  justify-content: space-between;
   padding: 0 8px 9px;
+  color: var(--st-faint, #8b8b94);
 }
 
 .mc-squad > header strong {
@@ -386,7 +495,8 @@
 }
 
 .mc-attention {
-  padding: 17px;
+  padding: 20px 18px;
+  border-bottom: 1px solid var(--st-frame, #26262a);
 }
 
 .mc-attention h3 {
@@ -453,16 +563,8 @@
 
 @media (max-width: 1120px) {
   .mc-mission {
-    grid-template-columns: 190px minmax(0, 1fr);
-  }
-
-  .mc-mission-columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .mc-evidence-column {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --mc-left-width: 190px;
+    --mc-right-width: 260px;
   }
 }
 
