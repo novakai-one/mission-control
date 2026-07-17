@@ -2,17 +2,62 @@ import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { SessionReference } from '../../../shared/project/schema.js';
-import type { CanonicalEvent, SessionSnapshot } from '../../../shared/provider/schema.js';
+import type { ApprovalDetails, CanonicalEvent, SessionSnapshot } from '../../../shared/provider/schema.js';
 import { encodeCwd, readSession, type TranscriptEvent } from '../../transcript/parser.js';
 import { SessionNotFoundError, type ProviderSessionSource } from '../source/index.js';
+
+// Tools that stop the turn until Chris answers. They must reach the
+// conversation as approvals — mapped to 'tool' they were filtered out and a
+// question needing him produced nothing on screen.
+const INPUT_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
+
+function needsInput(event: TranscriptEvent): boolean {
+  return event.kind === 'tool_use' && INPUT_TOOLS.has(event.tool);
+}
 
 function canonicalKind(event: TranscriptEvent): CanonicalEvent['kind'] | null {
   if (event.kind === 'user_text') return 'user';
   if (event.kind === 'assistant_text') return 'assistant';
+  if (needsInput(event)) return 'approval';
   if (event.kind === 'tool_use' || event.kind === 'tool_result') return 'tool';
   if (event.kind === 'task_snapshot') return 'task';
   if (event.kind === 'usage' || event.kind === 'assistant_thinking') return null;
   return 'system';
+}
+
+interface AskQuestion {
+  question?: string;
+  header?: string;
+  options?: { label?: string }[];
+}
+
+/** AskUserQuestion → the question as caption, its answers as option rows. */
+function askApproval(input: { questions?: AskQuestion[] }): { text: string; approval: ApprovalDetails } {
+  const questions = Array.isArray(input?.questions) ? input.questions : [];
+  const text = questions.map((entry) => entry?.question).filter(Boolean).join('\n\n') || 'Question for you';
+  const reason = questions.map((entry) => entry?.header).filter(Boolean).join(' · ');
+  const prefixed = questions.length > 1;
+  const options = questions.flatMap((entry) =>
+    (Array.isArray(entry?.options) ? entry.options : [])
+      .map((option) => option?.label)
+      .filter((label): label is string => typeof label === 'string' && label !== '')
+      .map((label) => (prefixed && entry.header ? `${entry.header}: ${label}` : label)));
+  return {
+    text,
+    approval: { ...(reason ? { reason } : {}), writes: [], ...(options.length ? { options } : {}) },
+  };
+}
+
+/** ExitPlanMode → title-only caption; the plan body stays in the terminal. */
+function planApproval(input: { plan?: string }): { text: string; approval: ApprovalDetails } {
+  const plan = typeof input?.plan === 'string' ? input.plan : '';
+  const title = plan.split('\n').map((line) => line.trim()).find(Boolean)?.replace(/^#+\s*/, '') ?? '';
+  return { text: title ? `Plan ready — ${title}` : 'Plan ready for review', approval: { writes: [] } };
+}
+
+function inputRequest(event: TranscriptEvent): { text: string; approval: ApprovalDetails } {
+  if (event.kind !== 'tool_use') return { text: '', approval: { writes: [] } };
+  return event.tool === 'AskUserQuestion' ? askApproval(event.input) : planApproval(event.input);
 }
 
 function eventText(event: TranscriptEvent): string {
@@ -31,14 +76,16 @@ function eventText(event: TranscriptEvent): string {
 function canonicalEvent(event: TranscriptEvent): CanonicalEvent | null {
   const kind = canonicalKind(event);
   if (!kind) return null;
+  const request = kind === 'approval' ? inputRequest(event) : null;
   return {
     id: `claude:${event.eventKey || event.uuid}`,
     provider: 'claude',
     sessionId: event.sessionId,
     kind,
     timestamp: event.ts,
-    text: eventText(event),
+    text: request ? request.text : eventText(event),
     rawType: event.kind,
+    ...(request ? { approval: request.approval } : {}),
     ...(event.kind === 'task_snapshot' ? { tasks: event.tasks } : {}),
   };
 }
