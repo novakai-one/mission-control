@@ -59,14 +59,20 @@ const USAGE = {
 {
   const line1 = parseJsonlLine(assistantLine('m1', [{ type: 'thinking', thinking: 't' }], USAGE), '0', '') as TranscriptEvent[];
   const line2 = parseJsonlLine(assistantLine('m1', [{ type: 'thinking', thinking: 't' }, { type: 'text', text: 'hi' }], USAGE, 'u-m1b'), '1', '') as TranscriptEvent[];
-  const line3 = parseJsonlLine(assistantLine('m2', [{ type: 'text', text: 'y' }], { input_tokens: 5, output_tokens: 5 }), '2', '') as TranscriptEvent[];
-  const { perModel } = aggregateUsage([...line1, ...line2, ...line3]);
+  const switched = assistantLine('m2', [{ type: 'text', text: 'y' }], { input_tokens: 5, output_tokens: 5 });
+  switched.message.model = 'claude-opus-4-8';
+  const line3 = parseJsonlLine(switched, '2', '') as TranscriptEvent[];
+  const { perModel, latestModel } = aggregateUsage([...line1, ...line2, ...line3]);
   const totals = perModel['claude-fable-5'];
-  assert.equal(totals.requests, 2);          // m1 counted once despite two lines
-  assert.equal(totals.input, 105);           // 100 + 5, not 205
+  assert.equal(totals.requests, 1);          // m1 counted once despite two lines
+  assert.equal(totals.input, 100);           // duplicate m1 line is not counted twice
   assert.equal(totals.cacheRead, 1000);
-  assert.equal(totals.output, 25);
+  assert.equal(totals.output, 20);
+  assert.equal(perModel['claude-opus-4-8'].requests, 1);
+  assert.equal(latestModel, 'claude-opus-4-8');
 }
+
+assert.equal(aggregateUsage([]).latestModel, null);
 
 // Repeated usage reads for an unchanged transcript reuse parsed totals.
 {
