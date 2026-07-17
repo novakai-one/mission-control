@@ -209,6 +209,10 @@ async function cmdServe() {
   let child = null;
   let restarting = false;
   let shuttingDown = false;
+  // Pending crash-respawn timer. Tracked so a SIGHUP (or shutdown) landing
+  // during the backoff gap can cancel it — otherwise the timer AND the SIGHUP
+  // handler both call startChild() and two backends race the port.
+  let respawnTimer = null;
   // Escalating respawn backoff so a crash-looping snapshot doesn't hammer;
   // resets after a run stays healthy long enough to clear a transient failure.
   const MIN_BACKOFF_MS = 500;
@@ -217,6 +221,7 @@ async function cmdServe() {
   let backoffMs = MIN_BACKOFF_MS;
 
   const startChild = () => {
+    if (child) return; // never run two backends at once
     const resolved = resolveCurrentSnapshot();
     if (!resolved) fail("no current snapshot to serve — run 'npm run redeploy'.");
     const { dir, manifest } = resolved;
@@ -260,22 +265,26 @@ async function cmdServe() {
       const delay = backoffMs;
       backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
       console.error(`[deploy] backend exited (code ${code}, signal ${signal}) — respawning in ${delay}ms`);
-      setTimeout(startChild, delay);
+      respawnTimer = setTimeout(() => { respawnTimer = null; startChild(); }, delay);
     });
   };
 
   process.on('SIGHUP', () => {
     console.log('[deploy] SIGHUP — swapping to current snapshot');
+    // Cancel any pending crash-respawn so it can't fire alongside this swap.
+    if (respawnTimer) { clearTimeout(respawnTimer); respawnTimer = null; }
     if (child) {
       restarting = true;
       child.kill('SIGTERM');
     } else {
+      backoffMs = MIN_BACKOFF_MS;
       startChild();
     }
   });
 
   const shutdown = () => {
     shuttingDown = true;
+    if (respawnTimer) { clearTimeout(respawnTimer); respawnTimer = null; }
     if (child) child.kill('SIGTERM');
     try { rmSync(PID_FILE, { force: true }); } catch { /* ignore */ }
     process.exit(0);
