@@ -33,7 +33,8 @@
 }
 
 .wt-label {
-  font-family: var(--st-mono);
+  font-family: var(--st-sans);
+  font-weight: 600;
   font-size: 9.5px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -66,9 +67,11 @@
   padding-top: 14px;
 }
 
-/* Speaker labels: tiny mono uppercase, matching the chat panel's grammar. */
+/* Speaker labels: tiny Inter uppercase, matching the chat panel's grammar
+   (C12: mono lives only in the wordmark and real terminal output). */
 .wt-by {
-  font-family: var(--st-mono);
+  font-family: var(--st-sans);
+  font-weight: 600;
   font-size: 9.5px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
