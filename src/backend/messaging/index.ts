@@ -61,9 +61,8 @@ export class MessagingHub {
     private readonly broadcast: (event: string, payload: unknown) => void,
     options: MessagingOptions = {},
   ) {
-    this.store = new MessageStore(options.storePath);
+    this.store = new MessageStore(options.storePath); this.rooms = new RoomStore(options.roomsStorePath);
     this.store.onAppend((envelope) => this.broadcast('message-envelope', envelope));
-    this.rooms = new RoomStore(options.roomsStorePath);
     this.rooms.onAppend(() => this.broadcast('rooms-changed', { rooms: this.rooms.list() }));
     this.delivery = new PtyDelivery(this.terminals, options.timings);
     const router = new MessageRouter(
@@ -108,15 +107,15 @@ export class MessagingHub {
       response.status(404).json({ error: new RoomNotFoundError(roomId).message });
       return;
     }
-    const payload = (request.body ?? {}) as { add?: unknown; from?: unknown };
+    const payload = (request.body ?? {}) as { 'add'?: unknown; from?: unknown };
     try {
       const sender = this.requireText(payload.from, 'from');
       if (!room.members.includes(sender)) {
         response.status(403).json({ error: new NotARoomMemberError(sender, roomId).message });
         return;
       }
-      const add = this.requireStringArray(payload.add, 'add');
-      response.json({ room: this.rooms.addMembers(roomId, add) as Room });
+      const membersToAdd = this.requireStringArray(payload.add, 'add');
+      response.json({ room: this.rooms.addMembers(roomId, membersToAdd) as Room });
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
     }

@@ -48,16 +48,14 @@ export class MessageStore {
       const room = query.withRoom;
       envelopes = envelopes.filter((message) => message.to === room);
     }
-    if (query.threadId !== undefined) {
+    if (query.threadId !== undefined)
       envelopes = envelopes.filter((message) => message.threadId === query.threadId);
-    }
     if (query.since !== undefined) {
       const since = query.since;
       envelopes = envelopes.filter((message) => message.createdAt >= since);
     }
-    if (query.limit !== undefined && query.limit > 0) {
+    if (query.limit !== undefined && query.limit > 0)
       envelopes = envelopes.slice(-query.limit);
-    }
     return envelopes;
   }
 

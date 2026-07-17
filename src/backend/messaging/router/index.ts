@@ -6,7 +6,7 @@ import { MessageStore } from '../store/index.js';
 import { PtyDelivery } from '../delivery/index.js';
 import { RoomStore } from '../rooms/index.js';
 import { CHRIS_MEMBER, formatRoomInbound, isChannel, isRoom } from '../types.js';
-import type { AgentAddress, DeliveryReceipt, MessageEnvelope } from '../types.js';
+import type { AgentAddress, DeliveryReceipt, MessageEnvelope, Room } from '../types.js';
 
 /** Recipient not found / not running — the error carries the live roster (§5). */
 export class RecipientNotFoundError extends Error {
@@ -95,15 +95,22 @@ export class MessageRouter {
       if (member === envelope.from || member === CHRIS_MEMBER) continue;
       const address = liveByName.get(member);
       if (!address) continue;
-      try {
-        await this.delivery.deliver(address, envelope, formatRoomInbound(room, envelope));
-      } catch {
-        // Room delivery is best-effort; history remains available for pulling.
-      }
+      await this.deliverRoomMember(address, room, envelope);
     }
-
     this.settle(envelope, 'delivered');
     return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'room' };
+  }
+
+  private async deliverRoomMember(
+    address: AgentAddress,
+    room: Room,
+    envelope: MessageEnvelope,
+  ): Promise<void> {
+    try {
+      await this.delivery.deliver(address, envelope, formatRoomInbound(room, envelope));
+    } catch {
+      // Room delivery is best-effort; history remains available for pulling.
+    }
   }
 
   /** Channel fan-out is record-only: readers pull, nothing is PTY-injected (§4). */

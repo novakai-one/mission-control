@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PtyDelivery } from '../delivery/index.js';
-import { RoomStore } from '../rooms/index.js';
-import { MessageStore } from '../store/index.js';
-import type { AgentAddress, MessageEnvelope } from '../types.js';
+import { PtyDelivery } from '../../delivery/index.js';
+import { RoomStore } from '../../rooms/index.js';
+import { MessageStore } from '../../store/index.js';
+import type { AgentAddress, MessageEnvelope } from '../../types.js';
 import {
   ChannelInterruptError,
   MessageRouter,
   NotARoomMemberError,
   RoomNotFoundError,
-} from './index.js';
+} from '../index.js';
 
 const FAST = { interruptSettleMs: 0, submitDelayMs: 0 };
 const ROSTER: AgentAddress[] = [
@@ -21,12 +21,12 @@ const ROSTER: AgentAddress[] = [
 ];
 
 let counter = 0;
-function envelope(to: string, overrides: Partial<MessageEnvelope> = {}): MessageEnvelope {
+function envelope(recipient: string, overrides: Partial<MessageEnvelope> = {}): MessageEnvelope {
   counter += 1;
   return {
     id: `msg_room_${counter}`,
     from: 'claude-1',
-    to,
+    'to': recipient,
     delivery: 'normal',
     body: 'room hello',
     createdAt: new Date().toISOString(),

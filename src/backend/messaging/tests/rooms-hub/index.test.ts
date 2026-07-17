@@ -1,12 +1,13 @@
+/* eslint-disable max-lines-per-function */
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import express from 'express';
-import { MessagingHub } from '../index.js';
-import type { AgentInfo } from '../../terminal/manager.js';
-import type { MessageEnvelope, Room } from '../types.js';
+import { MessagingHub } from '../../index.js';
+import type { AgentInfo } from '../../../terminal/manager.js';
+import type { MessageEnvelope, Room } from '../../types.js';
 
 function agent(agentId: string, title: string, provider: 'claude' | 'codex'): AgentInfo {
   return {
@@ -28,7 +29,7 @@ const agents = [
 ];
 const writes: Array<{ agentId: string; data: string }> = [];
 const broadcasts: Array<{ event: string; payload: unknown }> = [];
-const hub = new MessagingHub(
+const messagingHub = new MessagingHub(
   {
     list: () => agents,
     write: (agentId, data) => {
@@ -46,7 +47,7 @@ const hub = new MessagingHub(
 
 const application = express();
 application.use(express.json());
-hub.registerRoutes(application);
+messagingHub.registerRoutes(application);
 const server: Server = await new Promise((resolve) => {
   const listening = application.listen(0, '127.0.0.1', () => resolve(listening));
 });
@@ -78,19 +79,19 @@ async function testRoomLifecycle(): Promise<Room> {
   assert.deepEqual((await request('/api/rooms')).json.rooms, [room]);
 
   const forbidden = await request(`/api/rooms/${room.roomId}/members`, 'POST', {
-    add: ['outsider'],
+    'add': ['outsider'],
     from: 'not-a-member',
   });
   assert.equal(forbidden.status, 403);
   const amended = await request(`/api/rooms/${room.roomId}/members`, 'POST', {
-    add: ['claude-2'],
+    'add': ['claude-2'],
     from: 'claude-1',
   });
   assert.equal(amended.status, 200);
   assert.ok(amended.json.room.members.includes('claude-2'));
   assert.equal(
     (await request('/api/rooms/room_unknown/members', 'POST', {
-      add: ['codex-2'],
+      'add': ['codex-2'],
       from: 'claude-1',
     })).status,
     404,
@@ -102,7 +103,7 @@ async function testRoomMessaging(room: Room): Promise<void> {
   writes.length = 0;
   const posted = await request('/api/messages', 'POST', {
     from: 'claude-1',
-    to: room.roomId,
+    'to': room.roomId,
     delivery: 'normal',
     body: 'three-way hello',
   });
@@ -122,7 +123,7 @@ async function testRoomMessaging(room: Room): Promise<void> {
   assert.equal(
     (await request('/api/messages', 'POST', {
       from: 'claude-1',
-      to: room.roomId,
+      'to': room.roomId,
       delivery: 'interrupt',
       body: 'never record this',
     })).status,
@@ -134,7 +135,7 @@ async function testRoomMessaging(room: Room): Promise<void> {
   assert.equal(
     (await request('/api/messages', 'POST', {
       from: 'outsider',
-      to: room.roomId,
+      'to': room.roomId,
       body: 'no access',
     })).status,
     403,
@@ -142,7 +143,7 @@ async function testRoomMessaging(room: Room): Promise<void> {
   assert.equal(
     (await request('/api/messages', 'POST', {
       from: 'claude-1',
-      to: 'room_unknown',
+      'to': 'room_unknown',
       body: 'missing',
     })).status,
     404,

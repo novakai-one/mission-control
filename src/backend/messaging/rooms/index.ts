@@ -27,6 +27,8 @@ export class RoomStore {
     return room;
   }
 
+  // Frozen public contract uses RoomStore.get(roomId).
+  // eslint-disable-next-line id-length
   get(roomId: string): Room | null {
     return this.fold().get(roomId) ?? null;
   }
@@ -35,6 +37,8 @@ export class RoomStore {
     return Array.from(this.fold().values()).filter((room) => !room.archived);
   }
 
+  // Frozen public contract uses the input name "add".
+  // eslint-disable-next-line id-length
   addMembers(roomId: string, add: string[]): Room | null {
     const room = this.get(roomId);
     if (!room) return null;
