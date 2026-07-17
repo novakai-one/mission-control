@@ -2,7 +2,7 @@
 
 /** A live headless Chrome process bound to one session. */
 export interface BrowserInstance {
-  pid: number;
+  processId: number;
   port: number;
   userDataDir: string;
   /** CDP base URL, e.g. http://127.0.0.1:9300 */
@@ -40,7 +40,7 @@ export type CommandKind = 'goto' | 'click' | 'type' | 'press' | 'text' | 'shot';
 /** One imperative action against a session's current page. */
 export interface BrowserCommand {
   kind: CommandKind;
-  url?: string;
+  href?: string;
   selector?: string;
   text?: string;
   shotPath?: string;
@@ -48,8 +48,8 @@ export interface BrowserCommand {
 
 /** Result of applying a BrowserCommand. */
 export interface ActionResult {
-  ok: boolean;
-  url: string;
+  success: boolean;
+  pageUrl: string;
   title?: string;
   text?: string;
   shotPath?: string;

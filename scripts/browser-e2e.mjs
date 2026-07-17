@@ -54,7 +54,7 @@ async function main() {
   const sessions = readSessions();
   assert.equal(sessions.length, 2, 'two isolated sessions registered');
   const ports = new Set(sessions.map((s) => s.instance.port));
-  const pids = new Set(sessions.map((s) => s.instance.pid));
+  const pids = new Set(sessions.map((s) => s.instance.processId));
   assert.equal(ports.size, 2, 'distinct debug ports');
   assert.equal(pids.size, 2, 'distinct Chrome processes');
   for (const shot of [alphaShot, bravoShot]) {

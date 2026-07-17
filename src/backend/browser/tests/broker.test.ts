@@ -6,7 +6,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SessionBroker, type BrowserProvider } from '../broker.js';
-import type { BrowserInstance, LaunchSpec } from '../types.js';
+import type { BrowserInstance, LaunchSpec } from '../domain/types.js';
 
 class FakeProvider implements BrowserProvider {
   launches = 0;
@@ -14,11 +14,11 @@ class FakeProvider implements BrowserProvider {
   private nextPort = 9300;
   async launch(_spec: LaunchSpec): Promise<BrowserInstance> {
     this.launches += 1;
-    const port = this.nextPort++;
-    return { pid: 1000 + port, port, userDataDir: `/tmp/udd-${port}`, cdpEndpoint: `http://127.0.0.1:${port}` };
+    const port = this.nextPort += 1;
+    return { processId: 1000 + port, port, userDataDir: `/tmp/udd-${port}`, cdpEndpoint: `http://127.0.0.1:${port}` };
   }
   async dispose(instance: BrowserInstance): Promise<void> {
-    this.disposed.push(instance.pid);
+    this.disposed.push(instance.processId);
   }
 }
 
@@ -26,13 +26,13 @@ function registryDir(): string {
   return mkdtempSync(join(tmpdir(), 'mc-browser-'));
 }
 
-function fixedClock(iso: string): () => Date {
-  return () => new Date(iso);
+function fixedClock(isoText: string): () => Date {
+  return () => new Date(isoText);
 }
 
 async function testGetOrCreateReuses(): Promise<void> {
   const provider = new FakeProvider();
-  const broker = new SessionBroker({ provider, registryDir: registryDir(), now: fixedClock('2026-07-17T00:00:00Z'), isAlive: () => true });
+  const broker = new SessionBroker({ provider, registryDir: registryDir(), clock: fixedClock('2026-07-17T00:00:00Z'), isAlive: () => true });
   const first = await broker.acquire('s1', 'a1');
   const second = await broker.acquire('s1', 'a1');
   assert.equal(provider.launches, 1, 'second acquire of same id reuses the instance');
@@ -42,43 +42,41 @@ async function testGetOrCreateReuses(): Promise<void> {
 async function testDistinctIdsAreIsolated(): Promise<void> {
   const provider = new FakeProvider();
   const broker = new SessionBroker({ provider, registryDir: registryDir(), isAlive: () => true });
-  const a = await broker.acquire('alpha', 'a1');
-  const b = await broker.acquire('bravo', 'a2');
+  const alpha = await broker.acquire('alpha', 'a1');
+  const bravo = await broker.acquire('bravo', 'a2');
   assert.equal(provider.launches, 2, 'each id gets its own instance');
-  assert.notEqual(a.cdpEndpoint, b.cdpEndpoint, 'distinct endpoints');
+  assert.notEqual(alpha.cdpEndpoint, bravo.cdpEndpoint, 'distinct endpoints');
 }
 
 async function testReconnectAcrossProcesses(): Promise<void> {
-  const path = registryDir();
-  const provider1 = new FakeProvider();
-  const broker1 = new SessionBroker({ provider: provider1, registryDir: path, isAlive: () => true });
-  await broker1.acquire('s1', 'a1');
-  // A fresh broker over the same registry file (simulating a new CLI process) reuses.
-  const provider2 = new FakeProvider();
-  const broker2 = new SessionBroker({ provider: provider2, registryDir: path, isAlive: () => true });
-  await broker2.acquire('s1', 'a1');
-  assert.equal(provider2.launches, 0, 'reconnecting broker reuses the persisted instance');
+  const directory = registryDir();
+  const first = new SessionBroker({ provider: new FakeProvider(), registryDir: directory, isAlive: () => true });
+  await first.acquire('s1', 'a1');
+  // A fresh broker over the same registry (a new CLI process) reuses.
+  const secondProvider = new FakeProvider();
+  const second = new SessionBroker({ provider: secondProvider, registryDir: directory, isAlive: () => true });
+  await second.acquire('s1', 'a1');
+  assert.equal(secondProvider.launches, 0, 'reconnecting broker reuses the persisted instance');
 }
 
 async function testExpiredLeaseRelaunches(): Promise<void> {
-  const path = registryDir();
+  const directory = registryDir();
   const provider = new FakeProvider();
-  const broker1 = new SessionBroker({ provider, registryDir: path, now: fixedClock('2026-07-17T00:00:00Z'), ttlMs: 1000, isAlive: () => true });
-  await broker1.acquire('s1', 'a1');
-  // 10s later — well past the 1s TTL.
-  const broker2 = new SessionBroker({ provider, registryDir: path, now: fixedClock('2026-07-17T00:00:10Z'), ttlMs: 1000, isAlive: () => true });
-  await broker2.acquire('s1', 'a1');
+  const first = new SessionBroker({ provider, registryDir: directory, clock: fixedClock('2026-07-17T00:00:00Z'), ttlMs: 1000, isAlive: () => true });
+  await first.acquire('s1', 'a1');
+  const second = new SessionBroker({ provider, registryDir: directory, clock: fixedClock('2026-07-17T00:00:10Z'), ttlMs: 1000, isAlive: () => true });
+  await second.acquire('s1', 'a1');
   assert.equal(provider.launches, 2, 'expired lease forces a relaunch');
   assert.equal(provider.disposed.length, 1, 'old instance disposed');
 }
 
 async function testDeadInstanceRelaunches(): Promise<void> {
-  const path = registryDir();
+  const directory = registryDir();
   const provider = new FakeProvider();
-  const broker1 = new SessionBroker({ provider, registryDir: path, isAlive: () => true });
-  await broker1.acquire('s1', 'a1');
-  const broker2 = new SessionBroker({ provider, registryDir: path, isAlive: () => false });
-  await broker2.acquire('s1', 'a1');
+  const first = new SessionBroker({ provider, registryDir: directory, isAlive: () => true });
+  await first.acquire('s1', 'a1');
+  const second = new SessionBroker({ provider, registryDir: directory, isAlive: () => false });
+  await second.acquire('s1', 'a1');
   assert.equal(provider.launches, 2, 'dead instance forces a relaunch');
   assert.equal(provider.disposed.length, 1, 'dead instance disposed');
 }

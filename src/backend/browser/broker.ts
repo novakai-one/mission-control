@@ -1,13 +1,12 @@
 // SessionBroker — the application core. Get-or-create one isolated browser per
-// session id, persisted to a JSON registry so ephemeral CLI processes reconnect
-// across runs. Contention is eliminated by partition (one session ⇢ one
-// instance), not by locking a shared tab. Impure work (spawning Chrome) lives
-// behind the injected BrowserProvider port.
+// session id, persisted as one JSON file per session so concurrent CLI processes
+// never clobber each other's registry. Contention is eliminated by partition
+// (one session ⇢ one instance), not by locking a shared tab. Impure work
+// (spawning Chrome) lives behind the injected BrowserProvider port.
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { isLeaseExpired, leaseExpiresAt } from './lease.js';
-import { decideAllocation } from './policy.js';
-import type { BrowserInstance, LaunchSpec, Session, SessionHandle } from './types.js';
+import { decideAllocation, isLeaseExpired, leaseExpiresAt } from './domain/rules.js';
+import type { BrowserInstance, LaunchSpec, Session, SessionHandle } from './domain/types.js';
 
 /** Port the broker depends on for the impure browser lifecycle. */
 export interface BrowserProvider {
@@ -17,19 +16,18 @@ export interface BrowserProvider {
 
 export interface BrokerDeps {
   provider: BrowserProvider;
-  /** Directory holding one JSON file per session. One-file-per-session keeps
-   *  concurrent CLI processes for different sessions from clobbering each other. */
+  /** Directory holding one JSON file per session. */
   registryDir: string;
-  now?: () => Date;
+  clock?: () => Date;
   ttlMs?: number;
-  isAlive?: (pid: number) => boolean;
+  isAlive?: (processId: number) => boolean;
 }
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-function defaultIsAlive(pid: number): boolean {
+function defaultIsAlive(processId: number): boolean {
   try {
-    process.kill(pid, 0);
+    process.kill(processId, 0);
     return true;
   } catch {
     return false;
@@ -39,15 +37,15 @@ function defaultIsAlive(pid: number): boolean {
 export class SessionBroker {
   private readonly provider: BrowserProvider;
   private readonly registryDir: string;
-  private readonly now: () => Date;
+  private readonly clock: () => Date;
   private readonly ttlMs: number;
-  private readonly isAlive: (pid: number) => boolean;
+  private readonly isAlive: (processId: number) => boolean;
   private sessions = new Map<string, Session>();
 
   constructor(deps: BrokerDeps) {
     this.provider = deps.provider;
     this.registryDir = deps.registryDir;
-    this.now = deps.now ?? (() => new Date());
+    this.clock = deps.clock ?? (() => new Date());
     this.ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
     this.isAlive = deps.isAlive ?? defaultIsAlive;
     this.load();
@@ -57,26 +55,30 @@ export class SessionBroker {
   async acquire(sessionId: string, agentId: string): Promise<SessionHandle> {
     await this.sweep();
     const existing = this.sessions.get(sessionId);
-    const alive = existing ? this.isAlive(existing.instance.pid) : false;
-    const decision = decideAllocation(existing, alive, this.now());
-
+    const alive = existing ? this.isAlive(existing.instance.processId) : false;
+    const decision = decideAllocation(existing, alive, this.clock());
     if (decision.kind === 'reuse' && decision.session) {
-      const renewed: Session = { ...decision.session, leaseExpiresAt: leaseExpiresAt(this.now(), this.ttlMs) };
-      this.sessions.set(sessionId, renewed);
-      this.persist(renewed);
-      return this.toHandle(renewed);
+      return this.renew(decision.session);
     }
+    if (existing) await this.provider.dispose(existing.instance);
+    return this.create(sessionId, agentId);
+  }
 
-    if (existing) {
-      await this.provider.dispose(existing.instance);
-    }
+  private renew(session: Session): SessionHandle {
+    const renewed: Session = { ...session, leaseExpiresAt: leaseExpiresAt(this.clock(), this.ttlMs) };
+    this.sessions.set(renewed.sessionId, renewed);
+    this.persist(renewed);
+    return this.toHandle(renewed);
+  }
+
+  private async create(sessionId: string, agentId: string): Promise<SessionHandle> {
     const instance = await this.provider.launch({ headless: true });
     const session: Session = {
       sessionId,
       agentId,
       instance,
       status: 'active',
-      leaseExpiresAt: leaseExpiresAt(this.now(), this.ttlMs),
+      leaseExpiresAt: leaseExpiresAt(this.clock(), this.ttlMs),
     };
     this.sessions.set(sessionId, session);
     this.persist(session);
@@ -94,26 +96,26 @@ export class SessionBroker {
 
   /** Reclaim every expired or dead session's instance. */
   async sweep(): Promise<void> {
-    const now = this.now();
-    for (const [id, session] of this.sessions) {
-      if (isLeaseExpired(session, now) || !this.isAlive(session.instance.pid)) {
+    const instant = this.clock();
+    for (const [identifier, session] of this.sessions) {
+      if (isLeaseExpired(session, instant) || !this.isAlive(session.instance.processId)) {
         await this.provider.dispose(session.instance);
-        this.sessions.delete(id);
-        this.forget(id);
+        this.sessions.delete(identifier);
+        this.forget(identifier);
       }
     }
   }
 
   /** Live roster — the seam a future mirror viewer consumes. */
   list(): SessionHandle[] {
-    return [...this.sessions.values()].map((s) => this.toHandle(s));
+    return [...this.sessions.values()].map((session) => this.toHandle(session));
   }
 
   /** Record the last URL a session navigated to (keeps handles useful). */
-  record(sessionId: string, url: string): void {
+  record(sessionId: string, pageUrl: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    session.lastUrl = url;
+    session.lastUrl = pageUrl;
     this.persist(session);
   }
 
