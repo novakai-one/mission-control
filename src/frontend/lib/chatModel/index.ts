@@ -81,9 +81,10 @@ function approvalRows(event: CanonicalEvent, targets: MentionTarget[]): ChatRow[
     rows.push({ id: `${event.id}:write:${index}`, mono: write, text: '', state: 'writes', settled: false, objectId: firstMentionObjectId(write, targets) });
   }
   // Answer choices of a question approval — labels, not terminal output, so
-  // they ride the text slot rather than mono.
+  // they ride the text slot rather than mono. State stays empty: the numbered
+  // row IS the option; a chip on every choice would be ornament.
   for (const [index, option] of (approval.options ?? []).entries()) {
-    rows.push({ id: `${event.id}:option:${index}`, mono: '', text: option, state: 'option', settled: false, objectId: firstMentionObjectId(option, targets) });
+    rows.push({ id: `${event.id}:option:${index}`, mono: '', text: option, state: '', settled: false, objectId: firstMentionObjectId(option, targets) });
   }
   return rows;
 }

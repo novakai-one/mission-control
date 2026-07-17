@@ -83,7 +83,7 @@ assert.equal(questions[0].caption, 'Which chat model should rooms use?');
 assert.equal(questions[0].rows.length, 2);
 assert.equal(questions[0].rows[0].mono, '');
 assert.equal(questions[0].rows[0].text, 'Ad-hoc rooms');
-assert.equal(questions[0].rows[0].state, 'option');
+assert.equal(questions[0].rows[0].state, '');
 assert.equal(questions[0].rows[1].text, 'One standing group');
 assert.equal(questions[0].rows[1].settled, false);
 
