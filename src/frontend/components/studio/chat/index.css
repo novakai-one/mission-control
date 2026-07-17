@@ -80,16 +80,50 @@
 }
 
 /* -------------------------------------------------------------- messages */
+/* Variant B's message anatomy: avatar square · name/time header · body.
+   Identity is the avatar + name in ink — never a per-person color claim. */
 .st-msg {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.st-av {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--st-r-lg);
+  background: var(--st-panel-3);
+  border: 1px solid var(--st-line-2);
+  color: var(--st-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+.st-msg-c {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+}
+
+.st-when {
+  margin-left: auto;
+  padding-left: 10px;
+  font-weight: 400;
+  color: var(--st-faintest);
 }
 
 /* Speaker labels: tiny mono uppercase, agent NAME as the identity — no
    per-provider colors. Every name stays muted ink; gold belongs to the one
    agent currently waiting on Chris, nothing else. */
 .st-by {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
   font-family: var(--st-sans);
   font-weight: 600;
   font-size: 9.5px;

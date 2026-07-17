@@ -13,7 +13,7 @@ import {
   type Conversation,
   type TunnelEnvelope,
 } from '../../../../../lib/tunnelModel/index.js';
-import { formatChatTime } from '../../../../../lib/chatModel/index.js';
+import { avatarInitials, formatChatTime } from '../../../../../lib/chatModel/index.js';
 import type { MentionTarget } from '../../../../../lib/mentions/index.js';
 import { MarkdownText } from '../../../../../lib/markdown/index.js';
 import { MentionText } from '../../mention/index.js';
@@ -61,22 +61,26 @@ function TranscriptRow({ envelope, kind, liveNames, targets, onResolve }: Transc
   // Resolution is an explicit affordance — the gold meta line is a real
   // button. Nothing resolves by bubbling: clicks on the body or a mention
   // inside it can never release the amber.
+  const initials = avatarInitials(fromYou ? 'You' : envelope.from);
   return (
     <div className={rowClass}>
-      {holdsGold ? (
-        <button type="button" className={`${metaClass} st-tn-resolve`} onClick={() => onResolve(itemId)}>
-          <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
-        </button>
-      ) : (
-        <div className={metaClass}>
-          <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
+      <span className="st-av" aria-hidden="true">{initials}</span>
+      <div className="st-msg-c">
+        {holdsGold ? (
+          <button type="button" className={`${metaClass} st-tn-resolve`} onClick={() => onResolve(itemId)}>
+            <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
+          </button>
+        ) : (
+          <div className={metaClass}>
+            <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
+          </div>
+        )}
+        <div className={`st-say st-tn-body${fromYou ? ' st-say-you' : ''}`}>
+          <MarkdownText
+            text={envelope.body}
+            renderText={(plain) => <MentionText text={plain} targets={targets} />}
+          />
         </div>
-      )}
-      <div className={`st-say st-tn-body${fromYou ? ' st-say-you' : ''}`}>
-        <MarkdownText
-          text={envelope.body}
-          renderText={(plain) => <MentionText text={plain} targets={targets} />}
-        />
       </div>
     </div>
   );

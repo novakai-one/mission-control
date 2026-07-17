@@ -9,6 +9,7 @@ import type { ThreadProjection } from '../../../../shared/provider/schema.js';
 import type { AgentInfo } from '../../../lib/agentSocket/index.js';
 import {
   agentActivity,
+  avatarInitials,
   buildChatMessages,
   formatChatTime,
   type AgentActivity,
@@ -101,17 +102,20 @@ function ChatMessageBlock({ message, targets }: { message: ChatMessage; targets:
   const blockClass = `st-msg${holdsGold ? ' st-msg-needs' : ''}${isSettling ? ' st-msg-settling' : ''}`;
   return (
     <div className={blockClass}>
-      <div className={message.fromYou ? 'st-by st-by-you' : 'st-by'}>
-        <b>{message.author}</b>
-        {message.time && <> · {message.time}</>}
+      <span className="st-av" aria-hidden="true">{avatarInitials(message.author)}</span>
+      <div className="st-msg-c">
+        <div className={message.fromYou ? 'st-by st-by-you' : 'st-by'}>
+          <b>{message.author}</b>
+          {message.time && <span className="st-when">{message.time}</span>}
+        </div>
+        <div className={message.fromYou ? 'st-say st-say-you' : 'st-say'}>
+          <MarkdownText
+            text={message.caption}
+            renderText={(plain) => <MentionText text={plain} targets={targets} />}
+          />
+        </div>
+        {message.rows.length > 0 && <StateRows message={message} />}
       </div>
-      <div className={message.fromYou ? 'st-say st-say-you' : 'st-say'}>
-        <MarkdownText
-          text={message.caption}
-          renderText={(plain) => <MentionText text={plain} targets={targets} />}
-        />
-      </div>
-      {message.rows.length > 0 && <StateRows message={message} />}
     </div>
   );
 }
@@ -122,8 +126,11 @@ function ChatMessageBlock({ message, targets }: { message: ChatMessage; targets:
 function PendingSendBlock({ pending }: { pending: PendingSend }) {
   return (
     <div className="st-msg st-msg-pending">
-      <div className="st-by st-by-you"><b>You</b> · {pending.time} · queued</div>
-      <div className="st-say st-say-you"><MarkdownText text={pending.text} /></div>
+      <span className="st-av" aria-hidden="true">C</span>
+      <div className="st-msg-c">
+        <div className="st-by st-by-you"><b>You</b><span className="st-when">{pending.time} · queued</span></div>
+        <div className="st-say st-say-you"><MarkdownText text={pending.text} /></div>
+      </div>
     </div>
   );
 }
