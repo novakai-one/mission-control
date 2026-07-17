@@ -16,6 +16,7 @@ import { listDir, resolveGitRoot, clampToHome, PathDeniedError, NotFoundError } 
 import { getRepoInfo } from '../versionControl/index.js';
 import { AgentsHub } from './agents.js';
 import { ProjectsHub } from './projects/index.js';
+import { CanvasHub } from './canvas/index.js';
 import { MessagingHub } from '../messaging/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
@@ -54,6 +55,7 @@ export class ServerController {
   private readonly activeSockets = new Set<WebSocket>();
   private readonly agentsHub: AgentsHub;
   private readonly projectsHub: ProjectsHub;
+  private readonly canvasHub: CanvasHub;
   private readonly messagingHub: MessagingHub;
 
   constructor(
@@ -63,6 +65,7 @@ export class ServerController {
   ) {
     this.agentsHub = new AgentsHub(this.activeSockets);
     this.projectsHub = new ProjectsHub(this.agentsHub);
+    this.canvasHub = new CanvasHub((event, payload) => this.broadcastEvent(event, payload));
     this.messagingHub = this.buildMessagingHub();
     this.server = createServer(this.app);
     this.wsServer = new WebSocketServer({ server: this.server });
@@ -119,6 +122,7 @@ export class ServerController {
   private configureRoutes(): void {
     this.agentsHub.registerRoutes(this.app);
     this.projectsHub.registerRoutes(this.app);
+    this.canvasHub.registerRoutes(this.app);
     this.messagingHub.registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {
