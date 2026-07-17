@@ -65,8 +65,11 @@ if (cmd === 'send') {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ from, to, delivery: interrupt ? 'interrupt' : 'normal', body, ...(threadId ? { threadId } : {}) }),
   });
-  if (response) {
-    const payload = await response.json().catch(() => ({}));
+  // A pre-tunnel server 404s the route itself with no JSON error — treat it
+  // like no server. A new-server 404 (unknown recipient) carries `error`.
+  const payload = response ? await response.json().catch(() => ({})) : null;
+  const preTunnelServer = response && response.status === 404 && !payload?.error;
+  if (response && !preTunnelServer) {
     if (!response.ok) {
       console.error(`send failed (${response.status}): ${payload.error || 'unknown error'}`);
       if (payload.roster) console.error('live agents: ' + (payload.roster.map(a => a.name).join(', ') || '(none)'));
