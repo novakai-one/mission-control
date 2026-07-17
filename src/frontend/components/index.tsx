@@ -510,6 +510,7 @@ export function DashboardShell() {
           thread={workspace.selectedThread}
           projection={workspace.projection}
           runtimeAgent={runtimeAgent}
+          sessionUsage={sessionUsage}
           agents={agentsState.agents}
           onLaunch={workspace.launchProvider}
           onAttach={workspace.attachSession}

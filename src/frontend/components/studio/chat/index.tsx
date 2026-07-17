@@ -26,8 +26,10 @@ import {
 } from '../../../lib/attention/index.js';
 import { latestChrisQuestion, useTunnelFeed } from '../../../lib/tunnelModel/index.js';
 import { MarkdownText } from '../../../lib/markdown/index.js';
+import type { SessionUsage } from '../../../lib/cost/index.js';
 import { ChatComposer } from './composer.js';
 import { MentionText } from './mention/index.js';
+import { ParityStrip } from './parity/index.js';
 import { TunnelMessenger } from './tunnel/index.js';
 import './index.css';
 
@@ -43,6 +45,9 @@ export interface StudioChatPanelProps {
   thread: ThreadRecord | null;
   projection: ThreadProjection | null;
   runtimeAgent: AgentInfo | null;
+  /** Aggregated token usage for the selected session — the parity readout's
+   * projection source (already fetched by the shell; never refetched here). */
+  sessionUsage: SessionUsage | null;
   /** Every known agent — the tunnel's roster hint and mention targets. */
   agents: AgentInfo[];
   onLaunch(provider: ProviderId): Promise<unknown>;
@@ -314,6 +319,9 @@ export function StudioChatPanel(props: StudioChatPanelProps) {
         </span>
       </div>
 
+      {activeTab === 'conversation' && (
+        <ParityStrip agent={props.runtimeAgent} usage={props.sessionUsage} />
+      )}
       {activeTab === 'conversation' && (
         <ConversationBody projection={props.projection} thread={props.thread} pendingSends={pendingSends} targets={mentionTargets} />
       )}
