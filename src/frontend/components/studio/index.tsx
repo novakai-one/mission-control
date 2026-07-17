@@ -5,13 +5,17 @@ import React, { useState } from 'react';
 import { Settings, PanelRight } from 'lucide-react';
 import type { ProjectRecord, ThreadRecord } from '../../../shared/project/schema.js';
 import type { AgentInfo } from '../../lib/agentSocket/index.js';
+import { useHighlightedObject } from '../../lib/highlight/index.js';
+import { useAttention } from '../../lib/attention/index.js';
+import { agentObjectId, threadObjectId } from '../../lib/mentions/index.js';
 import './index.css';
 
-export type ViewMode = 'workspace' | 'files' | 'agents' | 'transcript' | 'ruleset' | 'debug';
+export type ViewMode = 'workspace' | 'files' | 'canvas' | 'agents' | 'transcript' | 'ruleset' | 'debug';
 
 const VIEW_TABS: { mode: ViewMode; label: string }[] = [
   { mode: 'workspace', label: 'Workspace' },
   { mode: 'files', label: 'Files' },
+  { mode: 'canvas', label: 'Canvas' },
   { mode: 'agents', label: 'Agents' },
   { mode: 'transcript', label: 'Transcript' },
   { mode: 'ruleset', label: 'Ruleset' },
@@ -60,8 +64,18 @@ function ProjectRow({ project, here, onSelect }: { project: ProjectRecord; here:
 }
 
 function ThreadRow({ thread, here, onSelect }: { thread: ThreadRecord; here: boolean; onSelect(): void }) {
+  // A chat mention pointing at this thread lights the row — the chip stays
+  // quiet, the object glows. The amber engine may additionally grant this
+  // row the app's one gold dot (its thread holds the item needing Chris),
+  // which releases to sage as the item settles.
+  const isLit = useHighlightedObject() === threadObjectId(thread.id);
+  const attention = useAttention();
+  const needsYou = attention.goldThreadId === thread.id;
+  const settlingHere = !needsYou && attention.settlingThreadId === thread.id;
+  const rowClass = `studio-thread${here ? ' studio-here' : ''}${isLit ? ' studio-lit' : ''}`
+    + `${needsYou ? ' studio-needs' : ''}${settlingHere ? ' studio-settling' : ''}`;
   return (
-    <button type="button" className={here ? 'studio-thread studio-here' : 'studio-thread'} onClick={onSelect}>
+    <button type="button" className={rowClass} onClick={onSelect}>
       <span className="studio-dot" />
       <span className="studio-thread-name">{thread.title}</span>
       {thread.sessionReferences.length > 0 && <span className="studio-count">{thread.sessionReferences.length}</span>}
@@ -145,6 +159,17 @@ interface StudioWorkHeadProps {
   onToggleViewPanel(): void;
 }
 
+function SessionChip({ agent }: { agent: AgentInfo }) {
+  // Lights when a chat mention names this agent (its title, e.g. claude-1).
+  const isLit = useHighlightedObject() === agentObjectId(agent.title);
+  return (
+    <span className={isLit ? 'studio-sess studio-lit' : 'studio-sess'}>
+      <span className={agent.status === 'running' ? 'studio-sess-dot studio-live' : 'studio-sess-dot'} />
+      {agent.title} · {agent.sessionId.slice(0, 8)}
+    </span>
+  );
+}
+
 export function StudioWorkHead(props: StudioWorkHeadProps) {
   return (
     <div className="studio-work-head">
@@ -162,10 +187,7 @@ export function StudioWorkHead(props: StudioWorkHeadProps) {
       </nav>
       <span className="studio-head-spacer" />
       {props.sessionAgents.map((agent) => (
-        <span key={agent.agentId} className="studio-sess">
-          <span className={agent.status === 'running' ? 'studio-sess-dot studio-live' : 'studio-sess-dot'} />
-          {agent.provider} · {agent.sessionId.slice(0, 8)}
-        </span>
+        <SessionChip key={agent.agentId} agent={agent} />
       ))}
       <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
         <Settings size={14} />

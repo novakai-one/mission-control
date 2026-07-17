@@ -12,6 +12,7 @@ import { FilesPanel } from './files/index.js';
 import { SubTimeline, SubagentInspector, useSubagentState } from './subagent/index.js';
 import { SidePanel } from './sidepanel/index.js';
 import { AgentsView, useAgentsState } from './agents/index.js';
+import { CanvasView, CANVAS_CHANGED_EVENT } from './canvas/index.js';
 import { ViewPanel, useViewPanelState } from './viewpanel/index.js';
 import { WorkspaceTimeline } from './workspace/timeline/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
@@ -267,8 +268,13 @@ export function DashboardShell() {
           if (message.event?.kind === 'usage') refetchUsage(1500);
           if (message.subagentId && message.event) subagentLiveRef.current?.(message.subagentId, message.event);
         }
-      } else if (message.event === 'watch-started') {
-        // Watch acknowledgement — must not fall through to the debug message list.
+      } else if (message.event === 'watch-started' || message.event === 'message-envelope') {
+        // Watch acks and tunnel envelopes (consumed via the agentSocket
+        // singleton) must not fall through to the debug message list.
+      } else if (message.event === 'canvas-event') {
+        // External canvas write (the ./canvas CLI, an editor) — the always-
+        // mounted CanvasView listens for this and reloads its document.
+        window.dispatchEvent(new CustomEvent(CANVAS_CHANGED_EVENT, { detail: message.payload }));
       } else if (message.event === 'build-session' && message.payload?.sessionId && message.payload?.projectDir) {
         const { sessionId, projectDir } = message.payload;
         setSessions(prev => prev.some(session => session.sessionId === sessionId)
@@ -375,6 +381,8 @@ export function DashboardShell() {
           onCreate={agentsState.createAgent}
           visible={viewMode === 'agents'}
         />
+        {/* Always mounted so the map's pan/zoom and selection survive tab switches. */}
+        <CanvasView visible={viewMode === 'canvas'} />
         {viewMode === 'workspace' ? (
           <WorkspaceTimeline
             project={workspace.selectedProject}
@@ -469,6 +477,7 @@ export function DashboardShell() {
           thread={workspace.selectedThread}
           projection={workspace.projection}
           runtimeAgent={runtimeAgent}
+          agents={agentsState.agents}
           onLaunch={workspace.launchProvider}
           onAttach={workspace.attachSession}
           onOpenAgent={openAgent}

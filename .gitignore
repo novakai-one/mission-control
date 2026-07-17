@@ -10,3 +10,4 @@ desktop/package-lock.json
 .novakai-command/terminal-host/
 .mission-control/
 .novakai/
+.novakai-command/messages.jsonl

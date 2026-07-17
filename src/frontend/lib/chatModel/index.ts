@@ -1,8 +1,9 @@
 // Chat panel read model. Maps canonical thread events into the studio reply
 // grammar: a caption plus numbered state rows. Every row carries `objectId` —
-// the future linked-mention target (the workspace object the row lights when
-// clicked). It is null until the mention engine lands; keeping the slot in the
-// model now means message rows can adopt targets without a schema change.
+// the linked-mention target: when the caller passes the resolvable mention
+// targets, a row whose text names a workspace object gets that object's id,
+// and clicking the row lights it.
+import { firstMentionObjectId, type MentionTarget } from '../mentions/index.js';
 import type { CanonicalEvent, ThreadProjection } from '../../../shared/provider/schema.js';
 
 export interface ChatRow {
@@ -54,26 +55,30 @@ export function formatChatTime(timestamp: string): string {
   return parsed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }
 
-function taskRows(event: CanonicalEvent): ChatRow[] {
-  return (event.tasks ?? []).map((task, index) => ({
-    id: `${event.id}:${task.id || index}`,
-    mono: '',
-    text: task.status === 'in_progress' ? (task.activeForm || task.subject) : task.subject,
-    state: task.status.replace(/_/g, ' '),
-    settled: task.status === 'completed',
-    objectId: null,
-  }));
+function taskRows(event: CanonicalEvent, targets: MentionTarget[]): ChatRow[] {
+  return (event.tasks ?? []).map((task, index) => {
+    const text = task.status === 'in_progress' ? (task.activeForm || task.subject) : task.subject;
+    return {
+      id: `${event.id}:${task.id || index}`,
+      mono: '',
+      text,
+      state: task.status.replace(/_/g, ' '),
+      settled: task.status === 'completed',
+      objectId: firstMentionObjectId(text, targets),
+    };
+  });
 }
 
-function approvalRows(event: CanonicalEvent): ChatRow[] {
+function approvalRows(event: CanonicalEvent, targets: MentionTarget[]): ChatRow[] {
   const approval = event.approval;
   if (!approval) return [];
   const rows: ChatRow[] = [];
   if (approval.command) {
-    rows.push({ id: `${event.id}:command`, mono: approval.command, text: approval.reason ?? '', state: 'awaiting', settled: false, objectId: null });
+    const text = approval.reason ?? '';
+    rows.push({ id: `${event.id}:command`, mono: approval.command, text, state: 'awaiting', settled: false, objectId: firstMentionObjectId(`${approval.command} ${text}`, targets) });
   }
   for (const [index, write] of approval.writes.entries()) {
-    rows.push({ id: `${event.id}:write:${index}`, mono: write, text: '', state: 'writes', settled: false, objectId: null });
+    rows.push({ id: `${event.id}:write:${index}`, mono: write, text: '', state: 'writes', settled: false, objectId: firstMentionObjectId(write, targets) });
   }
   return rows;
 }
@@ -84,10 +89,10 @@ function captionFor(event: CanonicalEvent): string {
   return event.text || event.rawType;
 }
 
-function toChatMessage(event: CanonicalEvent, names: Map<string, string>, needsYou: boolean): ChatMessage {
+function toChatMessage(event: CanonicalEvent, names: Map<string, string>, needsYou: boolean, targets: MentionTarget[]): ChatMessage {
   const fromYou = event.kind === 'user';
-  const rows = event.kind === 'task' ? taskRows(event)
-    : event.kind === 'approval' ? approvalRows(event)
+  const rows = event.kind === 'task' ? taskRows(event, targets)
+    : event.kind === 'approval' ? approvalRows(event, targets)
     : [];
   return {
     id: event.id,
@@ -104,7 +109,7 @@ function toChatMessage(event: CanonicalEvent, names: Map<string, string>, needsY
  * events stay in the workspace timeline, not the conversation. Only an
  * approval that is still the thread's newest word may claim attention —
  * exactly one gold label, released the moment anything follows it. */
-export function buildChatMessages(projection: ThreadProjection | null, limit = 80): ChatMessage[] {
+export function buildChatMessages(projection: ThreadProjection | null, limit = 80, targets: MentionTarget[] = []): ChatMessage[] {
   if (!projection) return [];
   const names = agentNames(projection.events);
   const lastEvent = projection.events[projection.events.length - 1];
@@ -112,7 +117,7 @@ export function buildChatMessages(projection: ThreadProjection | null, limit = 8
   return projection.events
     .filter((event) => CHAT_KINDS.has(event.kind))
     .slice(-limit)
-    .map((event) => toChatMessage(event, names, event.id === openApprovalId));
+    .map((event) => toChatMessage(event, names, event.id === openApprovalId, targets));
 }
 
 export type AgentActivity = 'idle' | 'working' | 'replying' | 'ready' | 'settled';
