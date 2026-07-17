@@ -70,7 +70,11 @@ export function snapshotDir(short) {
 
 export function readCurrent() {
   if (!existsSync(CURRENT_FILE)) return null;
-  return JSON.parse(readFileSync(CURRENT_FILE, 'utf8'));
+  try {
+    return JSON.parse(readFileSync(CURRENT_FILE, 'utf8'));
+  } catch {
+    fail("current.json is unreadable — run 'npm run redeploy' to rewrite the pointer.");
+  }
 }
 
 export function writeCurrent(short) {
