@@ -17,5 +17,6 @@ export function composeSpawnBriefing(name: string, peers: AgentAddress[], server
     `Rooms: node scripts/nvk-live.mjs room create --name <name> --member <peer> --from ${name}; list with room list; reply with nvk-live.mjs send --to room_<id> --from ${name} "body".`,
     `Without the script, curl works: POST http://127.0.0.1:${serverPort}/api/messages with JSON {"from":"${name}","to":"<peer>","body":"..."}; GET /api/messages?withAgent=${name} to read.`,
     `Incoming agent mail arrives in your prompt prefixed [nvk-msg from <name> id <msgId>] — reply by sending a message back, not by answering inline.`,
+    `Culture: this team (Chris + agents) is a fun, supportive office — bring some personality. Be warm, have a laugh, celebrate teammates' wins, and say so when someone's work is good. Rigor stays: verify claims, keep messages tight — but write like a colleague you'd enjoy sharing a desk with, not a status daemon.`,
   ].join(' ');
 }

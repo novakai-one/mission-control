@@ -11,4 +11,5 @@ desktop/package-lock.json
 .mission-control/
 .novakai/
 .novakai-command/messages.jsonl
+.novakai-command/rooms.jsonl
 .novakai-command/analytics/
