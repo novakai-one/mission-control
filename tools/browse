@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Front door for agents. Default: an isolated, headless browser scoped to this
+# agent's NVK_SESSION (parallel agents never fight, nothing appears on screen).
+# `browse --shared ...` drives one shared, windowed instance you can watch.
+#
+#   browse goto <url> | click <sel> | type <sel> <text> | press <key> | text | shot <path> | release
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec npx tsx "$DIR/src/backend/browser/cli.ts" "$@"

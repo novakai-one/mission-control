@@ -51,8 +51,10 @@ export class SessionBroker {
     this.load();
   }
 
-  /** Get the agent's session, creating (or replacing a stale) one as needed. */
-  async acquire(sessionId: string, agentId: string): Promise<SessionHandle> {
+  /** Get the agent's session, creating (or replacing a stale) one as needed.
+   *  `spec` only applies when a fresh instance is launched; a reused session
+   *  keeps whatever it was launched with. */
+  async acquire(sessionId: string, agentId: string, spec: LaunchSpec = { headless: true }): Promise<SessionHandle> {
     await this.sweep();
     const existing = this.sessions.get(sessionId);
     const alive = existing ? this.isAlive(existing.instance.processId) : false;
@@ -61,7 +63,7 @@ export class SessionBroker {
       return this.renew(decision.session);
     }
     if (existing) await this.provider.dispose(existing.instance);
-    return this.create(sessionId, agentId);
+    return this.create(sessionId, agentId, spec);
   }
 
   private renew(session: Session): SessionHandle {
@@ -71,8 +73,8 @@ export class SessionBroker {
     return this.toHandle(renewed);
   }
 
-  private async create(sessionId: string, agentId: string): Promise<SessionHandle> {
-    const instance = await this.provider.launch({ headless: true });
+  private async create(sessionId: string, agentId: string, spec: LaunchSpec): Promise<SessionHandle> {
+    const instance = await this.provider.launch(spec);
     const session: Session = {
       sessionId,
       agentId,

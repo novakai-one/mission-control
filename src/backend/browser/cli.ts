@@ -10,31 +10,40 @@ import path from 'node:path';
 import { SessionBroker } from './broker.js';
 import { ChromePool } from './provider/chrome-pool.js';
 import { CdpControl } from './provider/cdp-control.js';
-import type { ActionResult, BrowserCommand, CommandKind } from './domain/types.js';
+import type { ActionResult, BrowserCommand, CommandKind, LaunchSpec } from './domain/types.js';
 
 const DEFAULT_REGISTRY_DIR = path.join(homedir(), '.novakai', 'browser', 'sessions');
+// The single shared, watchable instance behind `--shared` (one for everyone).
+const SHARED_SESSION_ID = '__shared__';
 
 interface Invocation {
   sessionId: string;
+  spec: LaunchSpec;
   verb: string;
   args: string[];
 }
 
 function parseInvocation(argv: string[]): Invocation {
   let sessionId = process.env.NVK_SESSION ?? '';
+  let shared = false;
   const rest: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--session') {
       sessionId = argv[index + 1] ?? '';
       index += 1;
-      continue;
+    } else if (argv[index] === '--shared') {
+      shared = true;
+    } else {
+      rest.push(argv[index]);
     }
-    rest.push(argv[index]);
   }
-  if (!sessionId) throw new Error('no session id: pass --session <id> or set NVK_SESSION');
+  // Default: isolated, headless, one instance per agent (never fights, never
+  // shows a window). `--shared`: one watchable windowed instance for everyone.
+  if (shared) sessionId = SHARED_SESSION_ID;
+  if (!sessionId) throw new Error('no session id: pass --session <id>, set NVK_SESSION, or use --shared');
   const [verb, ...args] = rest;
   if (!verb) throw new Error('no verb given');
-  return { sessionId, verb, args };
+  return { sessionId, spec: { headless: !shared }, verb, args };
 }
 
 function parseCommand(verb: string, args: string[]): BrowserCommand {
@@ -67,7 +76,7 @@ async function main(): Promise<void> {
     return;
   }
   const command = parseCommand(invocation.verb, invocation.args);
-  const handle = await broker.acquire(invocation.sessionId, process.env.NVK_AGENT ?? 'local');
+  const handle = await broker.acquire(invocation.sessionId, process.env.NVK_AGENT ?? 'local', invocation.spec);
   const result = await new CdpControl().perform(handle.cdpEndpoint, command);
   if (result.success && command.kind === 'goto') broker.record(invocation.sessionId, result.pageUrl);
   emit(result);

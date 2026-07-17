@@ -11,9 +11,11 @@ import type { BrowserInstance, LaunchSpec } from '../domain/types.js';
 class FakeProvider implements BrowserProvider {
   launches = 0;
   disposed: number[] = [];
+  lastSpec: LaunchSpec | null = null;
   private nextPort = 9300;
-  async launch(_spec: LaunchSpec): Promise<BrowserInstance> {
+  async launch(spec: LaunchSpec): Promise<BrowserInstance> {
     this.launches += 1;
+    this.lastSpec = spec;
     const port = this.nextPort += 1;
     return { processId: 1000 + port, port, userDataDir: `/tmp/udd-${port}`, cdpEndpoint: `http://127.0.0.1:${port}` };
   }
@@ -90,10 +92,18 @@ async function testReleaseDisposesAndDrops(): Promise<void> {
   assert.equal(broker.list().length, 0, 'released session no longer listed');
 }
 
+async function testLaunchSpecFlowsToProvider(): Promise<void> {
+  const provider = new FakeProvider();
+  const broker = new SessionBroker({ provider, registryDir: registryDir(), isAlive: () => true });
+  await broker.acquire('shared', 'a1', { headless: false });
+  assert.equal(provider.lastSpec?.headless, false, 'the launch spec reaches the provider (--shared => windowed)');
+}
+
 await testGetOrCreateReuses();
 await testDistinctIdsAreIsolated();
 await testReconnectAcrossProcesses();
 await testExpiredLeaseRelaunches();
 await testDeadInstanceRelaunches();
 await testReleaseDisposesAndDrops();
+await testLaunchSpecFlowsToProvider();
 console.log('PASS');
