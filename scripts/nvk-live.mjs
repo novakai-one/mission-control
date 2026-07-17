@@ -16,7 +16,12 @@ function takeAll(name) {
   return values.filter(Boolean);
 }
 
-const backends = normalizeBackends(takeAll('--backend'));
+const backendOptions = takeAll('--backend');
+const backends = normalizeBackends(
+  backendOptions.length > 0
+    ? backendOptions
+    : (process.env.NVK_COMMAND_URL ? [process.env.NVK_COMMAND_URL] : []),
+);
 
 if (command === 'roster') {
   const discovery = await discoverAgents(backends);
