@@ -43,6 +43,7 @@ node scripts/nvk-oversee.mjs watch \
   --backend http://127.0.0.1:3031 \
   --backend http://127.0.0.1:3131 \
   --monitor "#1 Product Plan" \
+  --monitor "Fable support ftw" \
   --interval 15 \
   --stale 180 \
   --heartbeat 600 \
@@ -50,7 +51,7 @@ node scripts/nvk-oversee.mjs watch \
 ```
 
 Oversight joins the live roster, parent transcripts, and subagent metadata.
-`--monitor` scopes alerts to one lead, preventing unrelated-team noise.
+Repeat `--monitor` for each lead, preventing unrelated-team noise.
 Notifications fire on state changes, plus one ten-minute heartbeat.
 Async launch acknowledgements remain running until completion evidence arrives.
 Missing transcript support renders unavailable; it never fabricates clean state.

@@ -22,18 +22,20 @@ const intervalMs = Number(takeOption('--interval') ?? 15) * 1000;
 const staleMs = Number(takeOption('--stale') ?? 120) * 1000;
 const heartbeatMs = Number(takeOption('--heartbeat') ?? 600) * 1000;
 const notify = takeOption('--notify');
-const monitor = takeOption('--monitor');
+const monitors = takeAll('--monitor');
 const json = args.includes('--json');
 let previous = '';
 let lastPublishedAt = 0;
 
 async function run() {
   const inspected = await inspectTeam(backends, { staleMs });
-  const snapshot = monitor
+  const snapshot = monitors.length > 0
     ? {
         ...inspected,
         agents: inspected.agents.filter((agent) => (
-          agent.agentId === monitor || agent.title?.toLowerCase().includes(monitor.toLowerCase())
+          monitors.some((monitor) => (
+            agent.agentId === monitor || agent.title?.toLowerCase().includes(monitor.toLowerCase())
+          ))
         )),
       }
     : inspected;
@@ -53,6 +55,6 @@ async function run() {
 await run();
 if (command === 'watch') setInterval(() => void run().catch((error) => console.error(error.message)), intervalMs);
 else if (command !== 'once') {
-  console.error('usage: nvk-oversee <once|watch> [--backend URL] [--monitor agent] [--interval seconds] [--stale seconds] [--heartbeat seconds] [--notify agent] [--json]');
+  console.error('usage: nvk-oversee <once|watch> [--backend URL] [--monitor agent ...] [--interval seconds] [--stale seconds] [--heartbeat seconds] [--notify agent] [--json]');
   process.exitCode = 1;
 }
