@@ -71,12 +71,9 @@ export class ServerController {
   ) {
     this.agentsHub = new AgentsHub(this.activeSockets, terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
-    this.canvasHub = new CanvasHub((event, payload) => this.broadcastEvent(event, payload));
-    this.analyticsHub = new AnalyticsHub((event, payload) => this.broadcastEvent(event, payload));
-    this.designHub = new DesignHub((event, payload) => this.broadcastEvent(event, payload));
+    [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
     this.messagingHub = this.buildMessagingHub();
-    this.server = createServer(this.app);
-    this.wsServer = new WebSocketServer({ server: this.server });
+    this.server = createServer(this.app); this.wsServer = new WebSocketServer({ server: this.server });
 
     this.configureExpress();
     this.configureWebSockets();
@@ -85,6 +82,12 @@ export class ServerController {
     this.coordinator.setBroadcastHandler((event, payload) => {
       this.broadcastEvent(event, payload);
     });
+  }
+
+  /** Studio lenses share one event broadcast boundary. */
+  private buildStudioHubs(): [CanvasHub, AnalyticsHub, DesignHub] {
+    const broadcast = (event: string, payload: unknown): void => this.broadcastEvent(event, payload);
+    return [new CanvasHub(broadcast), new AnalyticsHub(broadcast), new DesignHub(broadcast)];
   }
 
   /**
