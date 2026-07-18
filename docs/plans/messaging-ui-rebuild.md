@@ -395,6 +395,42 @@ in a browser.**
 - **D11 (font):** keep the app's existing Google Fonts Inter `@import` rather than bundling
   Inter; offline dev without network falls back to system-ui (acceptable?).
 
+## 9b. ASSUMPTIONS added during the build (2026-07-19, builder)
+
+- **D1′ (density-as-data, OWNER-LOCKED, supersedes D1):** density is a typed setting, not
+  fixed values — `MessagingTabSettings { density: 'low'|'normal'|'high' }` in
+  `messages/model.ts` with `DENSITY_SCALE = { low: 1.0, normal: 1.3, high: 1.7 }`.
+  `MessagesView` writes the factor onto `.msg-view` as `--msg-scale` (via `setProperty`,
+  inline `style=` is lint-banned); every size token in `tokens.css` is
+  `calc(spec px × var(--msg-scale))`. One knob rescales the whole tab; swapping
+  `MESSAGING_SETTINGS` to an app store later is a one-line change. Default: `normal`.
+- **D2′ (TEAMS, OWNER-LOCKED, supersedes D2):** section hidden entirely.
+- **D9′ (delegation card):** CUT, not shipped dormant (D9's own "cut it" option) — no data
+  source, and dead code fights the change-easy philosophy. Reply context kept (real data:
+  `envelope.threadId` → "↳ Replying to <name>", only when the parent envelope is known).
+- **A12 (test placement):** `messages/tests/model.test.ts`, not the plan's
+  `messages/model.test.ts` — the structural lint rule (max 2 code files/dir) forbids
+  `index.tsx + model.ts + model.test.ts` in one directory.
+- **A13 (shared chrome CSS):** tab bars, ghost glyph button, section headers live in the
+  shell `messages/index.css` (single source used by both rails) — per-module duplication
+  would fight the one-place-to-change rule. Everything else stays per-module.
+- **A14 (timestamps):** `formatClockTime` (HH:MM 24h, in `model.ts`) for the storyboard's
+  "12:41" look, not `formatChatTime`'s locale am/pm.
+- **A15 (Review semantics):** right-rail "Review" = scroll the thread to the failed row
+  (DOM id `msg-row-<envelopeId>`) AND dismiss the failed message's attention item. The
+  notification row itself persists — the failed envelope is honest history.
+- **A16 (context collapse):** the storyboard's ghost icon button in the context tab bar
+  collapses the rail; a floating ghost button at the thread's top-right reopens it. The
+  rail header's ghost button opens the new-room picker.
+- **A17 (phone topbar):** at ≤800px a thread topbar appears (rail toggle + current lane
+  label); selecting a lane dismisses the rail overlay.
+- **A18 (honest status labels):** failed envelopes carry an amber "Delivery failed" label
+  and queued ones a dim "Sending…" — the storyboard has no status grammar, but a silent
+  failure is worse than a net-new label.
+- **A19 (#team auto-read on first visit):** pre-existing app semantics (freshest lane
+  auto-opens; `#team` is the only lane before history loads, so it self-reads on a truly
+  fresh browser). Kept as-is from the old messenger — not a rebuild regression.
+
 ## 10. Owner decisions needed BEFORE building
 
 1. **Density** (D1): approve ×1.3/×1.2 real-density mapping, or pixel-match the miniature.
@@ -402,3 +438,28 @@ in a browser.**
 3. **Amber law** (D8): confirm the storyboard's amber-everywhere wins inside the tab.
 4. **Presence invention** (D3): approve the unread/running/exited → amber/green/gray mapping.
 5. **Placeholders** (D10): confirm Stats = real counts, Tasks/Settings = designed empties.
+
+---
+
+## BUILD EVIDENCE (2026-07-19 — all 6 tasks landed, gates green per task)
+
+Commits (branch `kimi/messaging-ui`, worktree `Novakai-Command-kimi-messaging-ui`):
+
+- `97cf4cf6` task 1 — tokens.css (density-as-data --msg-* vars), model.ts + tests, RoomsRail, shell grid
+- `8fd4da5c` task 2 — MessageFeed (day pills, rows, reply context, working label, ported scroll/cursor)
+- `05e5c6ab` task 3 — ComposerBar (record-first send, per-lane drafts, error line)
+- `ce900d4b` task 4 — ContextPanel (Summary + person Tasks/Stats/Settings, shared chrome)
+- `1ff365dd` task 5 — pressed states, phone topbar + rail overlay
+- (task 6 commit adds this note; screenshots live outside the repo)
+
+Verified in a real browser (playwright, `tools/browse` + ad-hoc scripts) against the live
+backend on :3030/:3031 with seeded rooms/messages: room view, DM view, Stats tab,
+send happy path (ws echo), send failure path (404 roster hint + in-row "Delivery failed"),
+Review scroll, new-room picker (correctly empty with no live agents), 1100px + 700px
+responsive. Screenshots: `/Users/christopherdasca/Documents/kimi/workspace/messaging-ui-review/`
+(scene-1-room-summary.png, scene-2-dm-tasks.png, scene-2-dm-stats.png,
+scene-2-dm-settings.png, msg-error.png, msg-responsive-*.png).
+
+Not verified visually (no provider CLIs on this machine → no live agents): green presence
+dot, "Agent working…" thread label, "Working…" person badge. All three ride the same
+`workingAgentFor` / `presenceToneFor` predicates, unit-tested in `messages/tests/model.test.ts`.

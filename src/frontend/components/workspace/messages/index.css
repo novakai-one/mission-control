@@ -1,4 +1,5 @@
 /* Messages tab shell — the storyboard's 3-rail grid. Values: tokens.css. */
+@import './tokens.css';
 
 .msg-view {
   position: relative;
