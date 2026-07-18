@@ -1,6 +1,8 @@
 import fs from 'node:fs';
-import os from 'node:os';
+import { homedir } from 'node:os';
 import path from 'node:path';
+
+const DEFAULT_KIMI_CLI = path.join(homedir(), '.kimi-code', 'bin', 'kimi');
 
 export interface AppConfig {
   workspacePath: string;
@@ -29,8 +31,7 @@ export class ConfigManager {
     const defaultSettings: AppConfig = {
       workspacePath: process.cwd(),
       serverPort: 3031,
-      claudeCliPath: 'claude', codexCliPath: 'codex',
-      kimiCliPath: path.join(os.homedir(), '.kimi-code', 'bin', 'kimi'),
+      claudeCliPath: 'claude', codexCliPath: 'codex', kimiCliPath: DEFAULT_KIMI_CLI,
       geminiApiKey: process.env.GEMINI_API_KEY || ''
     };
 

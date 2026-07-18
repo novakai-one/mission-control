@@ -26,11 +26,11 @@ function fakeWrite(agentId: string, data: string): boolean {
   return true;
 }
 
-function envelope(to: string, from = 'claude-1'): MessageEnvelope {
+function envelope(recipient: string, from = 'claude-1'): MessageEnvelope {
   return {
     id: `msg_${Math.random().toString(36).slice(2)}`,
     from,
-    'to': to,
+    'to': recipient,
     delivery: 'normal',
     body: 'hello',
     createdAt: new Date().toISOString(),

@@ -26,8 +26,8 @@ function testAppendIsVisibleFromMemory(): string {
   const store = new MessageStore(join(directory, 'messages.jsonl'));
   store.append(envelope('msg_one'));
   store.append(envelope('msg_two'));
-  const ids = store.history().map((message) => message.id);
-  assert.deepEqual(ids, ['msg_one', 'msg_two'], 'appends stay visible in first-seen order');
+  const listed = store.history().map((message) => message.id);
+  assert.deepEqual(listed, ['msg_one', 'msg_two'], 'appends stay visible in first-seen order');
   return join(directory, 'messages.jsonl');
 }
 
@@ -35,8 +35,8 @@ function testExternalAppendBecomesVisible(storePath: string): void {
   const store = new MessageStore(storePath);
   assert.equal(store.history().length, 2, 'baseline from the previous writer');
   appendFileSync(storePath, JSON.stringify(envelope('msg_external')) + '\n');
-  const ids = store.history().map((message) => message.id);
-  assert.deepEqual(ids, ['msg_one', 'msg_two', 'msg_external'],
+  const listed = store.history().map((message) => message.id);
+  assert.deepEqual(listed, ['msg_one', 'msg_two', 'msg_external'],
     'a size/mtime probe re-folds when an outside writer appends (nvk-msg fallback)');
 }
 

@@ -75,7 +75,7 @@ export class InterruptRateLimiter {
 }
 
 export class MessageRouter {
-  private readonly adapters: { pty: PtyDeliveryAdapter; human: HumanDeliveryAdapter };
+  private readonly adapters: { agent: PtyDeliveryAdapter; human: HumanDeliveryAdapter };
 
   constructor(
     private readonly store: MessageStore,
@@ -84,7 +84,7 @@ export class MessageRouter {
     private readonly roster: () => AgentAddress[],
     private readonly interruptLimiter = new InterruptRateLimiter(),
   ) {
-    this.adapters = { pty: new PtyDeliveryAdapter(delivery), human: new HumanDeliveryAdapter() };
+    this.adapters = { agent: new PtyDeliveryAdapter(delivery), human: new HumanDeliveryAdapter() };
   }
 
   async route(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
@@ -118,7 +118,7 @@ export class MessageRouter {
       const address = liveByName.get(member);
       if (!address) continue;
       try {
-        await this.adapters.pty.deliver({ kind: 'agent', address }, envelope, formatRoomInbound(room, envelope));
+        await this.adapters.agent.deliver({ kind: 'agent', address }, envelope, formatRoomInbound(room, envelope));
       } catch {
         failed.push(member);
       }
@@ -147,7 +147,7 @@ export class MessageRouter {
   }
 
   private async deliverResolved(envelope: MessageEnvelope, actor: ResolvedActor): Promise<DeliveryReceipt> {
-    const adapter = actor.kind === 'human' ? this.adapters.human : this.adapters.pty;
+    const adapter = actor.kind === 'human' ? this.adapters.human : this.adapters.agent;
     try {
       const receipt = await adapter.deliver(actor, envelope);
       this.settle(envelope, 'delivered');
