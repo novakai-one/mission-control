@@ -4,7 +4,7 @@
 // audit record: the envelope is appended first, and every outcome lands as
 // a status amendment.
 import { MessageStore } from '../store/index.js';
-import { DeliveryFailedError, HumanDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../delivery/index.js';
+import { HumanDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../delivery/index.js';
 import { resolveActor } from '../actors/index.js';
 import type { ResolvedActor } from '../actors/index.js';
 import { RoomStore } from '../rooms/index.js';
@@ -45,12 +45,8 @@ export class NotARoomMemberError extends Error {
   }
 }
 
-/** Room fan-out is all-or-nothing across live members: any failed write fails the envelope. */
-export class RoomDeliveryFailedError extends DeliveryFailedError {
-  constructor(room: Room, members: string[]) {
-    super(`room "${room.name}" delivery failed for member(s): ${members.join(', ')}`);
-  }
-}
+/** Room fan-out is best-effort AND honest: live members still get the write;
+ *  members whose PTY failed land on the receipt and the envelope settles 'partial'. */
 
 export class InterruptRateLimiter {
   private readonly sentAt = new Map<string, number[]>();
@@ -104,7 +100,10 @@ export class MessageRouter {
       throw this.fail(envelope, new NotARoomMemberError(envelope.from, envelope.to));
     }
     const failed = await this.deliverRoomMembers(room, envelope);
-    if (failed.length > 0) throw this.fail(envelope, new RoomDeliveryFailedError(room, failed));
+    if (failed.length > 0) {
+      this.settle(envelope, 'partial');
+      return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'room', failed };
+    }
     this.settle(envelope, 'delivered');
     return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'room' };
   }
