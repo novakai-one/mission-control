@@ -3,7 +3,11 @@
 // states) live entirely here; the router doesn't know them.
 //   normal:    type + submit (both CLIs queue mid-turn input natively)
 //   interrupt: Esc first, settle, then type + submit
+// Every recipient kind sits behind MessageDeliveryAdapter so the router is
+// uniform: PtyDeliveryAdapter is today's typing, HumanDeliveryAdapter is the
+// log+ws record the human reads, and future API-native agents slot in here.
 import { formatInbound } from '../types.js';
+import type { ResolvedActor } from '../actors/index.js';
 import type { AgentAddress, DeliveryReceipt, MessageEnvelope } from '../types.js';
 
 /** The one TerminalManager capability delivery needs. */
@@ -62,5 +66,49 @@ export class PtyDelivery {
     if (!this.writer.write(address.agentId, data)) {
       throw new DeliveryFailedError(`no live PTY for ${address.name} (${address.agentId})`);
     }
+  }
+}
+
+/** The delivery seam: one adapter per recipient kind (messaging rework task 3). */
+export interface MessageDeliveryAdapter {
+  deliver(
+    target: ResolvedActor,
+    envelope: MessageEnvelope,
+    line?: string,
+  ): Promise<DeliveryReceipt>;
+}
+
+/** Today's PTY typing behind the seam. PtyDelivery itself stays exported for existing callers. */
+export class PtyDeliveryAdapter implements MessageDeliveryAdapter {
+  constructor(private readonly ptyDelivery: PtyDelivery) {}
+
+  deliver(
+    target: ResolvedActor,
+    envelope: MessageEnvelope,
+    line?: string,
+  ): Promise<DeliveryReceipt> {
+    if (target.kind !== 'agent') {
+      throw new DeliveryFailedError(`PTY delivery requires an agent recipient, got ${target.kind}`);
+    }
+    return this.ptyDelivery.deliver(target.address, envelope, line);
+  }
+}
+
+/**
+ * The human reads the log + ws push, so "delivery" is the record itself —
+ * persistence and the message-envelope broadcast already happen via
+ * store.onAppend. The receipt honestly reports mode 'ui'.
+ */
+export class HumanDeliveryAdapter implements MessageDeliveryAdapter {
+  deliver(target: ResolvedActor, envelope: MessageEnvelope): Promise<DeliveryReceipt> {
+    if (target.kind !== 'human') {
+      throw new DeliveryFailedError(`human delivery requires the human recipient, got ${target.kind}`);
+    }
+    const receipt: DeliveryReceipt = {
+      messageId: envelope.id,
+      deliveredAt: new Date().toISOString(),
+      mode: 'ui',
+    };
+    return Promise.resolve(receipt);
   }
 }
