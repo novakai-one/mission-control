@@ -13,7 +13,11 @@ export interface TokenTotals {
 
 export type ModelTotals = Record<string, TokenTotals>;
 
-export interface AgentUsage { perModel: ModelTotals }
+export interface AgentUsage {
+  perModel: ModelTotals;
+  /** Provider-applied model from the newest usage-bearing transcript event. */
+  latestModel?: string | null;
+}
 
 export interface SubagentUsage extends AgentUsage {
   agentId: string;
@@ -104,7 +108,11 @@ export async function fetchUsage(projectDir: string, sessionId: string): Promise
   const response = await fetch(`/api/usage?project=${encodeURIComponent(projectDir)}&session=${encodeURIComponent(sessionId)}`);
   if (!response.ok) return null;
   const data = await response.json();
-  return data?.main?.perModel && Array.isArray(data.subagents) ? data as SessionUsage : null;
+  return data?.main?.perModel
+    && (data.main.latestModel === undefined || typeof data.main.latestModel === 'string' || data.main.latestModel === null)
+    && Array.isArray(data.subagents)
+    ? data as SessionUsage
+    : null;
 }
 
 export function formatTokens(count: number): string {

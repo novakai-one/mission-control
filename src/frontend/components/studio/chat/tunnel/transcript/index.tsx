@@ -5,6 +5,7 @@
 // releases to sage.
 import React, { useEffect, useRef, useState } from 'react';
 import { messageItemId, useAttention } from '../../../../../lib/attention/index.js';
+import { anchorFor, saveAnchor } from '../../../../../lib/readCursor/index.js';
 import {
   CHRIS,
   formatRoute,
@@ -12,7 +13,8 @@ import {
   type Conversation,
   type TunnelEnvelope,
 } from '../../../../../lib/tunnelModel/index.js';
-import { formatChatTime } from '../../../../../lib/chatModel/index.js';
+import { avatarInitials, formatChatTime } from '../../../../../lib/chatModel/index.js';
+import { clearDraft, loadDraft, saveDraft } from '../../../../../lib/composerDraft/index.js';
 import type { MentionTarget } from '../../../../../lib/mentions/index.js';
 import { MarkdownText } from '../../../../../lib/markdown/index.js';
 import { MentionText } from '../../mention/index.js';
@@ -60,22 +62,26 @@ function TranscriptRow({ envelope, kind, liveNames, targets, onResolve }: Transc
   // Resolution is an explicit affordance — the gold meta line is a real
   // button. Nothing resolves by bubbling: clicks on the body or a mention
   // inside it can never release the amber.
+  const initials = avatarInitials(fromYou ? 'You' : envelope.from);
   return (
     <div className={rowClass}>
-      {holdsGold ? (
-        <button type="button" className={`${metaClass} st-tn-resolve`} onClick={() => onResolve(itemId)}>
-          <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
-        </button>
-      ) : (
-        <div className={metaClass}>
-          <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
+      <span className="st-av" aria-hidden="true">{initials}</span>
+      <div className="st-msg-c">
+        {holdsGold ? (
+          <button type="button" className={`${metaClass} st-tn-resolve`} onClick={() => onResolve(itemId)}>
+            <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
+          </button>
+        ) : (
+          <div className={metaClass}>
+            <RowMeta envelope={envelope} kind={kind} liveNames={liveNames} />
+          </div>
+        )}
+        <div className={`st-say st-tn-body${fromYou ? ' st-say-you' : ''}`}>
+          <MarkdownText
+            text={envelope.body}
+            renderText={(plain) => <MentionText text={plain} targets={targets} />}
+          />
         </div>
-      )}
-      <div className={`st-say st-tn-body${fromYou ? ' st-say-you' : ''}`}>
-        <MarkdownText
-          text={envelope.body}
-          renderText={(plain) => <MentionText text={plain} targets={targets} />}
-        />
       </div>
     </div>
   );
@@ -89,29 +95,62 @@ interface TranscriptProps {
   liveNames: string[];
   targets: MentionTarget[];
   onResolve(itemId: string): void;
+  /** Reports the newest envelope createdAt genuinely shown in the foreground
+   * — the ReadCursor advances on THIS, never on merely opening the lane. */
+  onSeen(seenCreatedAt: string): void;
 }
 
-export function Transcript({ conversation, messages, liveNames, targets, onResolve }: TranscriptProps) {
+export function Transcript({ conversation, messages, liveNames, targets, onResolve, onSeen }: TranscriptProps) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
+  const restoreRef = useRef<{ lane: string; done: boolean }>({ lane: '', done: false });
+  const anchorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastEnvelope = messages[messages.length - 1];
   const feedEdge = `${conversation.id}:${lastEnvelope?.id ?? ''}:${lastEnvelope?.status ?? ''}:${messages.length}`;
 
-  function trackScroll(): void {
-    const body = bodyRef.current;
-    if (body) atBottomRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < BOTTOM_SLACK_PX;
+  function reportSeen(): void {
+    if (atBottomRef.current && lastEnvelope && document.visibilityState === 'visible') {
+      onSeen(lastEnvelope.createdAt);
+    }
   }
 
-  // A lane switch always lands on the newest word; within a lane, follow the
-  // live edge only when already reading it — scrolled-up history reading is
-  // never yanked to the bottom by an arriving envelope.
+  function trackScroll(): void {
+    const body = bodyRef.current;
+    if (!body) return;
+    atBottomRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < BOTTOM_SLACK_PX;
+    reportSeen();
+    // The seat persists (debounced) so a reload restores this exact scroll.
+    if (anchorTimer.current) clearTimeout(anchorTimer.current);
+    const lane = conversation.id;
+    const seatTop = body.scrollTop;
+    anchorTimer.current = setTimeout(() => saveAnchor(lane, seatTop), 250);
+  }
+
+  // Opening a lane restores the saved seat (open ≠ read, C21); a lane never
+  // visited lands on the newest word. Within a lane, follow the live edge
+  // only when already reading it — scrolled-up history reading is never
+  // yanked to the bottom by an arriving envelope.
   useEffect(() => {
-    atBottomRef.current = true;
+    if (restoreRef.current.lane !== conversation.id) {
+      restoreRef.current = { lane: conversation.id, done: false };
+    }
   }, [conversation.id]);
 
   useEffect(() => {
     const body = bodyRef.current;
-    if (body && atBottomRef.current) body.scrollTop = body.scrollHeight;
+    if (!body) return;
+    if (!restoreRef.current.done && messages.length > 0) {
+      restoreRef.current.done = true;
+      const anchor = anchorFor(conversation.id);
+      body.scrollTop = anchor ?? body.scrollHeight;
+      atBottomRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < BOTTOM_SLACK_PX;
+      reportSeen();
+      return;
+    }
+    if (atBottomRef.current) {
+      body.scrollTop = body.scrollHeight;
+      reportSeen();
+    }
   }, [feedEdge]);
 
   if (messages.length === 0) return <div className="st-ai-quiet">Nothing said yet</div>;
@@ -137,9 +176,14 @@ interface MessengerComposerProps {
 }
 
 export function MessengerComposer({ conversation, onSend }: MessengerComposerProps) {
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => loadDraft(conversation.id));
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    setDraft(loadDraft(conversation.id));
+    setError(null);
+  }, [conversation.id]);
 
   async function send(): Promise<void> {
     const body = draft.trim();
@@ -149,6 +193,7 @@ export function MessengerComposer({ conversation, onSend }: MessengerComposerPro
     try {
       await onSend(body);
       setDraft('');
+      clearDraft(conversation.id);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
@@ -171,7 +216,11 @@ export function MessengerComposer({ conversation, onSend }: MessengerComposerPro
           aria-label={`Message ${conversation.title}`}
           placeholder="Say it in your own words…"
           value={draft}
-          onChange={(change) => setDraft(change.target.value)}
+          onChange={(change) => {
+            const nextDraft = change.target.value;
+            setDraft(nextDraft);
+            saveDraft(conversation.id, nextDraft);
+          }}
           onKeyDown={handleKeyDown}
         />
         <div className="st-composer-foot">

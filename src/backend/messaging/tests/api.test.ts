@@ -58,6 +58,13 @@ async function post(body: unknown): Promise<{ status: number; json: any }> {
   return { status: response.status, json: await response.json() };
 }
 
+async function postAsUser(body: unknown): Promise<{ status: number; json: any }> {
+  const response = await fetch(`${baseUrl}/api/user/messages`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  return { status: response.status, json: await response.json() };
+}
+
 async function getMessages(query: string): Promise<MessageEnvelope[]> {
   const response = await fetch(`${baseUrl}/api/messages${query}`);
   return (await response.json()).messages;
@@ -210,6 +217,76 @@ async function testProviderValidation(): Promise<void> {
   });
 }
 
+async function testRegisteredUserIdentityOwnsBrowserSends(): Promise<void> {
+  const identityResponse = await fetch(`${baseUrl}/api/identity`);
+  assert.equal(identityResponse.status, 200);
+  assert.deepEqual(await identityResponse.json(), {
+    identity: {
+      id: 'user:chris',
+      displayName: 'Chris',
+      memberName: 'chris',
+      role: 'owner',
+      permissions: ['messages:send', 'rooms:send'],
+    },
+  });
+
+  const direct = await postAsUser({ from: 'spoofed-agent', 'to': 'codex-1', body: 'browser-authored' });
+  assert.equal(direct.status, 201);
+  assert.equal(direct.json.envelope.from, 'chris', 'server identity overrides client sender claims');
+}
+
+async function testOwnerIdentitySendsToAnyMissionRoom(): Promise<void> {
+  const roomResponse = await fetch(`${baseUrl}/api/rooms`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Agents only', members: ['claude-1', 'codex-1'], from: 'claude-1' }),
+  });
+  const roomId = (await roomResponse.json()).room.roomId as string;
+  const roomSend = await postAsUser({ 'to': roomId, body: 'owner can address every mission room' });
+  assert.equal(roomSend.status, 201, 'owner identity has permission to send to any mission room');
+  assert.equal(roomSend.json.envelope.from, 'chris');
+}
+
+async function testOwnerTeamPostReachesEveryLiveAgent(): Promise<void> {
+  writes.length = 0;
+  const teamPost = await postAsUser({ 'to': TEAM_CHANNEL, body: 'Hello team, this is live chat.' });
+  assert.equal(teamPost.status, 201);
+  assert.deepEqual(
+    writes.filter((entry) => entry.data !== '\r').map((entry) => entry.agentId),
+    ['agent_1', 'agent_2'],
+    'Chris team chat is pushed to every live agent instead of waiting for terminal polling',
+  );
+  for (const write of writes.filter((entry) => entry.data !== '\r')) {
+    assert.match(write.data, /^\[nvk-msg from chris id msg_[^\]]+\] Hello team, this is live chat\.$/);
+  }
+}
+
+async function testAgentsCanReplyToUserInbox(): Promise<void> {
+  const reply = await post({ from: 'codex-1', 'to': 'chris', body: 'Reply visible in Mission Control.' });
+  assert.equal(reply.status, 201, 'Chris is a registered recipient even though he has no PTY');
+  assert.equal(reply.json.envelope.status, 'delivered');
+}
+
+async function testOpenBrowserTabsUpgradeToRegisteredIdentity(): Promise<void> {
+  const legacySend = await post({ from: 'chris', 'to': 'codex-1', body: 'legacy tab send' });
+  assert.equal(legacySend.status, 201);
+  assert.equal(legacySend.json.envelope.from, 'chris');
+
+  const roomResponse = await fetch(`${baseUrl}/api/rooms`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Legacy tab room',
+      members: ['codex-1'],
+      from: 'chris',
+    }),
+  });
+  assert.equal(roomResponse.status, 201);
+  const room = (await roomResponse.json()).room;
+  assert.equal(room.createdBy, 'chris');
+  assert.deepEqual(room.members, ['codex-1', 'chris']);
+}
+
 try {
   await testSendDeliversAndBroadcasts();
   await testHistoryQueryFilters();
@@ -220,6 +297,11 @@ try {
   await testChrisDirectMessageDeliveredViaUi();
   await testReservedNamesRejected();
   await testProviderValidation();
+  await testRegisteredUserIdentityOwnsBrowserSends();
+  await testOwnerIdentitySendsToAnyMissionRoom();
+  await testOwnerTeamPostReachesEveryLiveAgent();
+  await testAgentsCanReplyToUserInbox();
+  await testOpenBrowserTabsUpgradeToRegisteredIdentity();
   console.log('PASS');
 } finally {
   server.close();

@@ -7,6 +7,9 @@ export type ModelTotals = Record<string, TokenUsage & { requests: number }>;
 
 export interface AgentUsage {
   perModel: ModelTotals;
+  /** Model on the newest usage-bearing provider event. Unlike a control
+   * receipt, this is provider-applied evidence from the transcript. */
+  latestModel: string | null;
 }
 
 export interface SubagentUsage extends AgentUsage {
@@ -30,8 +33,11 @@ const usageCache = new Map<string, { fingerprint: string; usage: AgentUsage }>()
  */
 export function aggregateUsage(events: TranscriptEvent[]): AgentUsage {
   const byMsg = new Map<string, { model: string; usage: TokenUsage }>();
+  let latestModel: string | null = null;
   for (const event of events) {
-    if (event.kind === 'usage') byMsg.set(event.msgId, { model: event.model, usage: event.usage });
+    if (event.kind !== 'usage') continue;
+    byMsg.set(event.msgId, { model: event.model, usage: event.usage });
+    if (event.model) latestModel = event.model;
   }
   const perModel: ModelTotals = {};
   for (const { model, usage } of byMsg.values()) {
@@ -43,7 +49,7 @@ export function aggregateUsage(events: TranscriptEvent[]): AgentUsage {
     totals.output += usage.output;
     totals.requests += 1;
   }
-  return { perModel };
+  return { perModel, latestModel };
 }
 
 function cachedUsage(cacheKey: string, fingerprint: string, read: () => TranscriptEvent[]): AgentUsage {

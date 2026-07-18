@@ -56,6 +56,23 @@ export interface ChannelQuery {
 export const TEAM_CHANNEL = '#team';
 export const CHRIS_MEMBER = 'chris';
 
+export interface UserIdentity {
+  id: 'user:chris';
+  displayName: 'Chris';
+  memberName: typeof CHRIS_MEMBER;
+  role: 'owner';
+  permissions: readonly ['messages:send', 'rooms:send'];
+}
+
+/** Browser-authored messages resolve to this server-owned principal. */
+export const CHRIS_IDENTITY: UserIdentity = {
+  id: 'user:chris',
+  displayName: 'Chris',
+  memberName: CHRIS_MEMBER,
+  role: 'owner',
+  permissions: ['messages:send', 'rooms:send'],
+};
+
 export function isChannel(recipient: string): boolean {
   return recipient.startsWith('#');
 }

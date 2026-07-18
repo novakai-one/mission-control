@@ -10,10 +10,12 @@ import { useAttention } from '../../lib/attention/index.js';
 import { agentObjectId, threadObjectId } from '../../lib/mentions/index.js';
 import './index.css';
 
-export type ViewMode = 'workspace' | 'files' | 'canvas' | 'analytics' | 'design' | 'agents' | 'transcript' | 'ruleset' | 'debug';
+export type ViewMode = 'workspace' | 'organization' | 'messages' | 'files' | 'canvas' | 'analytics' | 'design' | 'agents' | 'transcript' | 'ruleset' | 'debug';
 
 const VIEW_TABS: { mode: ViewMode; label: string }[] = [
-  { mode: 'workspace', label: 'Workspace' },
+  { mode: 'workspace', label: 'Mission Control' },
+  { mode: 'organization', label: 'Organization' },
+  { mode: 'messages', label: 'Messages' },
   { mode: 'files', label: 'Files' },
   { mode: 'canvas', label: 'Canvas' },
   { mode: 'analytics', label: 'Analytics' },
@@ -156,6 +158,10 @@ interface StudioWorkHeadProps {
   onViewModeChange(mode: ViewMode): void;
   /** Live agents tied to the selected thread — rendered as session chips. */
   sessionAgents: AgentInfo[];
+  /** The whole fleet — the hero's presence cluster. */
+  agents: AgentInfo[];
+  project: ProjectRecord | null;
+  thread: ThreadRecord | null;
   onOpenSettings(): void;
 }
 
@@ -172,26 +178,28 @@ function SessionChip({ agent }: { agent: AgentInfo }) {
 
 export function StudioWorkHead(props: StudioWorkHeadProps) {
   return (
-    <div className="studio-work-head">
-      <nav className="studio-view-tabs" aria-label="Views">
-        {VIEW_TABS.map((entry) => (
-          <button
-            key={entry.mode}
-            type="button"
-            className={entry.mode === props.viewMode ? 'studio-tab studio-tab-on' : 'studio-tab'}
-            onClick={() => props.onViewModeChange(entry.mode)}
-          >
-            {entry.label}
-          </button>
+    <>
+      <div className="studio-work-head">
+        <nav className="studio-view-tabs" aria-label="Views">
+          {VIEW_TABS.map((entry) => (
+            <button
+              key={entry.mode}
+              type="button"
+              className={entry.mode === props.viewMode ? 'studio-tab studio-tab-on' : 'studio-tab'}
+              onClick={() => props.onViewModeChange(entry.mode)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </nav>
+        <span className="studio-head-spacer" />
+        {props.sessionAgents.map((agent) => (
+          <SessionChip key={agent.agentId} agent={agent} />
         ))}
-      </nav>
-      <span className="studio-head-spacer" />
-      {props.sessionAgents.map((agent) => (
-        <SessionChip key={agent.agentId} agent={agent} />
-      ))}
-      <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
-        <Settings size={14} />
-      </button>
-    </div>
+        <button type="button" className="studio-head-glyph" title="Settings" aria-label="Settings" onClick={props.onOpenSettings}>
+          <Settings size={14} />
+        </button>
+      </div>
+    </>
   );
 }

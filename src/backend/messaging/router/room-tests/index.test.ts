@@ -10,6 +10,7 @@ import {
   ChannelInterruptError,
   MessageRouter,
   NotARoomMemberError,
+  RoomDeliveryFailedError,
   RoomNotFoundError,
 } from '../index.js';
 
@@ -89,16 +90,18 @@ async function testInterruptAndUnknownRoomFail(): Promise<void> {
   assert.equal(store.history().at(-1)?.status, 'failed');
 }
 
-async function testDeliveryFailureIsBestEffort(): Promise<void> {
+async function testDeliveryFailureFailsTheEnvelope(): Promise<void> {
   const { router, room, store, writes } = fixture('agent_codex_1');
-  const receipt = await router.route(envelope(room.roomId));
-  assert.equal(receipt.mode, 'room');
-  assert.ok(writes.some((write) => write.agentId === 'agent_codex_2'));
-  assert.equal(store.history().at(-1)?.status, 'delivered');
+  await assert.rejects(
+    () => router.route(envelope(room.roomId)),
+    (error: unknown) => error instanceof RoomDeliveryFailedError && /codex-1/.test(error.message),
+  );
+  assert.ok(writes.some((write) => write.agentId === 'agent_codex_2'), 'live members still receive the write');
+  assert.equal(store.history().at(-1)?.status, 'failed', 'any member failure settles the envelope failed');
 }
 
 await testFanOutSkipsSenderChrisAndOffline();
 await testSenderMustBeMember();
 await testInterruptAndUnknownRoomFail();
-await testDeliveryFailureIsBestEffort();
+await testDeliveryFailureFailsTheEnvelope();
 console.log('PASS');

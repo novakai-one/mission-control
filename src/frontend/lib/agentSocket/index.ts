@@ -1,6 +1,10 @@
 // Singleton ws client for persistent agents. Wire protocol frozen in
 // docs/persistent-agents.md §5 — DO NOT deviate from the message shapes below.
 import type { ProviderId } from '../../../shared/project/schema.js';
+import type {
+  SessionControlIntent,
+  SessionControlReceipt,
+} from '../../../shared/sessionControl.js';
 
 export interface AgentInfo {
   agentId: string;
@@ -59,6 +63,7 @@ const roomsChangedListeners: Array<(rooms: unknown) => void> = [];
 const transcriptEventListeners: Array<(sessionId: string, event: unknown) => void> = [];
 const subagentsChangedListeners: Array<(sessionId: string, subagents: SubagentSummary[]) => void> = [];
 const subagentEventListeners: Array<(sessionId: string, subagentId: string, event: unknown) => void> = [];
+const sessionControlListeners: Array<(receipt: SessionControlReceipt) => void> = [];
 
 let backoffInitialMs = 500;
 let backoffMs = 500;
@@ -95,6 +100,8 @@ const BROADCAST_HANDLERS: Record<string, (message: ServerFrame) => void> = {
     emitAll(subagentsChangedListeners, message.sessionId as string, message.subagents as SubagentSummary[]),
   'subagent-event': message =>
     emitAll(subagentEventListeners, message.sessionId as string, message.subagentId as string, message.event),
+  'agent-control-result': message =>
+    emitAll(sessionControlListeners, message as unknown as SessionControlReceipt),
 };
 
 const AGENT_FRAME_TYPES = new Set(['agent-replay', 'agent-data', 'agent-exit']);
@@ -209,6 +216,13 @@ export function sendResize(agentId: string, cols: number, rows: number): void {
   send({ type: 'agent-resize', agentId, cols, rows });
 }
 
+/** Live controls are never queued: a stale model switch after reconnect is worse than rejection. */
+export function sendAgentControl(commandId: string, agentId: string, intent: SessionControlIntent): boolean {
+  if (!isOpen()) return false;
+  send({ type: 'agent-control', commandId, agentId, intent });
+  return true;
+}
+
 // Same not-queued rule as subscribeAgent: resubscribeAll() re-sends watch-session
 // for every watched session on open, so queueing it here too would double-send it.
 export function watchSession(projectDir: string, sessionId: string): void {
@@ -264,6 +278,12 @@ export function onSubagentEvent(
   listener: (sessionId: string, subagentId: string, event: unknown) => void
 ): () => void {
   return addListener(subagentEventListeners, listener);
+}
+
+export function onSessionControlResult(
+  listener: (receipt: SessionControlReceipt) => void,
+): () => void {
+  return addListener(sessionControlListeners, listener);
 }
 
 // Test-only seam: shrinks the backoff window so reconnect tests don't sleep 500ms+.
