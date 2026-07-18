@@ -1,6 +1,8 @@
 # Newly ignored going forward; historical node_modules/dist tracked before this
 # file existed are left in place to avoid conflicts (cleanup PR later).
 node_modules/
+# Worktree-local symlink to the main checkout's node_modules.
+/node_modules
 dist/
 release/
 desktop/package-lock.json
