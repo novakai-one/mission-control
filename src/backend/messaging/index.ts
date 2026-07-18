@@ -25,7 +25,10 @@ import type { MessageQuery, Room, SendMessage } from './types.js';
 
 export { MessageStore } from './store/index.js';
 export { RoomStore } from './rooms/index.js';
-export { PtyDelivery } from './delivery/index.js';
+export { PtyDelivery, PtyDeliveryAdapter, HumanDeliveryAdapter } from './delivery/index.js';
+export type { MessageDeliveryAdapter } from './delivery/index.js';
+export { resolveActor } from './actors/index.js';
+export type { ResolvedActor } from './actors/index.js';
 export { MessageRouter, InterruptRateLimiter } from './router/index.js';
 export { SendApi } from './send/index.js';
 export { rosterFromAgents, nextSpawnName, isNameTaken } from './address/index.js';

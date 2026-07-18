@@ -7,7 +7,7 @@ import {
 } from '../../../shared/provider/schema.js';
 import type { ProviderSessionSource } from '../../provider/source/index.js';
 
-type SessionSources = Record<ProviderId, ProviderSessionSource>;
+type SessionSources = Partial<Record<ProviderId, ProviderSessionSource>>;
 
 function requireThread(project: ProjectRecord, threadId: string): ThreadRecord {
   const thread = project.threads.find((entry) => entry.id === threadId);
@@ -30,7 +30,9 @@ export class ThreadProjector {
     const issues: SessionIssue[] = [];
     for (const reference of thread.sessionReferences) {
       try {
-        events.push(...this.sources[reference.provider].read(reference).events);
+        const source = this.sources[reference.provider];
+        if (!source) throw new Error(`no session source for provider ${reference.provider}`);
+        events.push(...source.read(reference).events);
       } catch (error) {
         issues.push({ reference, message: errorMessage(error) });
       }

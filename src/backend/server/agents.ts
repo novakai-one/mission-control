@@ -5,6 +5,8 @@
 import type { Express, Request, Response } from 'express';
 import path from 'node:path';
 import { WebSocket } from 'ws';
+import { PROVIDER_IDS } from '../../shared/project/schema.js';
+import type { ProviderId } from '../../shared/project/schema.js';
 import { TerminalManager, type AgentInfo, type CreateAgentOptions } from '../terminal/manager.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 import { nextSpawnName, isNameTaken } from '../messaging/address/index.js';
@@ -218,10 +220,19 @@ export class AgentsHub {
     pair.subagent.stop();
   }
 
+  private parseProvider(value: unknown): ProviderId | null {
+    if (value === undefined) return 'claude';
+    return PROVIDER_IDS.includes(value as ProviderId) ? (value as ProviderId) : null;
+  }
+
   private async createAgent(request: Request, response: Response): Promise<void> {
     const configuration = ConfigManager.load();
     const cwd = request.body?.cwd ?? configuration.activeRepo ?? process.cwd();
-    const provider = request.body?.provider === 'codex' ? 'codex' : 'claude';
+    const provider = this.parseProvider(request.body?.provider);
+    if (!provider) {
+      response.status(400).json({ error: `provider must be one of ${PROVIDER_IDS.join(', ')}` });
+      return;
+    }
     // Messaging addressing (§5): every agent gets a short unique name at
     // spawn — provider + ordinal when none is supplied, 409 on collisions.
     const requested = typeof request.body?.title === 'string' ? request.body.title : undefined;

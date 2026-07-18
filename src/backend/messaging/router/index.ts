@@ -1,9 +1,12 @@
-// Message router — records every envelope, then delivers DMs via PTY or
-// records channel posts pull-only (docs/agent-messaging.md §2, §4). Failures
-// are part of the audit record: the envelope is appended first, and every
-// outcome lands as a status amendment.
+// Message router — records every envelope, then delivers via the adapter
+// seam: PTY typing for agents, the log+ws record for the human, pull-only
+// for channels (docs/agent-messaging.md §2, §4). Failures are part of the
+// audit record: the envelope is appended first, and every outcome lands as
+// a status amendment.
 import { MessageStore } from '../store/index.js';
-import { PtyDelivery } from '../delivery/index.js';
+import { DeliveryFailedError, HumanDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../delivery/index.js';
+import { resolveActor } from '../actors/index.js';
+import type { ResolvedActor } from '../actors/index.js';
 import { RoomStore } from '../rooms/index.js';
 import { CHRIS_MEMBER, formatRoomInbound, isChannel, isRoom } from '../types.js';
 import type { AgentAddress, DeliveryReceipt, MessageEnvelope, Room } from '../types.js';
@@ -42,6 +45,13 @@ export class NotARoomMemberError extends Error {
   }
 }
 
+/** Room fan-out is all-or-nothing across live members: any failed write fails the envelope. */
+export class RoomDeliveryFailedError extends DeliveryFailedError {
+  constructor(room: Room, members: string[]) {
+    super(`room "${room.name}" delivery failed for member(s): ${members.join(', ')}`);
+  }
+}
+
 export class InterruptRateLimiter {
   private readonly sentAt = new Map<string, number[]>();
 
@@ -65,13 +75,17 @@ export class InterruptRateLimiter {
 }
 
 export class MessageRouter {
+  private readonly adapters: { agent: PtyDeliveryAdapter; human: HumanDeliveryAdapter };
+
   constructor(
     private readonly store: MessageStore,
-    private readonly delivery: PtyDelivery,
+    delivery: PtyDelivery,
     private readonly rooms: RoomStore,
     private readonly roster: () => AgentAddress[],
     private readonly interruptLimiter = new InterruptRateLimiter(),
-  ) {}
+  ) {
+    this.adapters = { agent: new PtyDeliveryAdapter(delivery), human: new HumanDeliveryAdapter() };
+  }
 
   async route(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     this.store.append(envelope);
@@ -89,28 +103,27 @@ export class MessageRouter {
     if (!room.members.includes(envelope.from)) {
       throw this.fail(envelope, new NotARoomMemberError(envelope.from, envelope.to));
     }
-
-    const liveByName = new Map(this.roster().map((address) => [address.name, address]));
-    for (const member of room.members) {
-      if (member === envelope.from || member === CHRIS_MEMBER) continue;
-      const address = liveByName.get(member);
-      if (!address) continue;
-      await this.deliverRoomMember(address, room, envelope);
-    }
+    const failed = await this.deliverRoomMembers(room, envelope);
+    if (failed.length > 0) throw this.fail(envelope, new RoomDeliveryFailedError(room, failed));
     this.settle(envelope, 'delivered');
     return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'room' };
   }
 
-  private async deliverRoomMember(
-    address: AgentAddress,
-    room: Room,
-    envelope: MessageEnvelope,
-  ): Promise<void> {
-    try {
-      await this.delivery.deliver(address, envelope, formatRoomInbound(room, envelope));
-    } catch {
-      // Room delivery is best-effort; history remains available for pulling.
+  /** Type into every live member's PTY; the sender and chris read the log instead. */
+  private async deliverRoomMembers(room: Room, envelope: MessageEnvelope): Promise<string[]> {
+    const liveByName = new Map(this.roster().map((address) => [address.name, address]));
+    const failed: string[] = [];
+    for (const member of room.members) {
+      if (member === envelope.from || member === CHRIS_MEMBER) continue;
+      const address = liveByName.get(member);
+      if (!address) continue;
+      try {
+        await this.adapters.agent.deliver({ kind: 'agent', address }, envelope, formatRoomInbound(room, envelope));
+      } catch {
+        failed.push(member);
+      }
     }
+    return failed;
   }
 
   /** Channel fan-out is record-only: readers pull, nothing is PTY-injected (§4). */
@@ -124,13 +137,19 @@ export class MessageRouter {
 
   private async routeDirect(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     const roster = this.roster();
-    const address = roster.find((agent) => agent.name === envelope.to);
-    if (!address) throw this.fail(envelope, new RecipientNotFoundError(envelope.to, roster));
+    const actor = resolveActor(envelope.to, roster, []);
+    if (actor?.kind === 'human') return this.deliverResolved(envelope, actor);
+    if (actor?.kind !== 'agent') throw this.fail(envelope, new RecipientNotFoundError(envelope.to, roster));
     if (envelope.delivery === 'interrupt' && !this.interruptLimiter.tryAcquire(envelope.from)) {
       throw this.fail(envelope, new InterruptRateLimitError(envelope.from, this.interruptLimiter.maxPerMinute));
     }
+    return this.deliverResolved(envelope, actor);
+  }
+
+  private async deliverResolved(envelope: MessageEnvelope, actor: ResolvedActor): Promise<DeliveryReceipt> {
+    const adapter = actor.kind === 'human' ? this.adapters.human : this.adapters.agent;
     try {
-      const receipt = await this.delivery.deliver(address, envelope);
+      const receipt = await adapter.deliver(actor, envelope);
       this.settle(envelope, 'delivered');
       return receipt;
     } catch (error) {

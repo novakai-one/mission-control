@@ -97,7 +97,7 @@ export function messagesFor(feed: TunnelEnvelope[], id: ConversationId): TunnelE
 
 export interface RosterEntry {
   name: string;
-  provider: 'claude' | 'codex';
+  provider: AgentInfo['provider'];
 }
 
 export function liveRoster(agents: Pick<AgentInfo, 'title' | 'provider' | 'status'>[]): RosterEntry[] {

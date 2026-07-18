@@ -9,7 +9,9 @@ import express from 'express';
 import type { Server } from 'node:http';
 import { MessagingHub, TEAM_CHANNEL } from '../index.js';
 import type { MessageEnvelope } from '../index.js';
-import type { AgentInfo } from '../../terminal/manager.js';
+import { AgentsHub } from '../../server/agents.js';
+import type { AgentInfo, CreateAgentOptions } from '../../terminal/manager.js';
+import type { TerminalRuntime } from '../../terminal/runtime/index.js';
 
 function agent(overrides: Partial<AgentInfo>): AgentInfo {
   return {
@@ -126,6 +128,88 @@ async function testDeadAgentIsNeverBriefed(): Promise<void> {
   assert.equal(writes.length, 0, 'no briefing typed for an agent missing from the roster');
 }
 
+async function testChrisDirectMessageDeliveredViaUi(): Promise<void> {
+  writes.length = 0;
+  broadcasts.length = 0;
+  const { status, json } = await post({ from: 'claude-1', 'to': 'chris', body: 'boss ping' });
+  assert.equal(status, 201, 'DM to chris is a first-class send');
+  assert.equal(json.envelope.status, 'delivered');
+  assert.equal(writes.length, 0, 'nothing is typed into a PTY for the human');
+  assert.deepEqual(
+    broadcasts.map((entry) => `${entry.event}:${entry.payload.status}`),
+    ['message-envelope:queued', 'message-envelope:delivered'],
+    'chris DM rides the ws broadcast like any envelope',
+  );
+  const inbox = await getMessages('?withAgent=chris');
+  assert.equal(inbox[0]?.body, 'boss ping', 'chris reads his inbox from the log');
+}
+
+/** AgentsHub over a fake runtime — reserved names 409 before any spawn happens. */
+function fakeTerminals(createdOptions: CreateAgentOptions[]): TerminalRuntime {
+  const create = (options: CreateAgentOptions): Promise<AgentInfo> => {
+    createdOptions.push(options);
+    return Promise.resolve(agent({
+      agentId: `agent_fake_${createdOptions.length}`,
+      title: options.title ?? 'agent',
+      provider: options.provider ?? 'claude',
+      cwd: options.cwd,
+    }));
+  };
+  return {
+    create,
+    write: () => true, resize: () => true, rename: () => true, kill: () => true, archive: () => true,
+    snapshot: () => '', list: () => agents,
+    onData: () => {}, onExit: () => {}, onSession: () => {},
+  };
+}
+
+async function withAgentsHub(
+  exercise: (base: string, createdOptions: CreateAgentOptions[]) => Promise<void>,
+): Promise<void> {
+  const createdOptions: CreateAgentOptions[] = [];
+  const agentHub = new AgentsHub(new Set(), fakeTerminals(createdOptions));
+  const hubApp = express();
+  hubApp.use(express.json());
+  agentHub.registerRoutes(hubApp);
+  const hubServer: Server = await new Promise((resolve) => {
+    const listening = hubApp.listen(0, '127.0.0.1', () => resolve(listening));
+  });
+  try {
+    await exercise(`http://127.0.0.1:${(hubServer.address() as { port: number }).port}`, createdOptions);
+  } finally {
+    hubServer.close();
+  }
+}
+
+async function postAgent(base: string, body: unknown): Promise<{ status: number }> {
+  const response = await fetch(`${base}/api/agents`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  return { status: response.status };
+}
+
+async function testReservedNamesRejected(): Promise<void> {
+  await withAgentsHub(async (base, createdOptions) => {
+    for (const reserved of ['chris', '#team', 'room_x']) {
+      const { status } = await postAgent(base, { title: reserved, provider: 'kimi' });
+      assert.equal(status, 409, `spawn titled ${reserved} is rejected`);
+    }
+    const renamed = await fetch(`${base}/api/agents/agent_1`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'chris' }),
+    });
+    assert.equal(renamed.status, 409, 'renaming onto a reserved name is rejected');
+    assert.equal(createdOptions.length, 0, 'no spawn ever reached the runtime');
+  });
+}
+
+async function testProviderValidation(): Promise<void> {
+  await withAgentsHub(async (base, createdOptions) => {
+    assert.equal((await postAgent(base, { title: 'kimi-9', provider: 'kimi' })).status, 201);
+    assert.equal(createdOptions[0]?.provider, 'kimi', 'kimi passes validation through to the spawn');
+    assert.equal((await postAgent(base, { title: 'bogus-1', provider: 'bogus' })).status, 400);
+  });
+}
+
 try {
   await testSendDeliversAndBroadcasts();
   await testHistoryQueryFilters();
@@ -133,6 +217,9 @@ try {
   await testFailureStatusCodes();
   await testSpawnBriefingTypedIntoNewAgentPty();
   await testDeadAgentIsNeverBriefed();
+  await testChrisDirectMessageDeliveredViaUi();
+  await testReservedNamesRejected();
+  await testProviderValidation();
   console.log('PASS');
 } finally {
   server.close();

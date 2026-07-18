@@ -1,10 +1,11 @@
 // Singleton ws client for persistent agents. Wire protocol frozen in
 // docs/persistent-agents.md §5 — DO NOT deviate from the message shapes below.
+import type { ProviderId } from '../../../shared/project/schema.js';
 
 export interface AgentInfo {
   agentId: string;
   title: string;
-  provider: 'claude' | 'codex';
+  provider: ProviderId;
   sessionId: string;
   sessionError?: string;
   projectDir: string;

@@ -3,7 +3,13 @@
 // AgentAddress roster maps name → agentId → PTY; only running agents are
 // addressable.
 import type { AgentInfo } from '../../terminal/manager.js';
+import { CHRIS_MEMBER, isChannel, isRoom } from '../types.js';
 import type { AgentAddress } from '../types.js';
+
+/** Names no agent may ever take: the human, every channel, every room id. */
+export function isReservedName(name: string): boolean {
+  return name === CHRIS_MEMBER || isChannel(name) || isRoom(name);
+}
 
 /** Live roster: running agents only, addressed by their title. */
 export function rosterFromAgents(agents: AgentInfo[]): AgentAddress[] {
@@ -12,7 +18,7 @@ export function rosterFromAgents(agents: AgentInfo[]): AgentAddress[] {
     .map((agent) => ({
       agentId: agent.agentId,
       name: agent.title,
-      provider: agent.provider === 'codex' ? 'codex' : 'claude',
+      provider: agent.provider,
     }));
 }
 
@@ -24,7 +30,8 @@ export function nextSpawnName(provider: string, takenTitles: Iterable<string>): 
   return `${provider}-${ordinal}`;
 }
 
-/** Backend-enforced uniqueness for spawn titles and renames. */
+/** Backend-enforced uniqueness for spawn titles and renames; reserved names are always taken. */
 export function isNameTaken(name: string, agents: AgentInfo[], excludeAgentId?: string): boolean {
+  if (isReservedName(name)) return true;
   return agents.some((agent) => agent.title === name && agent.agentId !== excludeAgentId);
 }

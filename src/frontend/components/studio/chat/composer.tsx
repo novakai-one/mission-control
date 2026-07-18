@@ -1,11 +1,12 @@
-// Composer foot of the AI panel. With a live agent it sends straight into the
-// agent's PTY over the existing socket; without one it offers the two provider
-// launch actions. The solid-gold send button is the brand's primary-action
-// signature (dark glyph on gold).
+// Composer foot of the AI panel. Sends are recorded first: the composer
+// POSTs an envelope to /api/messages (from chris, to the agent's name) and
+// the server's PtyDeliveryAdapter types it into the agent's PTY — the same
+// net effect as raw socket typing, now in the audit log. Without a live
+// agent it offers the provider launch actions. The solid-gold send button
+// is the brand's primary-action signature (dark glyph on gold).
 import React, { useState } from 'react';
 import type { ProviderId, ThreadRecord } from '../../../../shared/project/schema.js';
 import type { AgentInfo } from '../../../lib/agentSocket/index.js';
-import { sendInput } from '../../../lib/agentSocket/index.js';
 import './index.css';
 
 interface ChatComposerProps {
@@ -16,8 +17,12 @@ interface ChatComposerProps {
   onSent(text: string): void;
 }
 
-const PROVIDERS: ProviderId[] = ['claude', 'codex'];
-const LAUNCH_LABELS: Record<ProviderId, string> = { claude: 'Start Claude', codex: 'Start Codex' };
+const PROVIDERS: ProviderId[] = ['claude', 'codex', 'kimi'];
+const LAUNCH_LABELS: Record<ProviderId, string> = {
+  claude: 'Start Claude',
+  codex: 'Start Codex',
+  kimi: 'Start Kimi',
+};
 
 function LaunchRow({ onLaunch, onError }: { onLaunch(provider: ProviderId): Promise<unknown>; onError(message: string | null): void }) {
   const [launching, setLaunching] = useState<ProviderId | null>(null);
@@ -50,15 +55,28 @@ export function ChatComposer({ thread, runtimeAgent, onLaunch, onSent }: ChatCom
   const [error, setError] = useState<string | null>(null);
   const live = runtimeAgent?.status === 'running';
 
+  /** Record the send as an envelope; the server types it into the PTY. */
+  async function postMessage(recipient: string, text: string): Promise<void> {
+    const response = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'chris', 'to': recipient, delivery: 'normal', body: text }),
+    });
+    if (!response.ok) {
+      const failure = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(failure?.error ?? `HTTP ${response.status}`);
+    }
+  }
+
   function send(): void {
     if (!runtimeAgent || !prompt.trim()) return;
-    const agentId = runtimeAgent.agentId;
     const text = prompt.trim();
-    sendInput(agentId, text);
-    // The PTY needs the carriage return as its own write, after the text lands.
-    setTimeout(() => sendInput(agentId, '\r'), 20);
     setPrompt('');
-    onSent(text);
+    setError(null);
+    onSent(text); // optimistic row — the envelope broadcast confirms it
+    postMessage(runtimeAgent.title, text).catch((failure: unknown) => {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    });
   }
 
   function handleKeyDown(press: React.KeyboardEvent<HTMLTextAreaElement>): void {
