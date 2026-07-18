@@ -13,6 +13,7 @@ import { buildTargets } from '../../../lib/mentions/index.js';
 import {
   buildConversations,
   liveRoster,
+  messagesFor,
   useTunnelFeed,
   useTunnelRooms,
   type Conversation,
@@ -20,6 +21,7 @@ import {
   type TunnelRoom,
 } from '../../../lib/tunnelModel/index.js';
 import {
+  advanceCursor,
   saveLane,
   savedLane,
   unreadCountFor,
@@ -27,6 +29,7 @@ import {
 } from '../../../lib/readCursor/index.js';
 import { DENSITY_SCALE, MESSAGING_SETTINGS } from './model.js';
 import { RoomsRail } from './rail/index.js';
+import { MessageFeed } from './thread/index.js';
 import './index.css';
 
 interface MessagesViewProps {
@@ -72,7 +75,6 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     () => buildTargets(agents, projects.flatMap((entry) => entry.threads)),
     [agents, projects],
   );
-  void targets; // thread composer mentions land in Task 2
 
   // Unread per lane — DERIVED from feed past each ReadCursor (C21).
   const unread = useMemo(() => {
@@ -145,9 +147,18 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
         onStartChat={startChat}
       />
       <main className="msg-thread">
-        <div className="msg-temp">
-          {selected ? `# ${selected.title} — thread lands in Task 2` : 'No conversations yet'}
-        </div>
+        {selected ? (
+          <MessageFeed
+            conversation={selected}
+            messages={messagesFor(feed, selected.id)}
+            feed={feed}
+            agents={agents}
+            targets={targets}
+            onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
+          />
+        ) : (
+          <div className="msg-temp">No conversations yet</div>
+        )}
       </main>
       <aside className="msg-context">
         <div className="msg-temp">Context lands in Task 4</div>

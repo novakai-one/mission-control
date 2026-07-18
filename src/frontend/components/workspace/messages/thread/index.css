@@ -1,0 +1,117 @@
+/* MessageFeed — storyboard center column. Values: tokens.css. */
+
+.msg-feed {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--msg-sp-14);
+  padding: var(--msg-sp-18) var(--msg-sp-16);
+}
+
+.msg-feed-quiet {
+  margin: auto;
+  color: var(--msg-text-faint);
+  font-size: var(--msg-fs-hint);
+}
+
+/* ---- day pill ---- */
+.msg-day {
+  display: flex;
+  justify-content: center;
+}
+
+.msg-day-pill {
+  padding: var(--msg-sp-4) var(--msg-sp-8);
+  border-radius: var(--msg-r-pill);
+  background: var(--msg-bg-control);
+  font-size: var(--msg-fs-meta);
+  letter-spacing: 0.1em;
+  color: var(--msg-text-faint);
+}
+
+/* ---- message row: grid avatar / body / time ---- */
+.msg-row {
+  display: grid;
+  grid-template-columns: var(--msg-avatar-md) minmax(0, 1fr) auto;
+  gap: var(--msg-sp-12);
+  scroll-margin-top: var(--msg-sp-16);
+}
+
+.msg-row-av {
+  width: var(--msg-avatar-md);
+  height: var(--msg-avatar-md);
+  display: grid;
+  place-items: center;
+  border-radius: var(--msg-r-item);
+  background: var(--msg-bg-avatar-lg);
+  font: var(--msg-fw-semibold) var(--msg-fs-body) var(--msg-font-ui);
+  color: var(--msg-text-avatar);
+}
+
+.msg-row-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--msg-sp-5);
+}
+
+.msg-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--msg-sp-8);
+}
+
+.msg-row-head strong {
+  font: var(--msg-fw-semibold) var(--msg-fs-name) var(--msg-font-ui);
+  color: var(--msg-text-primary);
+}
+
+.msg-row-role {
+  font-size: var(--msg-fs-body);
+  color: var(--msg-text-role);
+}
+
+.msg-row-reply {
+  display: flex;
+  align-items: baseline;
+  gap: var(--msg-sp-5);
+  font-size: var(--msg-fs-meta);
+  color: var(--msg-text-muted);
+}
+
+.msg-row-reply-glyph {
+  font-size: var(--msg-fs-body);
+  color: var(--msg-amber);
+}
+
+.msg-row-text {
+  margin: 0;
+  font-size: var(--msg-fs-body);
+  line-height: 1.45;
+  color: var(--msg-text-body);
+  overflow-wrap: anywhere;
+}
+
+.msg-row-time {
+  padding-top: var(--msg-sp-2);
+  font-size: var(--msg-fs-meta);
+  color: var(--msg-text-role);
+  white-space: nowrap;
+}
+
+/* ---- status + working labels (amber is free in this tab, D8) ---- */
+.msg-row-failed {
+  font-size: var(--msg-fs-meta);
+  color: var(--msg-amber);
+}
+
+.msg-row-queued {
+  font-size: var(--msg-fs-meta);
+  color: var(--msg-text-dim);
+}
+
+.msg-row-working {
+  font-size: var(--msg-fs-meta);
+  color: var(--msg-amber);
+}
