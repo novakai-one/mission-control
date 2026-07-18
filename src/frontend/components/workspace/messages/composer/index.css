@@ -1,0 +1,100 @@
+/* ComposerBar — storyboard pinned composer. Values: tokens.css. */
+
+.msg-composer {
+  margin: 0;
+  padding: 0 var(--msg-sp-20) var(--msg-sp-18);
+  display: flex;
+  flex-direction: column;
+}
+
+.msg-composer-handle {
+  align-self: center;
+  width: var(--msg-handle-w);
+  height: var(--msg-handle-h);
+  margin-bottom: var(--msg-sp-7);
+  border-radius: var(--msg-r-pill);
+  background: var(--msg-border-handle);
+}
+
+.msg-composer-error {
+  margin-bottom: var(--msg-sp-8);
+  font-size: var(--msg-fs-body);
+  color: var(--msg-amber);
+}
+
+.msg-composer-box {
+  min-height: var(--msg-composer-min-h);
+  display: flex;
+  flex-direction: column;
+  gap: var(--msg-sp-10);
+  padding: var(--msg-sp-12) var(--msg-sp-14);
+  border: 1px solid var(--msg-border-strong);
+  border-radius: var(--msg-r-composer);
+  background: var(--msg-bg-raised);
+  transition: border-color var(--msg-t-fast);
+}
+
+.msg-composer-box:focus-within {
+  border-color: var(--msg-amber);
+}
+
+.msg-composer-channel {
+  font-size: var(--msg-fs-body);
+  color: var(--msg-text-dim);
+}
+
+.msg-composer-box textarea {
+  flex: 1;
+  min-height: var(--msg-sp-20);
+  border: 0;
+  padding: 0;
+  resize: none;
+  background: none;
+  outline: none;
+  font: var(--msg-fw-medium) var(--msg-fs-hint) var(--msg-font-ui);
+  color: var(--msg-text-body);
+}
+
+.msg-composer-box textarea::placeholder {
+  color: var(--msg-text-faint);
+}
+
+.msg-composer-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.msg-composer-saved {
+  font-size: var(--msg-fs-body);
+  color: var(--msg-text-faint);
+}
+
+.msg-send {
+  width: var(--msg-send-btn);
+  height: var(--msg-send-btn);
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--msg-r-send);
+  background: var(--msg-bg-send);
+  font: var(--msg-fw-bold) var(--msg-fs-hint) var(--msg-font-ui);
+  color: var(--msg-text-on-send);
+  cursor: pointer;
+  transition: opacity var(--msg-t-fast), transform var(--msg-t-fast);
+}
+
+.msg-send:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.msg-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.msg-send:focus-visible {
+  outline: 1px solid var(--msg-amber);
+  outline-offset: 2px;
+}

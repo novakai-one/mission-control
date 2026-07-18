@@ -30,6 +30,7 @@ import {
 import { DENSITY_SCALE, MESSAGING_SETTINGS } from './model.js';
 import { RoomsRail } from './rail/index.js';
 import { MessageFeed } from './thread/index.js';
+import { ComposerBar } from './composer/index.js';
 import './index.css';
 
 interface MessagesViewProps {
@@ -130,10 +131,6 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     const recipient = selected.kind === 'dm' ? selected.title : selected.id;
     await postJson('/api/user/messages', { 'to': recipient, delivery: 'normal', body });
   }
-  void send; // composer lands in Task 3
-
-  void dismissed;
-  void setDismissed;
 
   return (
     <section className="msg-view" ref={rootRef} aria-label="Messages">
@@ -148,14 +145,17 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
       />
       <main className="msg-thread">
         {selected ? (
-          <MessageFeed
-            conversation={selected}
-            messages={messagesFor(feed, selected.id)}
-            feed={feed}
-            agents={agents}
-            targets={targets}
-            onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
-          />
+          <>
+            <MessageFeed
+              conversation={selected}
+              messages={messagesFor(feed, selected.id)}
+              feed={feed}
+              agents={agents}
+              targets={targets}
+              onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
+            />
+            <ComposerBar conversation={selected} onSend={send} />
+          </>
         ) : (
           <div className="msg-temp">No conversations yet</div>
         )}
