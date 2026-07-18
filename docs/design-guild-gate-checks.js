@@ -42,6 +42,9 @@
   for (const el of all) {
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    // invisible ≠ attention signal (RF drag-handles ship gold at opacity 0);
+    // animated reveals are the breathing test's job, census reads the instant
+    if (parseFloat(cs.opacity) <= 0.05) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) continue;
 
