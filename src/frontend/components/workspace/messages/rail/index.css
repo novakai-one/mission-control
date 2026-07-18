@@ -58,6 +58,10 @@
   background: var(--msg-bg-control);
 }
 
+.msg-room:active {
+  background: var(--msg-bg-selected);
+}
+
 .msg-room.is-selected {
   min-height: var(--msg-row-selected-min);
   background: var(--msg-bg-selected);
@@ -112,6 +116,10 @@
 
 .msg-person:hover {
   background: var(--msg-bg-control);
+}
+
+.msg-person:active {
+  background: var(--msg-bg-selected);
 }
 
 .msg-person.is-selected,

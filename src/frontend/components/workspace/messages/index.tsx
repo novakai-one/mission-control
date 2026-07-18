@@ -28,7 +28,7 @@ import {
   unreadCountFor,
   useReadCursors,
 } from '../../../lib/readCursor/index.js';
-import { DENSITY_SCALE, MESSAGING_SETTINGS, workingAgentFor } from './model.js';
+import { DENSITY_SCALE, MESSAGING_SETTINGS, roomLabelFor, workingAgentFor } from './model.js';
 import { RoomsRail } from './rail/index.js';
 import { MessageFeed, messageRowId } from './thread/index.js';
 import { ComposerBar } from './composer/index.js';
@@ -69,6 +69,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
+  const [railOpen, setRailOpen] = useState(false);
 
   const roster = useMemo(() => liveRoster(agents), [agents]);
   const conversations = useMemo(
@@ -120,6 +121,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   function select(conversation: Conversation): void {
     setSelectedId(conversation.id);
     saveLane(conversation.id);
+    setRailOpen(false); // phone layout: picking a lane dismisses the rail overlay
   }
 
   async function startChat(members: string[], name: string): Promise<void> {
@@ -143,13 +145,10 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
 
   const laneMessages = selected ? messagesFor(feed, selected.id) : [];
   const working = workingAgentFor(laneMessages, agents, Date.now());
+  const viewClass = `msg-view${contextOpen ? '' : ' msg-context-closed'}${railOpen ? ' msg-rail-open' : ''}`;
 
   return (
-    <section
-      className={contextOpen ? 'msg-view' : 'msg-view msg-context-closed'}
-      ref={rootRef}
-      aria-label="Messages"
-    >
+    <section className={viewClass} ref={rootRef} aria-label="Messages">
       <RoomsRail
         conversations={conversations}
         unread={unread}
@@ -160,6 +159,22 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
         onStartChat={startChat}
       />
       <main className="msg-thread">
+        {selected && (
+          <div className="msg-thread-topbar">
+            <button
+              type="button"
+              className="msg-ghost"
+              aria-label="Show conversations"
+              title="Show conversations"
+              onClick={() => setRailOpen((current) => !current)}
+            >
+              <span className="msg-ghost-glyph" aria-hidden="true" />
+            </button>
+            <span className="msg-thread-title">
+              {selected.kind === 'dm' ? `@ ${selected.title}` : `# ${roomLabelFor(selected)}`}
+            </span>
+          </div>
+        )}
         {selected ? (
           <>
             <MessageFeed

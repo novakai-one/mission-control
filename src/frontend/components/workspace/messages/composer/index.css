@@ -89,6 +89,10 @@
   transform: translateY(-1px);
 }
 
+.msg-send:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 .msg-send:disabled {
   opacity: 0.4;
   cursor: default;
