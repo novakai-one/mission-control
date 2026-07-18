@@ -1,5 +1,8 @@
 /** Supported transcript owners referenced by Novakai threads. */
-export type ProviderId = 'claude' | 'codex';
+export type ProviderId = 'claude' | 'codex' | 'kimi';
+
+/** Every spawnable provider, in UI order. */
+export const PROVIDER_IDS: ProviderId[] = ['claude', 'codex', 'kimi'];
 
 /** Pointer to an authoritative provider-owned conversation. */
 export interface SessionReference {
@@ -38,10 +41,10 @@ function requiredString(value: unknown, field: string): string {
 }
 
 function providerId(value: unknown, field: string): ProviderId {
-  if (value !== 'claude' && value !== 'codex') {
-    throw new Error(`${field} must be claude or codex`);
+  if (!PROVIDER_IDS.includes(value as ProviderId)) {
+    throw new Error(`${field} must be one of ${PROVIDER_IDS.join(', ')}`);
   }
-  return value;
+  return value as ProviderId;
 }
 
 function optionalString(value: unknown, field: string): string | undefined {

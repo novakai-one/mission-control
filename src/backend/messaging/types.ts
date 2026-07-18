@@ -1,5 +1,6 @@
 // Agent messaging contracts per docs/agent-messaging.md §3. The envelope is
 // the extensible object — permissions and future metadata land here later.
+import type { ProviderId } from '../../shared/project/schema.js';
 
 export interface MessageEnvelope {
   id: string;            // msg_<uuid>
@@ -36,7 +37,7 @@ export interface DeliveryReceipt {
 export interface AgentAddress {
   agentId: string;
   name: string;
-  provider: 'claude' | 'codex';
+  provider: ProviderId;
 }
 
 export interface MessageQuery {

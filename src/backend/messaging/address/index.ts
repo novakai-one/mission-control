@@ -18,7 +18,7 @@ export function rosterFromAgents(agents: AgentInfo[]): AgentAddress[] {
     .map((agent) => ({
       agentId: agent.agentId,
       name: agent.title,
-      provider: agent.provider === 'codex' ? 'codex' : 'claude',
+      provider: agent.provider,
     }));
 }
 

@@ -17,8 +17,12 @@ interface ChatComposerProps {
   onSent(text: string): void;
 }
 
-const PROVIDERS: ProviderId[] = ['claude', 'codex'];
-const LAUNCH_LABELS: Record<ProviderId, string> = { claude: 'Start Claude', codex: 'Start Codex' };
+const PROVIDERS: ProviderId[] = ['claude', 'codex', 'kimi'];
+const LAUNCH_LABELS: Record<ProviderId, string> = {
+  claude: 'Start Claude',
+  codex: 'Start Codex',
+  kimi: 'Start Kimi',
+};
 
 function LaunchRow({ onLaunch, onError }: { onLaunch(provider: ProviderId): Promise<unknown>; onError(message: string | null): void }) {
   const [launching, setLaunching] = useState<ProviderId | null>(null);

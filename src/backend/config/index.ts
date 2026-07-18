@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 export interface AppConfig {
@@ -6,6 +7,7 @@ export interface AppConfig {
   geminiApiKey?: string;
   claudeCliPath?: string;
   codexCliPath?: string;
+  kimiCliPath?: string;
   serverPort: number;
   activeRepo?: string;
 }
@@ -28,6 +30,7 @@ export class ConfigManager {
       workspacePath: process.cwd(),
       serverPort: 3031,
       claudeCliPath: 'claude', codexCliPath: 'codex',
+      kimiCliPath: path.join(os.homedir(), '.kimi-code', 'bin', 'kimi'),
       geminiApiKey: process.env.GEMINI_API_KEY || ''
     };
 

@@ -1,9 +1,11 @@
 import { spawn as spawnPty } from 'node-pty';
 import type { IPty } from 'node-pty';
+import type { AppConfig } from '../../config/index.js';
 import type { ProviderId } from '../../../shared/project/schema.js';
 import { ConfigManager } from '../../config/index.js';
 import { resolveCli } from '../../agent/executor/index.js';
 import { CodexSessionLocator } from './codexDiscovery.js';
+import { KimiSessionLocator } from './kimi/index.js';
 
 /** Minimal PTY interface consumed by the persistent terminal module. */
 export type ProviderTerminalProcess =
@@ -24,10 +26,70 @@ export type ProviderLauncher = (
   requestedSessionId: string,
 ) => ProviderLaunch;
 
+interface ProviderSpec {
+  /** CLI argv; interactive TUI launches take no session flag unless the CLI owns one. */
+  args(requestedSessionId: string): string[];
+  /** Provider-owned env vars to strip from the inherited environment. */
+  scrub(envKey: string): boolean;
+  /** Configured CLI path (absolute or on-PATH name). */
+  cliPath(configuration: AppConfig): string | undefined;
+  /** Spawn the PTY and resolve the authoritative session id. */
+  launch(cwd: string, requestedSessionId: string): ProviderLaunch;
+}
+
+function launchClaude(cwd: string, requestedSessionId: string): ProviderLaunch {
+  return {
+    process: spawn('claude', cwd, PROVIDERS.claude.args(requestedSessionId), requestedSessionId),
+    sessionId: Promise.resolve(requestedSessionId),
+  };
+}
+
+function launchCodex(cwd: string, requestedSessionId: string): ProviderLaunch {
+  const locator = new CodexSessionLocator();
+  const known = locator.snapshot();
+  const startedAt = Date.now();
+  const launched = spawn('codex', cwd, PROVIDERS.codex.args(requestedSessionId), requestedSessionId);
+  return {
+    process: launched,
+    sessionId: locator.waitForNew(cwd, known, startedAt),
+    cancelSessionWait: (reason) => locator.cancel(reason),
+  };
+}
+
+function launchKimi(cwd: string, requestedSessionId: string): ProviderLaunch {
+  const locator = new KimiSessionLocator();
+  const known = locator.snapshot();
+  const launched = spawn('kimi', cwd, PROVIDERS.kimi.args(requestedSessionId), requestedSessionId);
+  return {
+    process: launched,
+    sessionId: locator.waitForNew(cwd, known),
+    cancelSessionWait: (reason) => locator.cancel(reason),
+  };
+}
+
+const PROVIDERS: Record<ProviderId, ProviderSpec> = {
+  claude: {
+    args: (requestedSessionId) => ['--session-id', requestedSessionId],
+    scrub: () => false,
+    cliPath: (configuration) => configuration.claudeCliPath,
+    launch: launchClaude,
+  },
+  codex: {
+    args: () => ['-c', 'check_for_update_on_startup=false', '--no-alt-screen'],
+    scrub: (envKey) => /^CODEX_/.test(envKey) && envKey !== 'CODEX_HOME',
+    cliPath: (configuration) => configuration.codexCliPath,
+    launch: launchCodex,
+  },
+  kimi: {
+    args: () => [],
+    scrub: (envKey) => /^KIMI_/.test(envKey),
+    cliPath: (configuration) => configuration.kimiCliPath,
+    launch: launchKimi,
+  },
+};
+
 export function providerArguments(provider: ProviderId, requestedSessionId: string): string[] {
-  return provider === 'claude'
-    ? ['--session-id', requestedSessionId]
-    : ['-c', 'check_for_update_on_startup=false', '--no-alt-screen'];
+  return PROVIDERS[provider].args(requestedSessionId);
 }
 
 export function providerEnvironment(
@@ -38,7 +100,7 @@ export function providerEnvironment(
   const scrubbed = { ...process.env };
   for (const envKey of Object.keys(scrubbed)) {
     if (/^CLAUDE|^ANTHROPIC/.test(envKey)) delete scrubbed[envKey];
-    if (provider === 'codex' && /^CODEX_/.test(envKey) && envKey !== 'CODEX_HOME') delete scrubbed[envKey];
+    if (PROVIDERS[provider].scrub(envKey)) delete scrubbed[envKey];
   }
   scrubbed.TERM = 'xterm-256color';
   // Bind each agent to its own isolated browser session. When the agent runs
@@ -56,7 +118,7 @@ export function providerEnvironment(
 function spawn(provider: ProviderId, cwd: string, args: string[], browserSession: string): ProviderTerminalProcess {
   const configuration = ConfigManager.load();
   const serverPort = Number(process.env.NOVAKAI_SERVER_PORT) || configuration.serverPort;
-  const configured = provider === 'claude' ? configuration.claudeCliPath : configuration.codexCliPath;
+  const configured = PROVIDERS[provider].cliPath(configuration);
   const { resolved, exists } = resolveCli(configured || provider);
   if (!exists) {
     throw new Error(`${provider} CLI not found (looked for "${configured || provider}"). `
@@ -71,21 +133,7 @@ function spawn(provider: ProviderId, cwd: string, args: string[], browserSession
   });
 }
 
-/** Launch Claude or Codex while resolving its authoritative session ID. */
+/** Launch a provider CLI while resolving its authoritative session ID. */
 export function launchProvider(provider: ProviderId, cwd: string, requestedSessionId: string): ProviderLaunch {
-  if (provider === 'claude') {
-    return {
-      process: spawn('claude', cwd, providerArguments(provider, requestedSessionId), requestedSessionId),
-      sessionId: Promise.resolve(requestedSessionId),
-    };
-  }
-  const locator = new CodexSessionLocator();
-  const known = locator.snapshot();
-  const startedAt = Date.now();
-  const process = spawn('codex', cwd, providerArguments(provider, requestedSessionId), requestedSessionId);
-  return {
-    process,
-    sessionId: locator.waitForNew(cwd, known, startedAt),
-    cancelSessionWait: (reason) => locator.cancel(reason),
-  };
+  return PROVIDERS[provider].launch(cwd, requestedSessionId);
 }

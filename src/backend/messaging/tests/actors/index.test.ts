@@ -7,7 +7,7 @@ import type { AgentAddress, Room } from '../../types.js';
 
 const roster: AgentAddress[] = [
   { agentId: 'agent_1', name: 'claude-1', provider: 'claude' },
-  { agentId: 'agent_2', name: 'codex-1', provider: 'codex' },
+  { agentId: 'agent_2', name: 'kimi-1', provider: 'kimi' },
 ];
 
 const rooms: Room[] = [{
@@ -25,7 +25,7 @@ function testResolvesTheHuman(): void {
 }
 
 function testResolvesAgentsRoomsChannels(): void {
-  const agent = resolveActor('codex-1', roster, rooms);
+  const agent = resolveActor('kimi-1', roster, rooms);
   assert.equal(agent?.kind, 'agent');
   assert.equal(agent.kind === 'agent' ? agent.address.agentId : null, 'agent_2');
   const room = resolveActor('room_ops', roster, rooms);
