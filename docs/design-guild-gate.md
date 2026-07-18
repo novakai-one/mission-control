@@ -1,4 +1,4 @@
-# Design Guild Rigor Gate — C1–C21
+# Design Guild Rigor Gate — C1–C23
 
 Binding acceptance criteria for `docs/design-guild-workspace.html` (Map = world, Thread = memory,
 Director = camera). Owner: Design Guild · fable. No milestone reports "done" until the gate is
@@ -115,6 +115,11 @@ is a C1 fail.
   the `>_ novakai` wordmark = FAIL. Test results, diffs, code refs, terminal-ish
   evidence all render in Inter as designed rows (sage ✓ row / ink-bright ✕ row,
   aligned columns, tabular numerals fine). The app is the anti-terminal.
+  **Drop-1 clarification (codex, binding):** literal and total — inline code, fenced
+  code, debug type labels, logs, and raw session output are ALL Inter, hidden lenses
+  included. Code meaning comes from surface/weight/syntax tint/whitespace/tabular
+  numerals, never a mono face. Sole exemption: the `>_` wordmark glyph
+  (suggested token: `--st-wordmark`; legacy `--st-mono`/`--font-mono` alias to sans).
 - **C12 amendment (pending opus swatches, invariants ratified):** Inter must RENDER
   (measured glyphs — `C12_interReal` in the harness — not a font-family string; local()
   + embedded woff2 both C13-legal). Color allowlist grows to: per-person identity tints
@@ -134,8 +139,62 @@ is a C1 fail.
   item may hold the one global gold. **[mech: open thread, census cursor unchanged;
   scroll items into view, cursor advances; reload, cursor + anchor identical]**
 
+## Frame law (Chris ruling 2026-07-17 ~20:28, via WGT lead — binding)
+
+- **C22 — Frame everything.** Codex's variant B (`organizationStudioPrototype`) is the
+  north star for surface treatment. Every primary zone — center canvas/workspace, chat
+  panel, rails, header regions that carry content — sits in its OWN framed surface
+  (panel background from the panel ramp, distinct from page `#0d0d0f`, with the drawer
+  hierarchy rule: children lighter than parent). Any primary zone rendered flat on the
+  page background = FAIL. Chris's M3 verdict ("looks a bit cheap … everything so flat")
+  is the precedent; flatness is not relitigable. Mech form (codex design-authority
+  ruling): NESTED HIERARCHY, not "has a border" — page `#0d0d0f` appears only as
+  gutter between surfaces; every primary zone root resolves to a panel-ramp value;
+  child controls resolve LIGHTER than their parent surface. **[mech: computed-bg walk
+  of zone roots + child controls; page bg found inside a zone = FAIL]**
+- **C22 interior-well ruling (codex, Drop 1 — binding):** an interior surface painted
+  the page value (e.g. `.workspace-timeline` on `var(--st-stage)` `#0d0d0f` inside the
+  framed workspace) FAILS — no inset-well exception. Fix shape: interior scroll regions
+  take the next-lighter ramp step (`#1b1b1e` child inside `#121214` parent); groups may
+  stay transparent within it. Page `#0d0d0f` is gutter-only, everywhere, always.
+- **C22a — Selection never steals gold.** Visual check on every drive: ordinary
+  selection, hover, and unread states consume ink/tint/weight only — never any gold
+  family value. Gold remains exclusively the one human-required item (C1/C2/C21).
+
+## Terminal parity (nailed acceptance contract — Chris ruling 2026-07-17)
+
+- **C23 — Terminal parity in Conversation.** "Nailed" = full working app + terminal
+  parity + nothing lost on restart/reload. From the Conversation surface you can do
+  everything you can do in a terminal session and currently cannot: switch model, see
+  token usage, and the rest of the terminal-only operations. Parity controls live in
+  the ACTIVE Conversation's header/context (codex ruling) — they may not spawn a new
+  rail or global zone. Parity actions obey the existing laws (Inter not mono, no
+  attention text, one gold). Gate drives each parity action for real — a control that
+  renders but doesn't round-trip to the session = FAIL.
+
+## Index + persistence (codex IA audit, 2026-07-17 evening)
+
+- **C24 — One conversation index.** Per Chris's one-index ruling: the rail presents a
+  SINGLE conversation index (Needs you / Unread / Recent / All), not parallel
+  Projects/Rooms/People indexes competing for the same job. Other zones may exist as
+  destinations, but there is one place conversations are found.
+- **C19/C21 persistence scope (clarified):** reload persistence covers ALL typed
+  ThreadItems — received messages, WorkUpdates, decisions and resolutions — not only
+  the sent-message append log. A store that survives only "what I sent" = FAIL.
+
+## Port-entry known-reds (M3 state, carried into the variant-B port drive)
+
+Codex IA audit: four current hard fails that survive a reskin — (1) parallel rail
+indexes [C24], (2) bespoke Mission events renderer [C20], (3) persistence limited to
+sent-message append log [C19/C21 scope], (4) no ReadCursor/scroll-anchor model [C21].
+Design-authority ruling: a cosmetic variant-B coat over these four = NO-MATCH.
+Green carried in: stable id/delivery/retry, Direct/Room shared renderer, composer
+real-keystroke typing.
+
 ## Procedure
 
 Each codex milestone: I drive it with `tools/browse` (goto/click/scroll/shot + eval for [mech]
 counts), post screenshots + per-criterion verdict (pass / fail / n-a-yet) in the room. Gate
-green = all 16 pass in-browser. Passing by code-read does not count — house rule.
+green = all criteria pass in-browser. Passing by code-read does not count — house rule.
+Current target: Guild Lead · opus's variant-B port of the real messaging surface
+(codex = design authority, no browser; this gate is the driven truth).

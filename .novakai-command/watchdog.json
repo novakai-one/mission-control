@@ -1,0 +1,9 @@
+{
+  "intervalSec": 60,
+  "defaults": { "quietAfterSec": 1200, "escalate": "team" },
+  "seats": [
+    { "title": "Message Man · claude", "quietAfterSec": 900, "escalate": "chris" }
+  ],
+  "ignoreTitles": ["chris"],
+  "stuckQueuedAfterSec": 600
+}
