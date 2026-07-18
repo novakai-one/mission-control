@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import type { SessionReference } from '../../../shared/project/schema.js';
+import { PROVIDER_IDS, type ProviderId, type SessionReference } from '../../../shared/project/schema.js';
 import { ProjectStore } from '../../project/persistence/store.js';
 import { ProjectService } from '../../project/service/service.js';
 import { ProjectRuntime } from '../../project/runtime/runtime.js';
@@ -10,8 +10,8 @@ import { ThreadProjector } from '../../thread/projection/projector.js';
 function sessionReference(body: unknown): SessionReference {
   if (!body || typeof body !== 'object') throw new Error('session reference is required');
   const input = body as Record<string, unknown>;
-  if (input.provider !== 'claude' && input.provider !== 'codex') {
-    throw new Error('provider must be claude or codex');
+  if (!PROVIDER_IDS.includes(input.provider as ProviderId)) {
+    throw new Error(`provider must be one of ${PROVIDER_IDS.join(', ')}`);
   }
   if (typeof input.sessionId !== 'string' || !input.sessionId.trim()) {
     throw new Error('sessionId is required');
@@ -20,7 +20,7 @@ function sessionReference(body: unknown): SessionReference {
     throw new Error('cwd must be a string');
   }
   return {
-    provider: input.provider,
+    provider: input.provider as ProviderId,
     sessionId: input.sessionId.trim(),
     ...(input.cwd ? { cwd: input.cwd } : {}),
   };
@@ -66,9 +66,9 @@ export class ProjectsHub {
   }
 
   private async launch(request: Request, response: Response): Promise<void> {
-    const provider = request.body?.provider;
-    if (provider !== 'claude' && provider !== 'codex') {
-      response.status(400).json({ error: 'provider must be claude or codex' });
+    const provider = request.body?.provider as ProviderId;
+    if (!PROVIDER_IDS.includes(provider)) {
+      response.status(400).json({ error: `provider must be one of ${PROVIDER_IDS.join(', ')}` });
       return;
     }
     try {

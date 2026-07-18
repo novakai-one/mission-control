@@ -31,7 +31,7 @@ function testValidProject(): void {
 function testRejectsUnknownProvider(): void {
   const broken = structuredClone(VALID_PROJECT);
   broken.threads[0]!.sessionReferences[0]!.provider = 'gemini';
-  assert.throws(() => parseProjectRecord(broken), /must be claude or codex/);
+  assert.throws(() => parseProjectRecord(broken), /must be one of claude, codex, kimi/);
 }
 
 function testRejectsMissingThreads(): void {
