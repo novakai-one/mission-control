@@ -7,6 +7,7 @@ import type { ProjectRecord } from '../../../../shared/project/schema.js';
 import type { AgentInfo } from '../../../lib/agentSocket/index.js';
 import {
   buildAttentionQueue,
+  messageItemId,
   updateAttentionQueue,
 } from '../../../lib/attention/index.js';
 import { buildTargets } from '../../../lib/mentions/index.js';
@@ -27,10 +28,11 @@ import {
   unreadCountFor,
   useReadCursors,
 } from '../../../lib/readCursor/index.js';
-import { DENSITY_SCALE, MESSAGING_SETTINGS } from './model.js';
+import { DENSITY_SCALE, MESSAGING_SETTINGS, workingAgentFor } from './model.js';
 import { RoomsRail } from './rail/index.js';
-import { MessageFeed } from './thread/index.js';
+import { MessageFeed, messageRowId } from './thread/index.js';
 import { ComposerBar } from './composer/index.js';
+import { ContextPanel } from './context/index.js';
 import './index.css';
 
 interface MessagesViewProps {
@@ -66,6 +68,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   const cursors = useReadCursors();
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
+  const [contextOpen, setContextOpen] = useState(true);
 
   const roster = useMemo(() => liveRoster(agents), [agents]);
   const conversations = useMemo(
@@ -132,8 +135,21 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     await postJson('/api/user/messages', { 'to': recipient, delivery: 'normal', body });
   }
 
+  // Review = scroll the thread to the failed row AND resolve its amber item.
+  function review(envelopeId: string): void {
+    setDismissed((current) => new Set(current).add(messageItemId(envelopeId)));
+    document.getElementById(messageRowId(envelopeId))?.scrollIntoView({ block: 'center' });
+  }
+
+  const laneMessages = selected ? messagesFor(feed, selected.id) : [];
+  const working = workingAgentFor(laneMessages, agents, Date.now());
+
   return (
-    <section className="msg-view" ref={rootRef} aria-label="Messages">
+    <section
+      className={contextOpen ? 'msg-view' : 'msg-view msg-context-closed'}
+      ref={rootRef}
+      aria-label="Messages"
+    >
       <RoomsRail
         conversations={conversations}
         unread={unread}
@@ -148,7 +164,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
           <>
             <MessageFeed
               conversation={selected}
-              messages={messagesFor(feed, selected.id)}
+              messages={laneMessages}
               feed={feed}
               agents={agents}
               targets={targets}
@@ -159,10 +175,29 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
         ) : (
           <div className="msg-temp">No conversations yet</div>
         )}
+        {!contextOpen && (
+          <button
+            type="button"
+            className="msg-ghost msg-context-reopen"
+            aria-label="Show context panel"
+            title="Show context panel"
+            onClick={() => setContextOpen(true)}
+          >
+            <span className="msg-ghost-glyph" aria-hidden="true" />
+          </button>
+        )}
       </main>
-      <aside className="msg-context">
-        <div className="msg-temp">Context lands in Task 4</div>
-      </aside>
+      {selected && contextOpen && (
+        <ContextPanel
+          conversation={selected}
+          messages={laneMessages}
+          agents={agents}
+          unreadCount={unread[selected.id] ?? 0}
+          working={working}
+          onReview={review}
+          onCollapse={() => setContextOpen(false)}
+        />
+      )}
     </section>
   );
 }

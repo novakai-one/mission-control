@@ -161,8 +161,10 @@ export function RoomsRail(props: RoomsRailProps) {
 
   return (
     <aside className="msg-rail" aria-label="Conversations">
-      <div className="msg-rail-head">
-        <button type="button" className="msg-rail-tab is-active">All</button>
+      <div className="msg-tabbar">
+        <div className="msg-tabrow">
+          <button type="button" className="msg-tab is-active">All</button>
+        </div>
         <button
           type="button"
           className="msg-ghost"

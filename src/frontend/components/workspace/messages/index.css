@@ -1,6 +1,7 @@
 /* Messages tab shell — the storyboard's 3-rail grid. Values: tokens.css. */
 
 .msg-view {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -10,6 +11,17 @@
   color: var(--msg-text-body);
   font-family: var(--msg-font-ui);
   font-size: var(--msg-fs-body);
+}
+
+.msg-view.msg-context-closed {
+  grid-template-columns: var(--msg-rail-w) minmax(250px, 1fr);
+}
+
+.msg-context-reopen {
+  position: absolute;
+  top: var(--msg-sp-10);
+  right: var(--msg-sp-10);
+  z-index: 20;
 }
 
 .msg-view * {
@@ -42,6 +54,101 @@
   height: 100%;
   color: var(--msg-text-faint);
   font-size: var(--msg-fs-hint);
+}
+
+/* ---- shared chrome: tab bars (rail "All", context Summary/Tasks/Stats) ---- */
+.msg-tabbar {
+  height: var(--msg-bar-h);
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 0 var(--msg-sp-8);
+  border-bottom: 1px solid var(--msg-border);
+}
+
+.msg-tabrow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--msg-sp-2);
+}
+
+.msg-tab {
+  border: 0;
+  background: none;
+  padding: 0 var(--msg-sp-8);
+  font: var(--msg-fw-medium) var(--msg-fs-body) var(--msg-font-ui);
+  color: var(--msg-text-muted);
+  cursor: pointer;
+  transition: color var(--msg-t-fast), border-color var(--msg-t-tab);
+  border-bottom: 2px solid transparent;
+}
+
+.msg-tab:hover {
+  color: var(--msg-text-body);
+}
+
+.msg-tab.is-active {
+  color: var(--msg-text-bright);
+  border-bottom-color: var(--msg-text-bright);
+  margin-bottom: -1px;
+  cursor: default;
+}
+
+.msg-tab:focus-visible {
+  outline: 1px solid var(--msg-amber);
+  outline-offset: -1px;
+}
+
+/* Ghost icon button + CSS-drawn rail glyph (spec-notes — no icon font). */
+.msg-ghost {
+  align-self: center;
+  width: var(--msg-ghost-btn);
+  height: var(--msg-ghost-btn);
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--msg-r-button);
+  background: none;
+  color: var(--msg-text-icon);
+  cursor: pointer;
+  transition: background var(--msg-t-fast), color var(--msg-t-fast);
+}
+
+.msg-ghost:hover {
+  background: var(--msg-bg-control);
+}
+
+.msg-ghost:focus-visible {
+  outline: 1px solid var(--msg-amber);
+  outline-offset: -1px;
+}
+
+.msg-ghost-glyph {
+  width: var(--msg-ghost-glyph);
+  height: var(--msg-ghost-glyph);
+  border: 1px solid currentcolor;
+  border-radius: 2px;
+  position: relative;
+}
+
+.msg-ghost-glyph::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 33%;
+  border-left: 1px solid currentcolor;
+}
+
+/* ---- shared section header (rail + context panels) ---- */
+.msg-section {
+  margin: 0;
+  padding: 0 var(--msg-sp-7);
+  font: var(--msg-fw-semibold) var(--msg-fs-meta) var(--msg-font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--msg-text-header);
 }
 
 /* ---- responsive (A2: real breakpoints, not the storyboard miniature) ---- */

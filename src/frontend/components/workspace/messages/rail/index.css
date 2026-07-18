@@ -1,5 +1,6 @@
 /* RoomsRail — storyboard left rail. Every value is a --msg-* token; find it,
-   change it, done. */
+   change it, done. Shared chrome (tab bars, ghost glyph, section headers)
+   lives in the shell index.css — one source, both rails. */
 
 .msg-rail {
   min-height: 0;
@@ -10,68 +11,6 @@
   border-right: 1px solid var(--msg-border);
 }
 
-/* ---- header bar: "All" tab + ghost glyph ---- */
-.msg-rail-head {
-  height: var(--msg-bar-h);
-  flex: none;
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  padding: 0 var(--msg-sp-8);
-  border-bottom: 1px solid var(--msg-border);
-}
-
-.msg-rail-tab {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: var(--msg-fw-medium) var(--msg-fs-body) var(--msg-font-ui);
-  color: var(--msg-text-muted);
-  cursor: default;
-}
-
-.msg-rail-tab.is-active {
-  color: var(--msg-text-bright);
-  border-bottom: 2px solid var(--msg-text-bright);
-  margin-bottom: -1px;
-}
-
-.msg-ghost {
-  align-self: center;
-  width: var(--msg-ghost-btn);
-  height: var(--msg-ghost-btn);
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--msg-r-button);
-  background: none;
-  color: var(--msg-text-icon);
-  cursor: pointer;
-  transition: background var(--msg-t-fast), color var(--msg-t-fast);
-}
-
-.msg-ghost:hover {
-  background: var(--msg-bg-control);
-}
-
-/* CSS-drawn rail glyph: bordered box + divider line (spec-notes — no icon font). */
-.msg-ghost-glyph {
-  width: var(--msg-ghost-glyph);
-  height: var(--msg-ghost-glyph);
-  border: 1px solid currentcolor;
-  border-radius: 2px;
-  position: relative;
-}
-
-.msg-ghost-glyph::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  bottom: -1px;
-  left: 33%;
-  border-left: 1px solid currentcolor;
-}
-
 /* ---- body ---- */
 .msg-rail-body {
   min-height: 0;
@@ -80,13 +19,8 @@
   padding: 0 var(--msg-sp-10) var(--msg-sp-12);
 }
 
-.msg-section {
+.msg-rail-body .msg-section {
   margin: var(--msg-sp-14) 0 var(--msg-sp-6);
-  padding: 0 var(--msg-sp-7);
-  font: var(--msg-fw-semibold) var(--msg-fs-meta) var(--msg-font-ui);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--msg-text-header);
 }
 
 .msg-rail-stack {
@@ -235,7 +169,6 @@
 /* ---- focus rings (A1: none authored in the spec — amber ring is ours) ---- */
 .msg-room:focus-visible,
 .msg-person:focus-visible,
-.msg-ghost:focus-visible,
 .msg-picker-agent:focus-visible {
   outline: 1px solid var(--msg-amber);
   outline-offset: -1px;
