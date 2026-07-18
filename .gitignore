@@ -18,3 +18,5 @@ desktop/package-lock.json
 .novakai-command/watchdog-state.json
 .novakai-command/watchdog-events.jsonl
 .novakai-command/watchdog.out
+
+.novakai-command/smoke/
