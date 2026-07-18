@@ -1,0 +1,189 @@
+// Messages tab view-model — every derived decision lives here as typed,
+// pure, testable data. Components stay dumb: they render what these
+// functions return. Change a rule here and the whole tab follows.
+import type { AgentInfo } from '../../../lib/agentSocket/index.js';
+import {
+  CHRIS,
+  isRoomId,
+  type Conversation,
+  type TunnelEnvelope,
+} from '../../../lib/tunnelModel/index.js';
+
+/* ---------- Density-as-data (owner decision, locked) -----------------------
+   The whole tab rescales from this ONE knob: MessagesView writes
+   DENSITY_SCALE[settings.density] onto .msg-view as --msg-scale and every
+   size token in tokens.css is calc(spec px × --msg-scale). App-level setting
+   concept — a constant today, a settings toggle tomorrow (swap the source of
+   MESSAGING_SETTINGS, nothing else changes). */
+export type MessagingDensity = 'low' | 'normal' | 'high';
+
+export interface MessagingTabSettings {
+  density: MessagingDensity;
+}
+
+export const DENSITY_SCALE: Record<MessagingDensity, number> = {
+  // eslint-disable-next-line id-length -- owner's locked density name (low|normal|high)
+  low: 1.0,
+  normal: 1.3,
+  high: 1.7,
+};
+
+export const MESSAGING_SETTINGS: MessagingTabSettings = { density: 'normal' };
+
+/* ---------- Presence (D3 — invented heuristic; no backend presence) --------
+   unread in the lane → amber "notification"; agent running → green;
+   anything else (exited / unknown) → gray. */
+export type PresenceTone = 'amber' | 'green' | 'gray';
+
+export const PRESENCE_LABEL: Record<PresenceTone, string> = {
+  amber: 'notification',
+  green: 'online',
+  gray: 'offline',
+};
+
+export function presenceToneFor(
+  unreadCount: number,
+  status: AgentInfo['status'] | null,
+): PresenceTone {
+  if (unreadCount > 0) return 'amber';
+  if (status === 'running') return 'green';
+  return 'gray';
+}
+
+/* ---------- Rail sections ---------------------------------------------------
+   MISSION ROOMS = #team channel pinned first, then rooms (recency order as
+   delivered by buildConversations); DIRECT MESSAGES = dm lanes. TEAMS is
+   hidden by owner decision (no backend concept of "team"). */
+export interface RailSections {
+  rooms: Conversation[];
+  directs: Conversation[];
+}
+
+export function splitRailSections(conversations: Conversation[]): RailSections {
+  const channels = conversations.filter((lane) => lane.kind === 'channel');
+  const rooms = conversations.filter((lane) => lane.kind === 'room');
+  const directs = conversations.filter((lane) => lane.kind === 'dm');
+  return { rooms: [...channels, ...rooms], directs };
+}
+
+/** Rail/composer label for a room lane: '#team' → 'team', 'room_…' → its name. */
+export function roomLabelFor(conversation: Conversation): string {
+  return conversation.title.replace(/^#/, '');
+}
+
+/* ---------- Identity labels ------------------------------------------------- */
+export function displayNameFor(sender: string): string {
+  return sender === CHRIS ? 'Chris' : sender;
+}
+
+export function roleFor(sender: string, agents: AgentInfo[]): string {
+  if (sender === CHRIS) return 'Product owner';
+  return agents.find((agent) => agent.title === sender)?.provider ?? 'agent';
+}
+
+/** One-letter storyboard initial ("Chris" → C, "Maya" → M). */
+export function initialFor(sender: string): string {
+  return displayNameFor(sender).trim().charAt(0).toUpperCase() || '?';
+}
+
+/* ---------- "Agent working…" (D6 — heuristic; no real working signal) ------
+   True when the lane's NEWEST envelope is addressed TO the agent (not from
+   them), that agent is running, and the envelope is fresh. Any word from the
+   agent becomes the newest envelope and clears it. */
+export const WORKING_WINDOW_MS = 10 * 60 * 1000;
+
+export function workingAgentFor(
+  messages: TunnelEnvelope[],
+  agents: AgentInfo[],
+  nowMs: number,
+): string | null {
+  const latest = messages[messages.length - 1];
+  if (!latest || latest.to === CHRIS || isRoomId(latest.to) || latest.to.startsWith('#')) return null;
+  const agent = agents.find((entry) => entry.title === latest.to);
+  if (agent?.status !== 'running') return null;
+  const ageMs = nowMs - Date.parse(latest.createdAt);
+  return ageMs >= 0 && ageMs < WORKING_WINDOW_MS ? latest.to : null;
+}
+
+/* ---------- Clock + day grouping ------------------------------------------- */
+export function formatClockTime(isoTimestamp: string): string {
+  const parsed = new Date(isoTimestamp);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const hours = String(parsed.getHours()).padStart(2, '0');
+  const minutes = String(parsed.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function dayKeyOf(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+export function dayLabelFor(isoTimestamp: string, nowDate: Date): string {
+  const parsed = new Date(isoTimestamp);
+  if (dayKeyOf(parsed) === dayKeyOf(nowDate)) return 'TODAY';
+  const month = parsed.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+  return `${month} ${parsed.getDate()}`;
+}
+
+export interface DayGroup {
+  dayKey: string;
+  label: string;
+  messages: TunnelEnvelope[];
+}
+
+/** Split one lane's (time-ordered) transcript into per-day groups for pills. */
+export function groupByDay(messages: TunnelEnvelope[], nowDate: Date): DayGroup[] {
+  const groups: DayGroup[] = [];
+  for (const message of messages) {
+    const dayKey = dayKeyOf(new Date(message.createdAt));
+    const last = groups[groups.length - 1];
+    if (last && last.dayKey === dayKey) last.messages.push(message);
+    else groups.push({ dayKey, label: dayLabelFor(message.createdAt, nowDate), messages: [message] });
+  }
+  return groups;
+}
+
+/* ---------- Reply context (only when data exists) ---------------------------
+   envelope.threadId points at the envelope it answers; when that parent is
+   known we render "Replying to <name>", otherwise nothing. */
+export function replyLabelFor(
+  envelope: TunnelEnvelope,
+  feed: TunnelEnvelope[],
+): string | null {
+  if (!envelope.threadId) return null;
+  const parent = feed.find((entry) => entry.id === envelope.threadId);
+  return parent ? `Replying to ${displayNameFor(parent.from)}` : null;
+}
+
+/* ---------- Stats (D10 — REAL derived counts, never dummy numbers) --------- */
+export interface LaneStats {
+  sent: number;
+  received: number;
+  delivered: number;
+  failed: number;
+}
+
+export function laneStatsFor(messages: TunnelEnvelope[]): LaneStats {
+  const stats: LaneStats = { sent: 0, received: 0, delivered: 0, failed: 0 };
+  for (const message of messages) {
+    if (message.from === CHRIS) stats.sent += 1;
+    else stats.received += 1;
+    if (message.status === 'failed') stats.failed += 1;
+    else if (message.status === 'delivered') stats.delivered += 1;
+  }
+  return stats;
+}
+
+/* ---------- Summary recap (derived quiet notes — honest, no lorem) --------- */
+export function recapNotesFor(
+  conversation: Conversation,
+  messages: TunnelEnvelope[],
+  unreadCount: number,
+): string[] {
+  const notes: string[] = [];
+  notes.push(unreadCount > 0 ? `${unreadCount} unread here.` : 'All caught up here.');
+  if (conversation.members) notes.push(`${conversation.members.length} members in this room.`);
+  const latest = messages[messages.length - 1];
+  notes.push(latest ? `Last word ${formatClockTime(latest.createdAt)}.` : 'Nothing said yet.');
+  return notes;
+}

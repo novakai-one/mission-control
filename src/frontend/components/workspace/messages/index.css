@@ -1,185 +1,79 @@
-/* C — team messaging studio. The four-column composition follows the
-   reference HTML; the canonical tunnel components supply the real data. */
-.messages-view {
+/* Messages tab shell — the storyboard's 3-rail grid. Values: tokens.css. */
+
+.msg-view {
   width: 100%;
+  height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 280px;
-  background: var(--st-panel);
+  grid-template-columns: var(--msg-rail-w) minmax(250px, 1fr) var(--msg-context-w);
+  background: var(--msg-bg-main);
+  color: var(--msg-text-body);
+  font-family: var(--msg-font-ui);
+  font-size: var(--msg-fs-body);
 }
 
-.messages-workspaces {
+.msg-view * {
+  box-sizing: border-box;
+}
+
+/* Center column: feed scrolls, composer pins to the bottom. */
+.msg-thread {
+  min-width: 0;
   min-height: 0;
-  padding: 15px 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  border-right: 1px solid var(--st-line);
-  background: var(--st-stage);
-}
-
-.messages-mark,
-.messages-workspace {
-  width: 36px;
-  height: 36px;
   display: grid;
-  place-items: center;
-  border-radius: var(--st-r-lg);
-  font: 600 10px var(--st-sans);
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: var(--msg-bg-main);
 }
 
-.messages-mark {
-  background: var(--st-panel-3);
-  color: var(--st-ink);
-}
-
-.messages-workspace {
-  border: 1px solid var(--st-line);
-  background: var(--st-panel);
-  color: var(--st-muted);
-  cursor: default;
-}
-
-.messages-workspace.is-active {
-  border-color: var(--st-line-3);
-  background: var(--st-panel-2);
-  color: var(--st-ink);
-}
-
-.messages-view > .st-ms {
-  grid-template-columns: 238px minmax(0, 1fr);
-  min-width: 0;
-  background: var(--st-panel);
-}
-
-.messages-view .st-ms-rail {
-  background: var(--st-panel);
-}
-
-.messages-view .st-ms-main {
-  background: var(--st-stage);
-}
-
-.messages-view .st-ms-head {
-  padding: 18px 20px 14px;
-}
-
-.messages-view .st-ms-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.messages-view .st-ai-body {
-  padding-top: 6px;
-}
-
-.messages-inspector {
-  min-width: 0;
-  overflow: auto;
-  border-left: 1px solid var(--st-line);
-  background: var(--st-panel);
-  padding: 0 16px;
-}
-
-.messages-inspector section {
-  padding: 18px 0;
-  border-bottom: 1px solid var(--st-line);
-}
-
-.messages-inspector section:last-child {
-  border-bottom: 0;
-}
-
-.messages-kicker {
-  color: var(--st-faintest);
-  font: 600 9px var(--st-sans);
-  letter-spacing: .15em;
-  text-transform: uppercase;
-}
-
-.messages-stats {
-  display: flex;
-  gap: 22px;
-  margin-top: 12px;
-}
-
-.messages-stats div {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.messages-stats strong {
-  font-size: 21px;
-  font-weight: 500;
-}
-
-.messages-stats span,
-.messages-inspector small,
-.messages-inspector p {
-  color: var(--st-faintest);
-  font-size: 9px;
-}
-
-.messages-agents,
-.messages-artifacts {
+/* Right rail column. */
+.msg-context {
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 10px;
-}
-
-.messages-agent,
-.messages-artifacts button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border: 0;
-  background: none;
-  color: var(--st-ink);
-  padding: 9px 0;
-  text-align: left;
-}
-
-.messages-agent > span {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--st-r-md);
-  background: var(--st-panel-3);
-  color: var(--st-muted);
-  font-size: 9px;
-}
-
-.messages-agent div,
-.messages-artifacts button div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.messages-agent strong,
-.messages-artifacts strong {
   overflow: hidden;
-  font-size: 10px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--msg-bg-panel);
+  border-left: 1px solid var(--msg-border);
 }
 
-.messages-artifacts button > span {
-  color: var(--st-muted);
+/* Temporary placeholders (Tasks 2–4 fill these). */
+.msg-temp {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--msg-text-faint);
+  font-size: var(--msg-fs-hint);
 }
 
-@media (max-width: 1150px) {
-  .messages-view {
-    grid-template-columns: 58px minmax(0, 1fr);
+/* ---- responsive (A2: real breakpoints, not the storyboard miniature) ---- */
+@media (max-width: 1200px) {
+  .msg-view {
+    grid-template-columns: var(--msg-rail-w) minmax(250px, 1fr);
   }
 
-  .messages-inspector {
+  .msg-context {
     display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .msg-view {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .msg-rail {
+    display: none;
+  }
+
+  .msg-view.msg-rail-open .msg-rail {
+    display: flex;
+    position: absolute;
+    z-index: 30;
+    inset: 0 auto 0 0;
+    width: var(--msg-rail-w);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  }
+
+  .msg-view {
+    position: relative;
   }
 }
