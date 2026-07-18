@@ -1,15 +1,24 @@
 // Append-only JSONL message store — the audit record of every send
 // (docs/agent-messaging.md R3). Status transitions append an amended copy of
 // the envelope (same id) rather than rewriting history; readers fold by id,
-// last line wins. The file is re-read on every query so writes from the
-// file-fallback CLI stay visible while the server runs.
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+// last line wins. The folded index lives in memory and is maintained from
+// appends; a size/mtime probe on the file triggers a re-fold when an outside
+// writer (hand edit, nvk-msg file fallback) changed it. Writes stay
+// synchronous inside one process — the event loop is the single writer.
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { TEAM_CHANNEL } from '../types.js';
 import type { ChannelQuery, MessageEnvelope, MessageQuery } from '../types.js';
 
+interface FileFingerprint {
+  size: number;
+  mtimeMs: number;
+}
+
 export class MessageStore {
   private appendListener: ((envelope: MessageEnvelope) => void) | null = null;
+  private byId: Map<string, MessageEnvelope> | null = null;
+  private fingerprint: FileFingerprint | null = null;
 
   constructor(
     private readonly storePath = path.join(process.cwd(), '.novakai-command', 'messages.jsonl'),
@@ -23,6 +32,12 @@ export class MessageStore {
   append(envelope: MessageEnvelope): void {
     mkdirSync(path.dirname(this.storePath), { recursive: true });
     appendFileSync(this.storePath, JSON.stringify(envelope) + '\n');
+    if (this.byId) {
+      // Snapshot: the router mutates the routed envelope's status after
+      // appending, and the index must hold what was recorded.
+      this.byId.set(envelope.id, { ...envelope });
+      this.fingerprint = this.probe();
+    }
     // Notify with a snapshot: the router mutates the routed envelope's status
     // after appending, and listeners must see what was recorded, not what the
     // object became later.
@@ -31,7 +46,7 @@ export class MessageStore {
 
   /** Append an amended copy with the new status; returns it, or null if the id is unknown. */
   updateStatus(id: string, status: MessageEnvelope['status']): MessageEnvelope | null {
-    const current = this.fold().get(id);
+    const current = this.folded().get(id);
     if (!current) return null;
     const updated: MessageEnvelope = { ...current, status };
     this.append(updated);
@@ -39,7 +54,7 @@ export class MessageStore {
   }
 
   history(query: MessageQuery = {}): MessageEnvelope[] {
-    let envelopes = Array.from(this.fold().values());
+    let envelopes = Array.from(this.fresh().values());
     if (query.withAgent !== undefined) {
       const agent = query.withAgent;
       envelopes = envelopes.filter((message) => message.from === agent || message.to === agent);
@@ -64,11 +79,34 @@ export class MessageStore {
     return this.history({ withAgent: TEAM_CHANNEL, ...query });
   }
 
-  /** Fold the entry lines by id — later lines (status amendments) win, first-seen order kept. */
-  private fold(): Map<string, MessageEnvelope> {
-    const byId = new Map<string, MessageEnvelope>();
-    for (const line of this.readLines()) byId.set(line.id, line);
-    return byId;
+  /** The in-memory index as-is — folds once, never re-probes (updateStatus stays atomic). */
+  private folded(): Map<string, MessageEnvelope> {
+    if (!this.byId) this.refold();
+    return this.byId!;
+  }
+
+  /** The index, re-folded first when the file changed under us (hand edits, CLI fallback). */
+  private fresh(): Map<string, MessageEnvelope> {
+    const probe = this.probe();
+    const unchanged = probe !== null
+      && this.fingerprint !== null
+      && probe.size === this.fingerprint.size
+      && probe.mtimeMs === this.fingerprint.mtimeMs;
+    if (!this.byId || !unchanged) this.refold();
+    return this.byId!;
+  }
+
+  private refold(): void {
+    const folded = new Map<string, MessageEnvelope>();
+    for (const line of this.readLines()) folded.set(line.id, line);
+    this.byId = folded;
+    this.fingerprint = this.probe();
+  }
+
+  private probe(): FileFingerprint | null {
+    if (!existsSync(this.storePath)) return null;
+    const stats = statSync(this.storePath);
+    return { size: stats.size, mtimeMs: stats.mtimeMs };
   }
 
   private readLines(): MessageEnvelope[] {
