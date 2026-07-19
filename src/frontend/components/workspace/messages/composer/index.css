@@ -1,6 +1,9 @@
 /* ComposerBar — storyboard pinned composer. Values: tokens.css. */
 
 .msg-composer {
+  /* Explicit row: the last auto track, pinned below the feed at every
+     viewport and feed length (see .msg-thread in ../index.css — M3). */
+  grid-row: 3;
   margin: 0;
   padding: 0 var(--msg-thread-pad-x) var(--msg-sp-18);
   display: flex;

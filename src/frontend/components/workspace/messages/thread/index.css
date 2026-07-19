@@ -1,6 +1,9 @@
 /* MessageFeed — storyboard center column. Values: tokens.css. */
 
 .msg-feed {
+  /* Explicit row: the flexible middle track, whatever the topbar's
+     visibility (see .msg-thread in ../index.css — M3). */
+  grid-row: 2;
   min-height: 0;
   overflow-y: auto;
   display: flex;

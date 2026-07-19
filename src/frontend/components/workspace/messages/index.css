@@ -108,7 +108,13 @@
   box-sizing: border-box;
 }
 
-/* Center column: feed scrolls, composer pins to the bottom. */
+/* Center column: feed scrolls, composer pins to the bottom. The three
+   children carry EXPLICIT row placement (topbar 1 / feed 2 / composer 3):
+   the topbar is display:none on desktop, and a hidden item generates no
+   grid box — under auto-placement the feed then lands in the AUTO row and
+   the composer in the flexible row, which collapses to zero whenever the
+   feed outgrows the column (M3 root cause). Pinning the rows makes
+   placement independent of topbar visibility. */
 .msg-thread {
   position: relative;
   min-width: 0;
@@ -121,6 +127,7 @@
 /* Phone-only thread header (A2): rail toggle + current lane. */
 .msg-thread-topbar {
   display: none;
+  grid-row: 1;
 }
 
 /* Right rail column. Stays MOUNTED when closed (M1): the shell folds its
