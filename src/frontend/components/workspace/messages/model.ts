@@ -52,6 +52,62 @@ export function snippetFor(body: string): string {
   return flat.length > limit ? `${flat.slice(0, limit).trimEnd()}…` : flat;
 }
 
+/* ---------- Rail widths (round 2 — drag handles, persisted) ----------------
+   Both outer columns resize between typed clamps; the pair persists to
+   localStorage as one typed object. Parse failures and out-of-range values
+   fall back to the storyboard defaults. */
+export interface RailWidths {
+  rail: number;
+  context: number;
+}
+
+export const RAIL_WIDTH_LIMITS: Record<keyof RailWidths, { floor: number; ceiling: number }> = {
+  rail: { floor: 180, ceiling: 360 },
+  context: { floor: 220, ceiling: 440 },
+};
+
+export const DEFAULT_RAIL_WIDTHS: RailWidths = { rail: 230, context: 280 };
+
+const RAIL_WIDTHS_KEY = 'novakai.messages.rail-widths.v1';
+
+export function clampRailWidth(kind: keyof RailWidths, pixels: number): number {
+  const limits = RAIL_WIDTH_LIMITS[kind];
+  if (!Number.isFinite(pixels)) return DEFAULT_RAIL_WIDTHS[kind];
+  const rounded = Math.round(pixels);
+  if (rounded < limits.floor) return limits.floor;
+  if (rounded > limits.ceiling) return limits.ceiling;
+  return rounded;
+}
+
+export function parseRailWidths(text: string | null): RailWidths {
+  if (!text) return DEFAULT_RAIL_WIDTHS;
+  try {
+    const parsed = JSON.parse(text) as Partial<RailWidths>;
+    return {
+      rail: clampRailWidth('rail', Number(parsed.rail)),
+      context: clampRailWidth('context', Number(parsed.context)),
+    };
+  } catch {
+    return DEFAULT_RAIL_WIDTHS;
+  }
+}
+
+export function loadRailWidths(): RailWidths {
+  try {
+    return parseRailWidths(globalThis.localStorage?.getItem(RAIL_WIDTHS_KEY) ?? null);
+  } catch {
+    return DEFAULT_RAIL_WIDTHS;
+  }
+}
+
+export function saveRailWidths(widths: RailWidths): void {
+  try {
+    globalThis.localStorage?.setItem(RAIL_WIDTHS_KEY, JSON.stringify(widths));
+  } catch {
+    // Private-mode storage failures never break a drag.
+  }
+}
+
 /* ---------- Presence (D3 — invented heuristic; no backend presence) --------
    unread in the lane → amber "notification"; agent running → green;
    anything else (exited / unknown) → gray. */

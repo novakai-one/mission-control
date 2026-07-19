@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import type { Conversation, TunnelEnvelope } from '../../../../lib/tunnelModel/index.js';
 import {
+  DEFAULT_RAIL_WIDTHS,
   DENSITY_SCALE,
+  clampRailWidth,
   dayLabelFor,
   displayNameFor,
   groupByDay,
   initialFor,
   isCollapsible,
   laneStatsFor,
+  parseRailWidths,
   presenceToneFor,
   recapNotesFor,
   replyLabelFor,
@@ -146,5 +149,17 @@ assert.ok(snippet.length <= 282); // 280 + ellipsis, trimmed
 assert.equal(snippetFor('line one\n\nline   two'), 'line one line   two'.replace('   ', ' '));
 assert.equal(isCollapsible('x'.repeat(280)), false);
 assert.equal(isCollapsible('x'.repeat(281)), true);
+
+// Rail widths: clamps, parse fallbacks, round-trip honesty.
+assert.equal(clampRailWidth('rail', 100), 180);
+assert.equal(clampRailWidth('rail', 999), 360);
+assert.equal(clampRailWidth('rail', 240.4), 240);
+assert.equal(clampRailWidth('context', 50), 220);
+assert.equal(clampRailWidth('context', 999), 440);
+assert.equal(clampRailWidth('rail', Number.NaN), DEFAULT_RAIL_WIDTHS.rail);
+assert.deepEqual(parseRailWidths(null), DEFAULT_RAIL_WIDTHS);
+assert.deepEqual(parseRailWidths('not json'), DEFAULT_RAIL_WIDTHS);
+assert.deepEqual(parseRailWidths('{"rail":250}'), { rail: 250, context: 280 });
+assert.deepEqual(parseRailWidths('{"rail":1,"context":9999}'), { rail: 180, context: 440 });
 
 console.log('messages/model tests passed');

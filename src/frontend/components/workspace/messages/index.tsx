@@ -28,7 +28,16 @@ import {
   unreadCountFor,
   useReadCursors,
 } from '../../../lib/readCursor/index.js';
-import { DENSITY_SCALE, MESSAGING_SETTINGS, roomLabelFor, workingAgentFor } from './model.js';
+import {
+  DENSITY_SCALE,
+  MESSAGING_SETTINGS,
+  clampRailWidth,
+  loadRailWidths,
+  roomLabelFor,
+  saveRailWidths,
+  workingAgentFor,
+  type RailWidths,
+} from './model.js';
 import { RoomsRail } from './rail/index.js';
 import { MessageFeed, messageRowId } from './thread/index.js';
 import { ComposerBar } from './composer/index.js';
@@ -70,6 +79,9 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
   const [railOpen, setRailOpen] = useState(false);
+  const [widths, setWidths] = useState<RailWidths>(() => loadRailWidths());
+  const widthsRef = useRef(widths);
+  widthsRef.current = widths;
 
   const roster = useMemo(() => liveRoster(agents), [agents]);
   const conversations = useMemo(
@@ -92,6 +104,47 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   useLayoutEffect(() => {
     rootRef.current?.style.setProperty('--msg-scale', String(DENSITY_SCALE[MESSAGING_SETTINGS.density]));
   }, []);
+
+  // Rail widths ride the same seam: two CSS vars, persisted as one typed object.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    root.style.setProperty('--msg-rail-w', `${widths.rail}px`);
+    root.style.setProperty('--msg-context-w', `${widths.context}px`);
+  }, [widths]);
+
+  // Drag a column edge: pointer capture keeps the drag alive off-handle; the
+  // width lands on pointerup. Arrow keys on the focused handle nudge ±16px.
+  function beginResize(kind: keyof RailWidths) {
+    return (down: React.PointerEvent<HTMLElement>) => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      down.preventDefault();
+      const handle = down.currentTarget;
+      handle.setPointerCapture(down.pointerId);
+      const move = (event: PointerEvent) => {
+        const pixels = kind === 'rail' ? event.clientX - rect.left : rect.right - event.clientX;
+        setWidths((current) => ({ ...current, [kind]: clampRailWidth(kind, pixels) }));
+      };
+      const release = () => {
+        handle.removeEventListener('pointermove', move);
+        saveRailWidths(widthsRef.current);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', release, { once: true });
+    };
+  }
+
+  function nudgeWidth(kind: keyof RailWidths) {
+    return (press: React.KeyboardEvent<HTMLElement>) => {
+      if (press.key !== 'ArrowLeft' && press.key !== 'ArrowRight') return;
+      press.preventDefault();
+      const delta = (press.key === 'ArrowRight' ? 16 : -16) * (kind === 'rail' ? 1 : -1);
+      const next = { ...widthsRef.current, [kind]: clampRailWidth(kind, widthsRef.current[kind] + delta) };
+      setWidths(next);
+      saveRailWidths(next);
+    };
+  }
 
   // Keep the app-wide amber engine fed — unchanged behavior (§6.9).
   useEffect(() => {
@@ -211,6 +264,26 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
           working={working}
           onReview={review}
           onCollapse={() => setContextOpen(false)}
+        />
+      )}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize conversations panel"
+        tabIndex={0}
+        className="msg-resize msg-resize-rail"
+        onPointerDown={beginResize('rail')}
+        onKeyDown={nudgeWidth('rail')}
+      />
+      {selected && contextOpen && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize context panel"
+          tabIndex={0}
+          className="msg-resize msg-resize-context"
+          onPointerDown={beginResize('context')}
+          onKeyDown={nudgeWidth('context')}
         />
       )}
     </section>
