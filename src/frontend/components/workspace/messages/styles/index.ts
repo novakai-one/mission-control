@@ -34,6 +34,12 @@ export const SHELL_STYLE = {
     purpose: 'Context column folded to zero width; animates on --msg-t-struct.',
     className: 'msg-context-closed',
   }),
+  railCollapsed: defineStyle({
+    id: 'shell-rail-collapsed',
+    name: 'MsgShellRailCollapsed-Style',
+    purpose: 'Rail column folded to its glyph strip; animates on --msg-t-struct.',
+    className: 'msg-rail-collapsed',
+  }),
   railOverlayOpen: defineStyle({
     id: 'shell-rail-overlay-open',
     name: 'MsgShellRailOverlayOpen-Style',

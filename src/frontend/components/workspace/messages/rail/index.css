@@ -9,6 +9,45 @@
   overflow: hidden;
   background: var(--msg-bg-panel);
   border-right: 1px solid var(--msg-border);
+  position: relative;
+}
+
+/* Rail fold (round 3, M2) — the old shell-drawer idiom: the shell grid
+   eases the column to --msg-rail-collapsed-w while the inner body (kept at
+   the full rail width) slides behind the clip edge and fades; the reopen
+   glyph crossfades in. No unmount, so the 700ms glide always plays. */
+.msg-rail-inner {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--msg-rail-w);
+  display: flex;
+  flex-direction: column;
+  transition: opacity var(--msg-t-struct);
+}
+
+.msg-view.msg-rail-collapsed .msg-rail-inner {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.msg-rail-reopen {
+  position: absolute;
+  top: calc((var(--msg-bar-h) - var(--msg-ghost-btn)) / 2);
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--msg-t-struct), visibility var(--msg-t-struct),
+    background var(--msg-t-fast), color var(--msg-t-fast);
+}
+
+.msg-view.msg-rail-collapsed .msg-rail-reopen {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 /* ---- body ---- */

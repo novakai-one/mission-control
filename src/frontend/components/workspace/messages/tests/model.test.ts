@@ -221,6 +221,8 @@ assert.ok(Object.isFrozen(FOLD_STYLE.fold));
 assert.ok(Object.isFrozen(FOLD_STYLE.open));
 assert.equal(SHELL_STYLE.base.className, 'msg-view');
 assert.equal(SHELL_STYLE.contextClosed.className, 'msg-context-closed');
+assert.ok(Object.isFrozen(SHELL_STYLE.railCollapsed));
+assert.equal(SHELL_STYLE.railCollapsed.className, 'msg-rail-collapsed');
 // resolveStyle combines only the attached blocks, in order, no duplicates logic.
 assert.equal(resolveStyle(SHELL_STYLE.base), 'msg-view');
 assert.equal(

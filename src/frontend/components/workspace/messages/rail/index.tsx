@@ -1,8 +1,9 @@
-// RoomsRail — the storyboard's left third: "All" tab + ghost glyph header,
-// MISSION ROOMS (hash rows, unread badges), DIRECT MESSAGES (avatar, name,
-// role, presence dot). TEAMS is hidden by owner decision (no backend "team").
-// All visuals come from tokens.css via --msg-* vars; all derivation from
-// model.ts. Change lives there, not here.
+// RoomsRail — the storyboard's left third: "All" tab + New room (plus glyph)
+// + desktop collapse toggle in the header; folded, the rail is a glyph strip
+// with a reopen button (M2). MISSION ROOMS (hash rows, unread badges),
+// DIRECT MESSAGES (avatar, name, role, presence dot). TEAMS is hidden by
+// owner decision (no backend "team"). All visuals come from tokens.css via
+// --msg-* vars; all derivation from model.ts. Change lives there, not here.
 import React, { useState } from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import type {
@@ -26,6 +27,9 @@ interface RoomsRailProps {
   selectedId: ConversationId | null;
   agents: AgentInfo[];
   roster: RosterEntry[];
+  /** Desktop fold state (M2) — the strip shows only the reopen glyph. */
+  collapsed: boolean;
+  onToggleCollapse(): void;
   onSelect(conversation: Conversation): void;
   onStartChat(members: string[], name: string): Promise<void>;
 }
@@ -161,53 +165,77 @@ export function RoomsRail(props: RoomsRailProps) {
 
   return (
     <aside className="msg-rail" aria-label="Conversations">
-      <div className="msg-tabbar">
-        <div className="msg-tabrow">
-          <button type="button" className="msg-tab is-active">All</button>
+      <button
+        type="button"
+        className="msg-ghost msg-rail-reopen"
+        aria-label="Show conversations"
+        title="Show conversations"
+        aria-expanded={!props.collapsed}
+        onClick={props.onToggleCollapse}
+      >
+        <span className="msg-ghost-glyph msg-glyph-rail" aria-hidden="true" />
+      </button>
+      <div className="msg-rail-inner">
+        <div className="msg-tabbar">
+          <div className="msg-tabrow">
+            <button type="button" className="msg-tab is-active">All</button>
+          </div>
+          <div className="msg-tabactions">
+            <button
+              type="button"
+              className="msg-ghost"
+              aria-label="New room"
+              title="New room"
+              onClick={() => setPicking((current) => !current)}
+            >
+              <span className="msg-ghost-glyph msg-glyph-plus" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="msg-ghost"
+              aria-label="Hide conversations"
+              title="Hide conversations"
+              aria-expanded={!props.collapsed}
+              onClick={props.onToggleCollapse}
+            >
+              <span className="msg-ghost-glyph msg-glyph-rail" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          className="msg-ghost"
-          aria-label="New room"
-          title="New room"
-          onClick={() => setPicking((current) => !current)}
-        >
-          <span className="msg-ghost-glyph" aria-hidden="true" />
-        </button>
-      </div>
-      <div className="msg-rail-body">
-        {picking && (
-          <NewRoomPicker
-            roster={props.roster}
-            onStartChat={props.onStartChat}
-            onClose={() => setPicking(false)}
-          />
-        )}
-        <div className="msg-section">Mission rooms</div>
-        <div className="msg-rail-stack">
-          {sections.rooms.map((lane) => (
-            <RoomRow
-              key={lane.id}
-              lane={lane}
-              count={props.unread[lane.id] ?? 0}
-              selected={lane.id === props.selectedId}
-              onSelect={props.onSelect}
+        <div className="msg-rail-body">
+          {picking && (
+            <NewRoomPicker
+              roster={props.roster}
+              onStartChat={props.onStartChat}
+              onClose={() => setPicking(false)}
             />
-          ))}
-        </div>
-        <div className="msg-section">Direct messages</div>
-        <div className="msg-rail-stack">
-          {sections.directs.map((lane) => (
-            <PersonRow
-              key={lane.id}
-              lane={lane}
-              agents={props.agents}
-              count={props.unread[lane.id] ?? 0}
-              selected={lane.id === props.selectedId}
-              onSelect={props.onSelect}
-            />
-          ))}
-          {sections.directs.length === 0 && <div className="msg-rail-quiet">No agents yet</div>}
+          )}
+          <div className="msg-section">Mission rooms</div>
+          <div className="msg-rail-stack">
+            {sections.rooms.map((lane) => (
+              <RoomRow
+                key={lane.id}
+                lane={lane}
+                count={props.unread[lane.id] ?? 0}
+                selected={lane.id === props.selectedId}
+                onSelect={props.onSelect}
+              />
+            ))}
+          </div>
+          <div className="msg-section">Direct messages</div>
+          <div className="msg-rail-stack">
+            {sections.directs.map((lane) => (
+              <PersonRow
+                key={lane.id}
+                lane={lane}
+                agents={props.agents}
+                count={props.unread[lane.id] ?? 0}
+                selected={lane.id === props.selectedId}
+                onSelect={props.onSelect}
+              />
+            ))}
+            {sections.directs.length === 0 && <div className="msg-rail-quiet">No agents yet</div>}
+          </div>
         </div>
       </div>
     </aside>

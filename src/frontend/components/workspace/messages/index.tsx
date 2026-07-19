@@ -81,6 +81,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
   const [railOpen, setRailOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [widths, setWidths] = useState<RailWidths>(() => loadRailWidths());
   const widthsRef = useRef(widths);
@@ -211,6 +212,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   const viewClass = resolveStyle(
     SHELL_STYLE.base,
     !contextOpen && SHELL_STYLE.contextClosed,
+    railCollapsed && SHELL_STYLE.railCollapsed,
     railOpen && SHELL_STYLE.railOverlayOpen,
     resizing && SHELL_STYLE.resizing,
   );
@@ -223,6 +225,8 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
         selectedId={selectedId}
         agents={agents}
         roster={roster}
+        collapsed={railCollapsed}
+        onToggleCollapse={() => setRailCollapsed((current) => !current)}
         onSelect={select}
         onStartChat={startChat}
       />
@@ -236,7 +240,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
               title="Show conversations"
               onClick={() => setRailOpen((current) => !current)}
             >
-              <span className="msg-ghost-glyph" aria-hidden="true" />
+              <span className="msg-ghost-glyph msg-glyph-list" aria-hidden="true" />
             </button>
             <span className="msg-thread-title">
               {selected.kind === 'dm' ? `@ ${selected.title}` : `# ${roomLabelFor(selected)}`}
@@ -266,7 +270,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
             title="Show context panel"
             onClick={() => setContextOpen(true)}
           >
-            <span className="msg-ghost-glyph" aria-hidden="true" />
+            <span className="msg-ghost-glyph msg-glyph-show-context" aria-hidden="true" />
           </button>
         )}
       </main>

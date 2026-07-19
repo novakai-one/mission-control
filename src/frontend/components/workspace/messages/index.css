@@ -22,6 +22,19 @@
   grid-template-columns: var(--msg-rail-w) minmax(250px, 1fr) 0;
 }
 
+.msg-view.msg-rail-collapsed {
+  grid-template-columns: var(--msg-rail-collapsed-w) minmax(250px, 1fr) var(--msg-context-w);
+}
+
+.msg-view.msg-rail-collapsed.msg-context-closed {
+  grid-template-columns: var(--msg-rail-collapsed-w) minmax(250px, 1fr) 0;
+}
+
+/* The rail resize handle is meaningless against the folded strip. */
+.msg-view.msg-rail-collapsed .msg-resize-rail {
+  display: none;
+}
+
 /* While a column edge is being dragged the drag must track the pointer
    1:1 — structural transitions pause for the drag's duration. */
 .msg-view.msg-resizing {
@@ -154,6 +167,13 @@
   gap: var(--msg-sp-2);
 }
 
+/* Right-aligned ghost actions inside a tab bar (New room, rail toggle). */
+.msg-tabactions {
+  display: flex;
+  align-items: stretch;
+  gap: var(--msg-sp-2);
+}
+
 .msg-tab {
   border: 0;
   background: none;
@@ -181,7 +201,8 @@
   outline-offset: -1px;
 }
 
-/* Ghost icon button + CSS-drawn rail glyph (spec-notes — no icon font). */
+/* Ghost icon button + CSS-drawn glyphs (no icon font). Round 3 (M2): each
+   action gets its OWN glyph — the shared box glyph masqueraded as a toggle. */
 .msg-ghost {
   align-self: center;
   width: var(--msg-ghost-btn);
@@ -206,20 +227,110 @@
 }
 
 .msg-ghost-glyph {
+  display: block;
   width: var(--msg-ghost-glyph);
   height: var(--msg-ghost-glyph);
-  border: 1px solid currentcolor;
-  border-radius: 2px;
   position: relative;
 }
 
-.msg-ghost-glyph::after {
+/* New room — a plus. */
+.msg-glyph-plus::before,
+.msg-glyph-plus::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: currentcolor;
+}
+
+.msg-glyph-plus::before {
+  width: 72%;
+  height: 1.5px;
+  transform: translate(-50%, -50%);
+}
+
+.msg-glyph-plus::after {
+  width: 1.5px;
+  height: 72%;
+  transform: translate(-50%, -50%);
+}
+
+/* Show conversations — list lines of varying measure. */
+.msg-glyph-list {
+  background-image: linear-gradient(currentcolor, currentcolor),
+    linear-gradient(currentcolor, currentcolor),
+    linear-gradient(currentcolor, currentcolor);
+  background-repeat: no-repeat;
+  background-size: 100% 1.5px, 68% 1.5px, 86% 1.5px;
+  background-position: 0 18%, 0 50%, 0 82%;
+}
+
+/* Panel glyphs — a framed box with a divider and a chevron. The rail's
+   divider sits left (the rail folds left); the context glyphs' divider sits
+   right (the context panel folds right). */
+.msg-glyph-rail,
+.msg-glyph-hide-context,
+.msg-glyph-show-context {
+  border: 1px solid currentcolor;
+  border-radius: 2px;
+}
+
+.msg-glyph-rail {
+  transition: transform var(--msg-t-struct);
+}
+
+/* Collapsed: the same glyph flips to point the way the rail will reopen. */
+.msg-view.msg-rail-collapsed .msg-glyph-rail {
+  transform: rotate(180deg);
+}
+
+.msg-glyph-rail::after {
   content: '';
   position: absolute;
   top: -1px;
   bottom: -1px;
   left: 33%;
   border-left: 1px solid currentcolor;
+}
+
+.msg-glyph-hide-context::after,
+.msg-glyph-show-context::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  right: 33%;
+  border-right: 1px solid currentcolor;
+}
+
+.msg-glyph-rail::before,
+.msg-glyph-hide-context::before,
+.msg-glyph-show-context::before {
+  content: '';
+  position: absolute;
+  top: 34%;
+  width: 30%;
+  height: 30%;
+  border-top: 1.5px solid currentcolor;
+  border-right: 1.5px solid currentcolor;
+}
+
+/* Rail toggle: chevron points left (the rail folds away to the left). */
+.msg-glyph-rail::before {
+  left: 62%;
+  transform: translateX(-50%) rotate(-135deg);
+}
+
+/* Hide context: chevron points right (the panel folds away to the right). */
+.msg-glyph-hide-context::before {
+  left: 30%;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+/* Show context: chevron points left (the panel is pulled back in). */
+.msg-glyph-show-context::before {
+  left: 38%;
+  transform: translateX(-50%) rotate(-135deg);
 }
 
 /* ---- shared section header (rail + context panels) ---- */
@@ -236,6 +347,10 @@
 @media (max-width: 1200px) {
   .msg-view {
     grid-template-columns: var(--msg-rail-w) minmax(250px, 1fr);
+  }
+
+  .msg-view.msg-rail-collapsed {
+    grid-template-columns: var(--msg-rail-collapsed-w) minmax(250px, 1fr);
   }
 
   .msg-context,
@@ -278,5 +393,16 @@
     inset: 0 auto 0 0;
     width: var(--msg-rail-w);
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  }
+
+  /* Phone overlay always shows the full rail, even if the desktop fold
+     state was left collapsed before the resize. */
+  .msg-view.msg-rail-open .msg-rail-inner {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .msg-rail-reopen {
+    display: none;
   }
 }

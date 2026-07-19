@@ -87,6 +87,7 @@
   --msg-bar-h: 44px;      /* rail header + context tab bar, matches app top bar */
   --msg-rail-w: 230px;
   --msg-context-w: 280px;
+  --msg-rail-collapsed-w: 44px; /* folded rail strip: one ghost glyph square */
 
   /* ---------- Center column rhythm (round 2 — calm, scannable) ---------- */
   --msg-thread-pad-x: calc(28px * var(--msg-scale));   /* real padding both sides */

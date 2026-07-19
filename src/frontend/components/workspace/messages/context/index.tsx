@@ -48,7 +48,7 @@ function CollapseButton(props: { onCollapse(): void }) {
       title="Hide context panel"
       onClick={props.onCollapse}
     >
-      <span className="msg-ghost-glyph" aria-hidden="true" />
+      <span className="msg-ghost-glyph msg-glyph-hide-context" aria-hidden="true" />
     </button>
   );
 }
