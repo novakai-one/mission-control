@@ -116,9 +116,12 @@ distilled from the html-builder project `messaging-styled` (revision
 - `storyboard-scene-02.png` — DM lane + Tasks right panel (identity header:
   name, role, live status)
 - `storyboard-scene-03.png` — DM lane + Stats right panel
-- `storyboard-tokens.css` — observed palette/radii/type/spacing, frequency-ranked
+- `storyboard-tokens.css` — COMPLETE exact-value inventory (every color, font,
+  weight, letter-spacing, radius, border, shadow + counts and source classes;
+  nothing renamed or collapsed — hex-exact, no pixel guessing)
 - `storyboard-styles.md` — full 116-class catalog with purposes (lookup table
-  for "how does the storyboard style X")
+  for "how does the storyboard style X"; when mirroring a component, copy its
+  exact class values — they beat the nearest inventory entry)
 
 **Precedence rules (read first):**
 1. The app's `tokens.css` wins wherever it already defines a value. The
