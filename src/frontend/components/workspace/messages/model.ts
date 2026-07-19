@@ -2,7 +2,7 @@
 // pure, testable data. Components stay dumb: they render what these
 // functions return. Change a rule here and the whole tab follows.
 import type { AgentInfo } from '../../../lib/agentSocket/index.js';
-import type { MentionTarget } from '../../../lib/mentions/index.js';
+import { agentObjectId, type MentionTarget } from '../../../lib/mentions/index.js';
 import {
   CHRIS,
   conversationIdsFor,
@@ -260,6 +260,20 @@ export function knownAgentsFor(agents: AgentInfo[], feed: TunnelEnvelope[]): Kno
   );
 }
 
+/* ---------- Composer mention universe (round 3 M8a) -------------------------
+   The picker's TRIGGER is fine — a word-boundary @ opens it with an empty
+   query (mentionQueryAt, round 2). What failed in review was the universe:
+   suggestions came from the LIVE roster only, so an empty roster (no agent
+   processes running — the common case against seeded data) meant zero
+   suggestions and a picker that never opened. The universe is the same
+   known-agents union the M5 pickers use: live first, then registered and
+   feed-history names. A mention is text, not a delivery claim — naming an
+   offline agent in a room is legitimate even where a DM send to one would
+   fail honestly at the router. */
+export function composerTargetsFor(knownAgents: KnownAgent[]): MentionTarget[] {
+  return knownAgents.map((agent) => ({ objectId: agentObjectId(agent.name), label: agent.name, kind: 'agent' }));
+}
+
 /* ---------- DM lane overlay (round 3 M5) ------------------------------------
    A freshly opened DM lane may not exist in `conversations` yet — the agent
    is registered but exited and history has never heard from them, so
@@ -279,7 +293,6 @@ export function resolveSelectedLane(
   return conversations.find((lane) => lane.id === selectedId)
     ?? (overlay && overlay.id === selectedId ? overlay : null);
 }
-
 /* ---------- Right-panel identity header (round 3 M4) -----------------------
    Rooms/channels get the same "where you are" header DMs have: name, kind,
    member count. The count only appears when the room record carries a real
@@ -317,6 +330,16 @@ export function isOwnFreshSend(envelope: TunnelEnvelope | undefined, nowMs: numb
  *  is actively scrolling right now. */
 export function userScrollActive(lastGestureAtMs: number | null, nowMs: number): boolean {
   return lastGestureAtMs !== null && nowMs - lastGestureAtMs < MESSAGING_SETTINGS.sendFollow.scrollGuardMs;
+}
+
+/* ---------- Rail search (round 3 M8c) ---------------------------------------
+   The old rail had a search box; the rebuild dropped it. Restored as one
+   honest derivation: case-insensitive substring over lane titles, both
+   sections filtered through the same seam. */
+export function filterRailLanes(conversations: Conversation[], query: string): Conversation[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return conversations;
+  return conversations.filter((lane) => lane.title.toLowerCase().includes(needle));
 }
 
 /* ---------- Identity labels ------------------------------------------------- */

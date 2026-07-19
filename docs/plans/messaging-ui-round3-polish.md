@@ -41,11 +41,21 @@ Review-instance additions (evidence in the design-review shots):
     context/index.tsx:42).
 15. Old rail had Search + All/People/Rooms tabs; new rail dropped them.
     Restore search or record the deferral as a decision.
+    → RESOLVED (M8, 2026-07-19): search restored as one substring field over
+    lane titles (`filterRailLanes` in model.ts). The All/People/Rooms TABS
+    stay dropped by decision — the rebuilt rail already separates MISSION
+    ROOMS / DIRECT MESSAGES into sections, so tabs would duplicate chrome
+    (YAGNI). Deferred unless the owner asks.
 16. Nit: at 760px the app top nav wraps "Mission Control" to two lines.
 17. Data provenance: :3040 currently proxies to the WORKTREE backend; maya /
     atlas messages are seed fixtures in the worktree `messages.jsonl` only.
     Label seeded data in the UI or document the seed clearly — owner doctrine
     is "honest ugly data beats pretty fake data".
+    → RESOLVED (M8, 2026-07-19): documented, not UI-labeled. The UI cannot
+    derive which envelopes are seed (the store has no provenance marker, and
+    inventing one needs backend changes — out of bounds). The seed is
+    documented in `.novakai-command/SEED.md` next to the data: what's fake,
+    why, and how to reset.
 
 ## Root causes already established (don't re-investigate)
 

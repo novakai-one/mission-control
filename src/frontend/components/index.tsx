@@ -330,7 +330,14 @@ export function DashboardShell() {
       }
     };
 
-    return () => socket.close();
+    // StrictMode's mount/unmount/mount cycle closes the first socket while it
+    // is still CONNECTING, which makes the browser log a console error
+    // ("WebSocket is closed before the connection is established"). Defer the
+    // close until the handshake finishes; an open socket closes directly.
+    return () => {
+      if (socket.readyState === WebSocket.CONNECTING) socket.onopen = () => socket.close();
+      else socket.close();
+    };
   }, []);
 
   // Start watching when session is selected and in live mode

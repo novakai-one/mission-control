@@ -50,6 +50,29 @@
   pointer-events: auto;
 }
 
+/* ---- rail search (round 3, M8c): one quiet field, restored from the old
+   rail; filtering itself is the model's filterRailLanes derivation. ---- */
+.msg-rail-search {
+  width: 100%;
+  margin: var(--msg-sp-10) 0 var(--msg-sp-4);
+  padding: var(--msg-sp-4) var(--msg-sp-7);
+  border: 1px solid var(--msg-border);
+  border-radius: var(--msg-r-item);
+  background: var(--msg-bg-control);
+  font: var(--msg-fw-medium) var(--msg-fs-body) var(--msg-font-ui);
+  color: var(--msg-text-body);
+  outline: none;
+  transition: border-color var(--msg-t-fast);
+}
+
+.msg-rail-search::placeholder {
+  color: var(--msg-text-faint);
+}
+
+.msg-rail-search:focus {
+  border-color: var(--msg-amber);
+}
+
 /* ---- body ---- */
 .msg-rail-body {
   min-height: 0;

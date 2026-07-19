@@ -32,6 +32,7 @@ import {
   DENSITY_SCALE,
   MESSAGING_SETTINGS,
   clampRailWidth,
+  composerTargetsFor,
   knownAgentsFor,
   loadRailWidths,
   reviewLanesFor,
@@ -92,6 +93,9 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     () => buildTargets(agents, projects.flatMap((entry) => entry.threads)),
     [agents, projects],
   );
+  // The composer picker draws from the KNOWN-agents union (M8a): the live
+  // roster alone leaves the picker empty whenever no agent process is up.
+  const composerTargets = useMemo(() => composerTargetsFor(knownAgents), [knownAgents]);
 
   // Unread per lane — DERIVED from feed past each ReadCursor (C21).
   const unread = useMemo(() => {
@@ -286,7 +290,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
               targets={targets}
               onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
             />
-            <ComposerBar conversation={selected} targets={targets} onSend={send} />
+            <ComposerBar conversation={selected} targets={composerTargets} onSend={send} />
           </>
         ) : (
           <div className="msg-temp">No conversations yet</div>

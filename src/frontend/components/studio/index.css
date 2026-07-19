@@ -427,6 +427,11 @@
   align-items: center;
   gap: 16px;
   height: 100%;
+  /* Narrow viewports (760px): the tabs overflow-X quietly instead of
+     squeezing each label into a two-line wrap (round 3, M8). */
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .studio-tab {
@@ -439,6 +444,8 @@
   padding: 2px 0;
   position: relative;
   height: 100%;
+  white-space: nowrap; /* "Mission Control" stays one line at 760px (M8) */
+  flex-shrink: 0;
   transition: color var(--st-dur) var(--st-ease);
 }
 

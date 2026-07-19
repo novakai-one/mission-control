@@ -1,5 +1,6 @@
-// RoomsRail — the storyboard's left third: "All" tab + labeled New room /
-// New DM entry points (M5) + desktop collapse toggle in the header; folded,
+// RoomsRail — the storyboard's left third: "All" tab + restored search field
+// (M8c) + labeled New room / New DM entry points (M5) + desktop collapse
+// toggle in the header; folded,
 // the rail is a glyph strip with a reopen button (M2). MISSION ROOMS (hash
 // rows, unread badges), DIRECT MESSAGES (avatar, name, role, presence dot).
 // TEAMS is hidden by owner decision (no backend "team"). All visuals come
@@ -13,6 +14,7 @@ import type {
 } from '../../../../lib/tunnelModel/index.js';
 import {
   PRESENCE_LABEL,
+  filterRailLanes,
   initialFor,
   presenceToneFor,
   roomLabelFor,
@@ -93,7 +95,10 @@ type NewFlow = 'room' | 'dm';
 
 export function RoomsRail(props: RoomsRailProps) {
   const [flow, setFlow] = useState<NewFlow | null>(null);
-  const sections = splitRailSections(props.conversations);
+  // Rail search (M8c): one substring query filters both sections through the
+  // model derivation — the old rail's search box, restored without the tabs.
+  const [query, setQuery] = useState('');
+  const sections = splitRailSections(filterRailLanes(props.conversations, query));
 
   function toggleFlow(next: NewFlow): void {
     setFlow((current) => (current === next ? null : next));
@@ -130,6 +135,14 @@ export function RoomsRail(props: RoomsRailProps) {
           </div>
         </div>
         <div className="msg-rail-body">
+          <input
+            type="search"
+            className="msg-rail-search"
+            placeholder="Search conversations"
+            aria-label="Search conversations"
+            value={query}
+            onChange={(change) => setQuery(change.target.value)}
+          />
           <div className="msg-new-actions">
             <button
               type="button"
@@ -162,7 +175,10 @@ export function RoomsRail(props: RoomsRailProps) {
               onClose={() => setFlow(null)}
             />
           )}
-          <div className="msg-section">Mission rooms</div>
+          {(!query.trim() || sections.rooms.length > 0) && <div className="msg-section">Mission rooms</div>}
+          {sections.rooms.length === 0 && sections.directs.length === 0 && query.trim() !== '' && (
+            <div className="msg-rail-quiet">No lanes match “{query.trim()}”.</div>
+          )}
           <div className="msg-rail-stack">
             {sections.rooms.map((lane) => (
               <RoomRow
@@ -174,7 +190,7 @@ export function RoomsRail(props: RoomsRailProps) {
               />
             ))}
           </div>
-          <div className="msg-section">Direct messages</div>
+          {(!query.trim() || sections.directs.length > 0) && <div className="msg-section">Direct messages</div>}
           <div className="msg-rail-stack">
             {sections.directs.map((lane) => (
               <PersonRow
@@ -186,7 +202,7 @@ export function RoomsRail(props: RoomsRailProps) {
                 onSelect={props.onSelect}
               />
             ))}
-            {sections.directs.length === 0 && <div className="msg-rail-quiet">No agents yet</div>}
+            {sections.directs.length === 0 && !query.trim() && <div className="msg-rail-quiet">No agents yet</div>}
           </div>
         </div>
       </div>

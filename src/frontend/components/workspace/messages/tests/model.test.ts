@@ -6,9 +6,11 @@ import {
   DENSITY_SCALE,
   MESSAGING_SETTINGS,
   clampRailWidth,
+  composerTargetsFor,
   dayLabelFor,
   displayNameFor,
   dmLaneFor,
+  filterRailLanes,
   groupByDay,
   initialFor,
   isCollapsible,
@@ -326,5 +328,31 @@ const guardMs = MESSAGING_SETTINGS.sendFollow.scrollGuardMs;
 assert.equal(userScrollActive(null, nowMs), false);
 assert.equal(userScrollActive(nowMs - guardMs + 1, nowMs), true);
 assert.equal(userScrollActive(nowMs - guardMs, nowMs), false); // boundary: no longer active
+
+// Rail search (M8c): case-insensitive substring over titles; empty query passes through.
+const searchable = [lane('#team', 'channel', '#team'), lane('room_a', 'room', 'alpha'), lane('dm:maya', 'dm', 'maya')];
+assert.equal(filterRailLanes(searchable, ''), searchable);
+assert.equal(filterRailLanes(searchable, '   '), searchable);
+assert.deepEqual(filterRailLanes(searchable, 'MAY').map((entry) => entry.id), ['dm:maya']);
+assert.deepEqual(filterRailLanes(searchable, 'a').map((entry) => entry.id), ['#team', 'room_a', 'dm:maya']);
+assert.deepEqual(filterRailLanes(searchable, 'zzz'), []);
+
+// Composer mention universe (M8a): known agents (live or not) become agent
+// targets — the picker opens on a bare @ even with an empty live roster.
+assert.deepEqual(composerTargetsFor([]), []);
+assert.deepEqual(
+  composerTargetsFor([
+    { name: 'maya', provider: 'claude', live: true },
+    { name: 'atlas', provider: null, live: false },
+  ]),
+  [
+    { objectId: 'agent:maya', label: 'maya', kind: 'agent' },
+    { objectId: 'agent:atlas', label: 'atlas', kind: 'agent' },
+  ],
+);
+// …and those targets feed the picker on an EMPTY query (bare @), not just
+// with filter text — the review miss was the universe, not the trigger.
+const offlineTargets = composerTargetsFor([{ name: 'atlas', provider: null, live: false }]);
+assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => target.label), ['atlas']);
 
 console.log('messages/model tests passed');
