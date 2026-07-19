@@ -18,6 +18,7 @@ interface AgentRowProps {
   onSelect?(): void;
 }
 
+/** One agent row in the MC LIVE SQUAD list. */
 export function AgentRow({ agent, selected, onSelect }: AgentRowProps) {
   return (
     <button
@@ -46,6 +47,8 @@ interface DirectMessageRowProps {
   onSelect?(): void;
 }
 
+/** One DIRECT MESSAGES lane row; renders from feed history even when no
+ *  live agent is registered for the lane (M6). */
 export function DirectMessageRow({ lane, agent, selected, onSelect }: DirectMessageRowProps) {
   return (
     <button

@@ -5,7 +5,9 @@
 // CSS ad hoc. The values themselves stay in tokens.css; these blocks only
 // name which authored class is attached.
 
-export interface StyleBlock {
+/** One typed, immutable style block (doctrine §B). Not exported: attachments
+ *  are only ever the frozen constants below, combined through resolveStyle. */
+interface StyleBlock {
   /** Stable id, unique within the tab. */
   readonly id: string;
   /** PascalCase -Style display name (html-builder convention). */
@@ -70,6 +72,7 @@ export const NEW_ACTION_STYLE = {
   }),
 };
 
+/** Known-agent picker states (round 3 M5 — rail/pickers.tsx). */
 export const PICKER_STYLE = {
   base: defineStyle({
     id: 'picker',

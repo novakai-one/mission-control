@@ -13,6 +13,8 @@ import {
 } from '../../../../lib/tunnelModel/index.js';
 import { dmLaneFor, resolveSelectedLane } from '../model.js';
 
+/** POST JSON and unwrap the error body into an honest Error message
+ *  (server `error` field + live-roster hint when one came back). */
 export async function postJson(path: string, payload: unknown): Promise<unknown> {
   const response = await fetch(path, {
     method: 'POST',
@@ -32,6 +34,10 @@ interface LaneFlowDeps {
   openLane(id: ConversationId): void;
 }
 
+/** Lane-creation flows for the rail entry points: startRoom posts the room
+ *  and opens the lane the 201 returns; openDm derives the DM lane locally
+ *  (a DM is not a server resource) and holds it as an overlay until the
+ *  first envelope makes buildConversations derive it for real. */
 export function useLaneFlows({ ingestRoom, openLane }: LaneFlowDeps): {
   resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null;
   startRoom(members: string[], name: string): Promise<void>;

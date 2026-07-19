@@ -29,6 +29,29 @@ function AgentRow(props: { agent: KnownAgent; picked: boolean; onPick(): void })
   );
 }
 
+/** The scrollable known-agent list both pickers share. */
+function AgentList(props: {
+  knownAgents: KnownAgent[];
+  picked(agent: KnownAgent): boolean;
+  onPick(name: string): void;
+}) {
+  return (
+    <div className="msg-picker-list">
+      {props.knownAgents.map((agent) => (
+        <AgentRow
+          key={agent.name}
+          agent={agent}
+          picked={props.picked(agent)}
+          onPick={() => props.onPick(agent.name)}
+        />
+      ))}
+      {props.knownAgents.length === 0 && <div className="msg-picker-quiet">No known agents yet</div>}
+    </div>
+  );
+}
+
+/** Multi-pick room picker: pick members, name the room, Create posts it
+ *  through onStartChat. */
 export function NewRoomPicker(props: PickerProps & { onStartChat(members: string[], name: string): Promise<void> }) {
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [name, setName] = useState('');
@@ -65,17 +88,11 @@ export function NewRoomPicker(props: PickerProps & { onStartChat(members: string
 
   return (
     <div className={resolveStyle(PICKER_STYLE.base)}>
-      <div className="msg-picker-list">
-        {props.knownAgents.map((agent) => (
-          <AgentRow
-            key={agent.name}
-            agent={agent}
-            picked={picked.has(agent.name)}
-            onPick={() => toggle(agent.name)}
-          />
-        ))}
-        {props.knownAgents.length === 0 && <div className="msg-picker-quiet">No known agents yet</div>}
-      </div>
+      <AgentList
+        knownAgents={props.knownAgents}
+        picked={(agent) => picked.has(agent.name)}
+        onPick={toggle}
+      />
       {picked.size > 0 && (
         <div className="msg-picker-name">
           <input
@@ -96,6 +113,8 @@ export function NewRoomPicker(props: PickerProps & { onStartChat(members: string
   );
 }
 
+/** Single-pick DM picker: picking a known agent opens the derived DM lane
+ *  immediately (a DM is not created on the server). */
 export function NewDmPicker(props: PickerProps & { onOpenDm(name: string): void }) {
   function open(agentName: string): void {
     props.onOpenDm(agentName);
@@ -104,12 +123,7 @@ export function NewDmPicker(props: PickerProps & { onOpenDm(name: string): void 
 
   return (
     <div className={resolveStyle(PICKER_STYLE.base)}>
-      <div className="msg-picker-list">
-        {props.knownAgents.map((agent) => (
-          <AgentRow key={agent.name} agent={agent} picked={false} onPick={() => open(agent.name)} />
-        ))}
-        {props.knownAgents.length === 0 && <div className="msg-picker-quiet">No known agents yet</div>}
-      </div>
+      <AgentList knownAgents={props.knownAgents} picked={() => false} onPick={open} />
     </div>
   );
 }
