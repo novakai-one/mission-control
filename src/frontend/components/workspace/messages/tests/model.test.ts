@@ -26,6 +26,7 @@ import {
   workingAgentFor,
   WORKING_WINDOW_MS,
 } from '../model.js';
+import { FOLD_STYLE, SHELL_STYLE, resolveStyle } from '../styles/index.js';
 
 function envelope(overrides: Partial<TunnelEnvelope>): TunnelEnvelope {
   return {
@@ -212,5 +213,22 @@ assert.equal(rowDeliveryFor(envelope({ status: 'delivered' }), nowMs), 'quiet');
 // The boundary: exactly at the window edge is no longer "Sending…".
 const edge = envelope({ status: 'queued', from: 'chris', createdAt: new Date(nowMs - windowMs).toISOString() });
 assert.equal(rowDeliveryFor(edge, nowMs), 'undelivered');
+
+// Style blocks (doctrine §B): frozen typed attachments, ONE resolver seam.
+assert.ok(Object.isFrozen(SHELL_STYLE.base));
+assert.ok(Object.isFrozen(SHELL_STYLE.contextClosed));
+assert.ok(Object.isFrozen(FOLD_STYLE.fold));
+assert.ok(Object.isFrozen(FOLD_STYLE.open));
+assert.equal(SHELL_STYLE.base.className, 'msg-view');
+assert.equal(SHELL_STYLE.contextClosed.className, 'msg-context-closed');
+// resolveStyle combines only the attached blocks, in order, no duplicates logic.
+assert.equal(resolveStyle(SHELL_STYLE.base), 'msg-view');
+assert.equal(
+  resolveStyle(SHELL_STYLE.base, SHELL_STYLE.contextClosed, false, SHELL_STYLE.railOverlayOpen),
+  'msg-view msg-context-closed msg-rail-open',
+);
+assert.equal(resolveStyle(FOLD_STYLE.fold, FOLD_STYLE.open), 'msg-row-fold is-open');
+assert.equal(resolveStyle(FOLD_STYLE.fold, false, null, undefined), 'msg-row-fold');
+assert.equal(resolveStyle(), '');
 
 console.log('messages/model tests passed');

@@ -12,17 +12,40 @@
   color: var(--msg-text-body);
   font-family: var(--msg-font-ui);
   font-size: var(--msg-fs-body);
+  /* Panel open/close rides the track list itself (same track count in every
+     state, so the flip interpolates) — the house panel motion (M1). */
+  transition: grid-template-columns var(--msg-t-struct);
 }
 
+/* Closed states keep THREE tracks so the fold animates instead of snapping. */
 .msg-view.msg-context-closed {
-  grid-template-columns: var(--msg-rail-w) minmax(250px, 1fr);
+  grid-template-columns: var(--msg-rail-w) minmax(250px, 1fr) 0;
 }
 
+/* While a column edge is being dragged the drag must track the pointer
+   1:1 — structural transitions pause for the drag's duration. */
+.msg-view.msg-resizing {
+  transition: none;
+}
+
+/* Reopen affordance: always mounted, crossfades with the panel like the old
+   shell drawer's reopen glyph. */
 .msg-context-reopen {
   position: absolute;
   top: var(--msg-sp-10);
   right: var(--msg-sp-10);
   z-index: 20;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--msg-t-struct), visibility var(--msg-t-struct),
+    background var(--msg-t-fast), color var(--msg-t-fast);
+}
+
+.msg-view.msg-context-closed .msg-context-reopen {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 /* ---- rail resize handles (round 2): invisible 9px strips on the column
@@ -87,7 +110,8 @@
   display: none;
 }
 
-/* Right rail column. */
+/* Right rail column. Stays MOUNTED when closed (M1): the shell folds its
+   track to zero while the panel fades — an unmount could never transition. */
 .msg-context {
   min-height: 0;
   display: flex;
@@ -95,6 +119,13 @@
   overflow: hidden;
   background: var(--msg-bg-panel);
   border-left: 1px solid var(--msg-border);
+  transition: opacity var(--msg-t-struct), border-color var(--msg-t-struct);
+}
+
+.msg-view.msg-context-closed .msg-context {
+  opacity: 0;
+  border-color: transparent;
+  pointer-events: none;
 }
 
 /* Temporary placeholders (Tasks 2–4 fill these). */

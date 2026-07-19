@@ -101,10 +101,35 @@
   overflow-wrap: anywhere;
 }
 
-/* ---- collapsible rows (round 2): calm snippets, click to expand ---- */
+/* ---- collapsible rows (round 2): calm snippets, click to expand ----
+   Round 3 (M1): both states stay mounted in a 0fr/1fr fold track that glides
+   on --msg-t-struct — the house reveal pattern, calm instead of a snap. */
 .msg-row-collapsible {
   cursor: pointer;
   border-radius: var(--msg-r-item);
+}
+
+.msg-row-foldbox {
+  min-width: 0;
+}
+
+.msg-row-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows var(--msg-t-struct), visibility var(--msg-t-struct);
+}
+
+.msg-row-fold.is-open {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+
+/* The clip layer carries no padding, so the collapsed track hides every
+   pixel — same rule as the old app's wt-reveal-clip. */
+.msg-row-fold-clip {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .msg-row-toggle {

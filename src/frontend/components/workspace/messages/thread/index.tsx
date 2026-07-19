@@ -26,6 +26,7 @@ import {
   snippetFor,
   workingAgentFor,
 } from '../model.js';
+import { FOLD_STYLE, resolveStyle } from '../styles/index.js';
 import './index.css';
 
 const BOTTOM_SLACK_PX = 48;
@@ -35,7 +36,9 @@ export function messageRowId(envelopeId: string): string {
 }
 
 /** Long bodies collapse to a snippet; a row click (outside links/buttons)
- *  toggles the full text. Short bodies render full, no affordance. */
+ *  toggles the full text. Short bodies render full, no affordance. Both
+ *  states stay mounted in a fold track that glides 0fr/1fr on the struct
+ *  token (the house reveal pattern — see wt-reveal in the old renderers). */
 function CollapsibleBody(props: {
   body: string;
   targets: MentionTarget[];
@@ -43,27 +46,49 @@ function CollapsibleBody(props: {
   onToggle(): void;
 }) {
   const { body, targets, expanded, onToggle } = props;
+  if (!isCollapsible(body)) {
+    return (
+      <div className="msg-row-text">
+        <MarkdownText text={body} renderText={(plain) => <MentionText text={plain} targets={targets} />} />
+      </div>
+    );
+  }
   return (
     <>
-      <div className="msg-row-text">
-        {expanded || !isCollapsible(body)
-          ? <MarkdownText text={body} renderText={(plain) => <MentionText text={plain} targets={targets} />} />
-          : <MentionText text={snippetFor(body)} targets={targets} />}
-      </div>
-      {isCollapsible(body) && (
-        <button
-          type="button"
-          className="msg-row-toggle"
-          aria-expanded={expanded}
-          onClick={(click) => {
-            click.stopPropagation();
-            onToggle();
-          }}
+      <div className="msg-row-foldbox">
+        <div
+          className={resolveStyle(FOLD_STYLE.fold, !expanded && FOLD_STYLE.open)}
+          aria-hidden={expanded}
         >
-          <span className="msg-row-chevron" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
-      )}
+          <div className="msg-row-fold-clip">
+            <div className="msg-row-text">
+              <MentionText text={snippetFor(body)} targets={targets} />
+            </div>
+          </div>
+        </div>
+        <div
+          className={resolveStyle(FOLD_STYLE.fold, expanded && FOLD_STYLE.open)}
+          aria-hidden={!expanded}
+        >
+          <div className="msg-row-fold-clip">
+            <div className="msg-row-text">
+              <MarkdownText text={body} renderText={(plain) => <MentionText text={plain} targets={targets} />} />
+            </div>
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        className="msg-row-toggle"
+        aria-expanded={expanded}
+        onClick={(click) => {
+          click.stopPropagation();
+          onToggle();
+        }}
+      >
+        <span className="msg-row-chevron" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+        {expanded ? 'Show less' : 'Show more'}
+      </button>
     </>
   );
 }

@@ -130,7 +130,11 @@
   --msg-sp-18: calc(18px * var(--msg-scale));
   --msg-sp-20: calc(20px * var(--msg-scale));
 
-  /* ---------- Motion (net-new, A1: faster than the studio's house speed) --- */
-  --msg-t-fast: 150ms ease;  /* color / background */
+  /* ---------- Motion (round 3, M1: house motion restored) ------------------
+     --msg-t-struct is the tab's structural speed — the SAME value as the app
+     shell's --anim-slow (src/frontend/css/index.css). Panels, the rail, and
+     row folds move on it; fast is for hover color only. */
+  --msg-t-fast: 150ms ease;  /* hover color / background only */
   --msg-t-tab: 200ms ease;   /* tab underline */
+  --msg-t-struct: 700ms cubic-bezier(0.33, 1, 0.68, 1); /* panels, rail, folds */
 }

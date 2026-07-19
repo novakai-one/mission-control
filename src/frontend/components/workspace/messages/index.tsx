@@ -39,6 +39,7 @@ import {
   workingAgentFor,
   type RailWidths,
 } from './model.js';
+import { SHELL_STYLE, resolveStyle } from './styles/index.js';
 import { RoomsRail } from './rail/index.js';
 import { MessageFeed, messageRowId } from './thread/index.js';
 import { ComposerBar } from './composer/index.js';
@@ -80,6 +81,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
   const [railOpen, setRailOpen] = useState(false);
+  const [resizing, setResizing] = useState(false);
   const [widths, setWidths] = useState<RailWidths>(() => loadRailWidths());
   const widthsRef = useRef(widths);
   widthsRef.current = widths;
@@ -123,12 +125,14 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
       down.preventDefault();
       const handle = down.currentTarget;
       handle.setPointerCapture(down.pointerId);
+      setResizing(true);
       const move = (event: PointerEvent) => {
         const pixels = kind === 'rail' ? event.clientX - rect.left : rect.right - event.clientX;
         setWidths((current) => ({ ...current, [kind]: clampRailWidth(kind, pixels) }));
       };
       const release = () => {
         handle.removeEventListener('pointermove', move);
+        setResizing(false);
         saveRailWidths(widthsRef.current);
       };
       handle.addEventListener('pointermove', move);
@@ -202,7 +206,14 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
 
   const laneMessages = selected ? messagesFor(feed, selected.id) : [];
   const working = workingAgentFor(laneMessages, agents, Date.now());
-  const viewClass = `msg-view${contextOpen ? '' : ' msg-context-closed'}${railOpen ? ' msg-rail-open' : ''}`;
+  // Panel state is a set of style-block attachments swapped through the one
+  // resolver seam (doctrine §B) — never ad-hoc class string math.
+  const viewClass = resolveStyle(
+    SHELL_STYLE.base,
+    !contextOpen && SHELL_STYLE.contextClosed,
+    railOpen && SHELL_STYLE.railOverlayOpen,
+    resizing && SHELL_STYLE.resizing,
+  );
 
   return (
     <section className={viewClass} ref={rootRef} aria-label="Messages">
@@ -247,7 +258,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
         ) : (
           <div className="msg-temp">No conversations yet</div>
         )}
-        {!contextOpen && (
+        {selected && (
           <button
             type="button"
             className="msg-ghost msg-context-reopen"
@@ -259,7 +270,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
           </button>
         )}
       </main>
-      {selected && contextOpen && (
+      {selected && (
         <ContextPanel
           conversation={selected}
           messages={laneMessages}
