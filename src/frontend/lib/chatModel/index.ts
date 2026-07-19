@@ -150,3 +150,13 @@ export function agentActivity(
   if (Number.isFinite(lastMs) && nowMs - lastMs < REPLY_RECENCY_MS) return 'replying';
   return 'ready';
 }
+
+/** Avatar initials — "You" reads as Chris; single-word names keep two
+ * letters so claude-1 ("CL") never collides with Chris ("C"). */
+export function avatarInitials(author: string): string {
+  if (author.trim().toLowerCase() === 'you') return 'C';
+  const words = author.split(/[\s·→]+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return words.slice(0, 2).map((word) => word[0]!).join('').toUpperCase();
+}

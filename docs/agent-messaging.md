@@ -90,11 +90,14 @@ Interfaces (as drawn on the canvas):
   urgency ("stop, rebase onto main first"). Per-provider quirks (Esc semantics,
   prompt states) live entirely inside PTY delivery — the router doesn't know
   them.
-- **Channel posts are pull-only.** `#team` fan-out records the envelope for
-  every reader; it does NOT PTY-inject into all agents, and `interrupt` is
-  rejected for channel recipients (interrupting the whole fleet is never what
-  anyone means). Agents learn channel etiquette from the spawn briefing: check
-  `nvk msg read #team` at natural pauses.
+- **Agent channel posts are pull-only; Chris's team chat is live.** Agent-authored
+  `#team` status posts remain in the shared audit feed for readers to pull.
+  A browser-authored post from the registered Chris owner identity is typed
+  into every live agent PTY immediately, so the Mission Control group chat is
+  genuinely interactive. `interrupt` is still rejected for every channel post.
+- **Chris has a server-owned inbox identity.** Agent DMs addressed to `chris`
+  settle into the audit store and broadcast to the UI without PTY delivery;
+  browser sends resolve to Chris on the server and never trust a client `from`.
 - Message inbound format when typed into a PTY:
   `[nvk-msg from <name> id <msgId>] <body>` — so recipients can distinguish
   agent mail from Chris typing.

@@ -1,0 +1,59 @@
+// New-lane flows (round 3, M5) — the two ways a lane comes into being.
+// A mission room exists only once POST /api/user/rooms answers; its 201
+// carries the room record, folded straight in — never awaited on the ws
+// echo. A DM needs no server resource at all: the lane is derived, so
+// "creating" one is just opening it. The overlay below stands in for the
+// not-yet-derived lane until Chris's first envelope lands and
+// buildConversations picks the lane up for real.
+import { useState } from 'react';
+import {
+  type Conversation,
+  type ConversationId,
+  type TunnelRoom,
+} from '../../../../lib/tunnelModel/index.js';
+import { dmLaneFor, resolveSelectedLane } from '../model.js';
+
+/** POST JSON and unwrap the error body into an honest Error message
+ *  (server `error` field + live-roster hint when one came back). */
+export async function postJson(path: string, payload: unknown): Promise<unknown> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const failure = (await response.json().catch(() => null)) as { error?: string; roster?: string[] } | null;
+    const rosterHint = failure?.roster?.length ? ` (live: ${failure.roster.join(', ')})` : '';
+    throw new Error(`${failure?.error ?? `HTTP ${response.status}`}${rosterHint}`);
+  }
+  return response.json();
+}
+
+interface LaneFlowDeps {
+  ingestRoom(room: TunnelRoom): void;
+  openLane(id: ConversationId): void;
+}
+
+/** Lane-creation flows for the rail entry points: startRoom posts the room
+ *  and opens the lane the 201 returns; openDm derives the DM lane locally
+ *  (a DM is not a server resource) and holds it as an overlay until the
+ *  first envelope makes buildConversations derive it for real. */
+export function useLaneFlows({ ingestRoom, openLane }: LaneFlowDeps): {
+  resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null;
+  startRoom(members: string[], name: string): Promise<void>;
+  openDm(name: string): Conversation;
+} {
+  const [overlay, setOverlay] = useState<Conversation | null>(null);
+  async function startRoom(members: string[], name: string): Promise<void> {
+    const data = (await postJson('/api/user/rooms', { name, members })) as { room: TunnelRoom };
+    ingestRoom(data.room); openLane(data.room.roomId);
+  }
+  function openDm(name: string): Conversation {
+    const lane = dmLaneFor(name);
+    setOverlay(lane); return lane;
+  }
+  function resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null {
+    return resolveSelectedLane(conversations, overlay, selectedId);
+  }
+  return { resolveSelected, startRoom, openDm };
+}

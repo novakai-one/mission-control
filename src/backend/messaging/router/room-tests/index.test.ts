@@ -89,7 +89,7 @@ async function testInterruptAndUnknownRoomFail(): Promise<void> {
   assert.equal(store.history().at(-1)?.status, 'failed');
 }
 
-async function testDeliveryFailureIsBestEffort(): Promise<void> {
+async function testDeliveryFailureFailsTheEnvelope(): Promise<void> {
   const { router, room, store, writes } = fixture('agent_codex_1');
   const receipt = await router.route(envelope(room.roomId));
   assert.equal(receipt.mode, 'room');
@@ -101,5 +101,5 @@ async function testDeliveryFailureIsBestEffort(): Promise<void> {
 await testFanOutSkipsSenderChrisAndOffline();
 await testSenderMustBeMember();
 await testInterruptAndUnknownRoomFail();
-await testDeliveryFailureIsBestEffort();
+await testDeliveryFailureFailsTheEnvelope();
 console.log('PASS');

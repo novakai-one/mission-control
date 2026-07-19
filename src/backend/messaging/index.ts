@@ -21,6 +21,7 @@ import {
 import { RoomStore } from './rooms/index.js';
 import { SendApi, InvalidSendError } from './send/index.js';
 import { MessageStore } from './store/index.js';
+import { CHRIS_IDENTITY, CHRIS_MEMBER } from './types.js';
 import type { MessageQuery, Room, SendMessage } from './types.js';
 
 export { MessageStore } from './store/index.js';
@@ -82,8 +83,11 @@ export class MessagingHub {
 
   registerRoutes(application: Express): void {
     application.post('/api/messages', (request, response) => void this.handleSend(request, response));
+    application.post('/api/user/messages', (request, response) => void this.handleUserSend(request, response));
     application.get('/api/messages', (request, response) => this.handleHistory(request, response));
+    application.get('/api/identity', (_request, response) => response.json({ identity: CHRIS_IDENTITY }));
     application.post('/api/rooms', (request, response) => this.handleCreateRoom(request, response));
+    application.post('/api/user/rooms', (request, response) => this.handleCreateUserRoom(request, response));
     application.get('/api/rooms', (_request, response) => response.json({ rooms: this.rooms.list() }));
     application.post(
       '/api/rooms/:roomId/members',
@@ -97,7 +101,27 @@ export class MessagingHub {
       const name = this.requireText(payload.name, 'name');
       const members = this.requireStringArray(payload.members, 'members');
       const createdBy = this.requireText(payload.from, 'from');
-      response.status(201).json({ room: this.rooms.create({ name, members, createdBy }) });
+      const resolvedMembers = createdBy === CHRIS_MEMBER
+        ? [...new Set([...members, CHRIS_IDENTITY.memberName])]
+        : members;
+      response.status(201).json({ room: this.rooms.create({ name, members: resolvedMembers, createdBy }) });
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private handleCreateUserRoom(request: Request, response: Response): void {
+    const payload = (request.body ?? {}) as { name?: unknown; members?: unknown };
+    try {
+      const name = this.requireText(payload.name, 'name');
+      const members = this.requireStringArray(payload.members, 'members');
+      response.status(201).json({
+        room: this.rooms.create({
+          name,
+          members: [...new Set([...members, CHRIS_IDENTITY.memberName])],
+          createdBy: CHRIS_IDENTITY.memberName,
+        }),
+      });
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
     }
@@ -157,8 +181,22 @@ export class MessagingHub {
 
   private async handleSend(request: Request, response: Response): Promise<void> {
     const payload = (request.body ?? {}) as Partial<SendMessage> & { from?: string; threadId?: string };
+    const sender = payload.from === CHRIS_MEMBER ? CHRIS_IDENTITY.memberName : payload.from as string;
+    await this.sendPayload(sender, payload, response);
+  }
+
+  private async handleUserSend(request: Request, response: Response): Promise<void> {
+    const payload = (request.body ?? {}) as Partial<SendMessage> & { threadId?: string };
+    await this.sendPayload(CHRIS_IDENTITY.memberName, payload, response);
+  }
+
+  private async sendPayload(
+    sender: string,
+    payload: Partial<SendMessage> & { threadId?: string },
+    response: Response,
+  ): Promise<void> {
     try {
-      const envelope = await this.sendApi.send(payload.from as string, {
+      const envelope = await this.sendApi.send(sender, {
         'to': payload.to as string,
         delivery: payload.delivery as SendMessage['delivery'],
         body: payload.body as string,

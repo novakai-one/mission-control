@@ -22,3 +22,5 @@ desktop/package-lock.json
 .novakai-command/watchdog.out
 
 .novakai-command/smoke/
+# symlinked in worktrees; the dir pattern above misses symlinks
+node_modules

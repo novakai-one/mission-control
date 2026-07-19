@@ -1,8 +1,9 @@
 // Message router — records every envelope, then delivers via the adapter
-// seam: PTY typing for agents, the log+ws record for the human, pull-only
-// for channels (docs/agent-messaging.md §2, §4). Failures are part of the
-// audit record: the envelope is appended first, and every outcome lands as
-// a status amendment.
+// seam: PTY typing for agents, the log+ws record for the human, and channel
+// posts by sender policy — agent posts stay pull-only while chris' team
+// chat is pushed to every live agent (docs/agent-messaging.md §2, §4).
+// Failures are part of the audit record: the envelope is appended first,
+// and every outcome lands as a status amendment.
 import { MessageStore } from '../store/index.js';
 import { HumanDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../delivery/index.js';
 import { resolveActor } from '../actors/index.js';
@@ -96,7 +97,7 @@ export class MessageRouter {
     }
     const room = this.rooms.get(envelope.to);
     if (!room) throw this.fail(envelope, new RoomNotFoundError(envelope.to));
-    if (!room.members.includes(envelope.from)) {
+    if (envelope.from !== CHRIS_MEMBER && !room.members.includes(envelope.from)) {
       throw this.fail(envelope, new NotARoomMemberError(envelope.from, envelope.to));
     }
     const failed = await this.deliverRoomMembers(room, envelope);
@@ -125,10 +126,20 @@ export class MessageRouter {
     return failed;
   }
 
-  /** Channel fan-out is record-only: readers pull, nothing is PTY-injected (§4). */
-  private routeChannel(envelope: MessageEnvelope): DeliveryReceipt {
+  /** Agent channel posts stay pull-only. Chris owns the interactive team chat:
+   * his browser-authored posts are pushed to every live agent immediately. */
+  private async routeChannel(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     if (envelope.delivery === 'interrupt') {
       throw this.fail(envelope, new ChannelInterruptError(envelope.to));
+    }
+    if (envelope.from === CHRIS_MEMBER) {
+      for (const address of this.roster()) {
+        try {
+          await this.adapters.agent.deliver({ kind: 'agent', address }, envelope);
+        } catch {
+          // Team chat fan-out is best-effort; the audit record remains readable.
+        }
+      }
     }
     this.settle(envelope, 'delivered');
     return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'channel' };

@@ -8,7 +8,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import { messageItemId, useAttention } from '../../../../lib/attention/index.js';
 import {
-  CHRIS,
   buildConversations,
   conversationIdsFor,
   latestChrisQuestion,
@@ -21,6 +20,13 @@ import {
   type TunnelRoom,
 } from '../../../../lib/tunnelModel/index.js';
 import type { MentionTarget } from '../../../../lib/mentions/index.js';
+import {
+  advanceCursor,
+  saveLane,
+  savedLane,
+  unreadCountFor,
+  useReadCursors,
+} from '../../../../lib/readCursor/index.js';
 import { MessengerRail } from './rail/index.js';
 import { MessengerComposer, Transcript } from './transcript/index.js';
 import './index.css';
@@ -36,6 +42,9 @@ interface TunnelMessengerProps {
   onResolve(itemId: string): void;
   /** Backfills one lane's history when it is opened. */
   onLoadConversation(id: ConversationId): void;
+  /** Product-view navigation may ask the messenger to open a canonical lane.
+   * The nonce lets the same lane be requested again after local navigation. */
+  openRequest?: { id: ConversationId; nonce: number } | null;
 }
 
 async function postJson(path: string, payload: unknown): Promise<unknown> {
@@ -59,18 +68,44 @@ function laneOf(feed: TunnelEnvelope[], attentionId: string | null): Conversatio
   return envelope ? conversationIdsFor(envelope)[0] ?? null : null;
 }
 
-export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConversation }: TunnelMessengerProps) {
+export function TunnelMessenger({
+  feed,
+  agents,
+  targets,
+  onResolve,
+  onLoadConversation,
+  openRequest,
+}: TunnelMessengerProps) {
   const { rooms, ingestRoom } = useTunnelRooms();
   const roster = useMemo(() => liveRoster(agents), [agents]);
   const conversations = useMemo(() => buildConversations(feed, rooms, roster), [feed, rooms, roster]);
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const attention = useAttention();
+  const cursors = useReadCursors();
 
-  // First open lands on the freshest lane. Selection by default never
+  // Unread per lane — DERIVED from feed past each ReadCursor (C21), never a
+  // second store.
+  const unread = useMemo(() => {
+    const counts: Record<ConversationId, number> = {};
+    for (const lane of conversations) counts[lane.id] = unreadCountFor(feed, lane.id, cursors);
+    return counts;
+  }, [feed, conversations, cursors]);
+
+  // First open restores the lane Chris was in (reload is not a reset); with
+  // no memory it lands on the freshest lane. Selection by default never
   // resolves anything — only an explicit click may release the amber.
   useEffect(() => {
-    if (!selectedId && conversations.length > 0) setSelectedId(conversations[0].id);
+    if (selectedId || conversations.length === 0) return;
+    const remembered = savedLane();
+    const restored = remembered && conversations.find((lane) => lane.id === remembered);
+    setSelectedId(restored ? restored.id : conversations[0].id);
   }, [selectedId, conversations]);
+
+  useEffect(() => {
+    if (!openRequest || !conversations.some((lane) => lane.id === openRequest.id)) return;
+    setSelectedId(openRequest.id);
+    saveLane(openRequest.id);
+  }, [openRequest?.nonce, conversations]);
 
   useEffect(() => {
     if (selectedId) onLoadConversation(selectedId);
@@ -83,6 +118,7 @@ export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConver
 
   function select(conversation: Conversation): void {
     setSelectedId(conversation.id);
+    saveLane(conversation.id);
     // Answering the ask: opening the asking lane IS the resolution. A failed
     // send keeps its explicit transcript-row resolve instead — seeing the
     // lane is not the same as dealing with the failure.
@@ -93,10 +129,9 @@ export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConver
   }
 
   async function startChat(members: string[], name: string): Promise<void> {
-    const data = (await postJson('/api/rooms', {
+    const data = (await postJson('/api/user/rooms', {
       name,
-      members: [...members, CHRIS],
-      from: CHRIS,
+      members,
     })) as { room: TunnelRoom };
     ingestRoom(data.room);
     setSelectedId(data.room.roomId);
@@ -105,7 +140,7 @@ export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConver
   async function send(body: string): Promise<void> {
     if (!selected) return;
     const recipient = selected.kind === 'dm' ? selected.title : selected.id;
-    await postJson('/api/messages', { from: CHRIS, 'to': recipient, delivery: 'normal', body });
+    await postJson('/api/user/messages', { 'to': recipient, delivery: 'normal', body });
   }
 
   const liveNames = roster.map((entry) => entry.name);
@@ -115,6 +150,7 @@ export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConver
       <MessengerRail
         roster={roster}
         conversations={conversations}
+        unread={unread}
         selectedId={selectedId}
         goldId={goldLane}
         settlingId={settlingLane}
@@ -134,6 +170,7 @@ export function TunnelMessenger({ feed, agents, targets, onResolve, onLoadConver
               liveNames={liveNames}
               targets={targets}
               onResolve={onResolve}
+              onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
             />
             <MessengerComposer conversation={selected} onSend={send} />
           </>

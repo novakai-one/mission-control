@@ -4,8 +4,12 @@
    hairline-separated text, and the only saturated marks are the gold agent
    name, the gold send action, and sage on settled rows. */
 .studio-ai {
-  border-left: 1px solid var(--st-line);
+  grid-row: 2;
   background: var(--st-panel);
+  border: 0;
+  border-left: 1px solid var(--st-frame);
+  border-radius: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -78,17 +82,52 @@
 }
 
 /* -------------------------------------------------------------- messages */
+/* Variant B's message anatomy: avatar square · name/time header · body.
+   Identity is the avatar + name in ink — never a per-person color claim. */
 .st-msg {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.st-av {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--st-r-lg);
+  background: var(--st-panel-3);
+  border: 1px solid var(--st-line-2);
+  color: var(--st-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+.st-msg-c {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+}
+
+.st-when {
+  margin-left: auto;
+  padding-left: 10px;
+  font-weight: 400;
+  color: var(--st-faintest);
 }
 
 /* Speaker labels: tiny mono uppercase, agent NAME as the identity — no
    per-provider colors. Every name stays muted ink; gold belongs to the one
    agent currently waiting on Chris, nothing else. */
 .st-by {
-  font-family: var(--st-mono);
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--st-sans);
+  font-weight: 600;
   font-size: 9.5px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -169,7 +208,8 @@
 }
 
 .st-srow-i {
-  font-family: var(--st-mono);
+  font-family: var(--st-sans);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--st-faintest);
   flex: 0 0 auto;
@@ -177,7 +217,7 @@
 }
 
 .st-srow-o {
-  font-family: var(--st-mono);
+  font-family: var(--st-sans);
   font-size: 11.5px;
   color: var(--st-ink);
   flex: 0 0 auto;
@@ -193,7 +233,8 @@
 }
 
 .st-srow-chip {
-  font-family: var(--st-mono);
+  font-family: var(--st-sans);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--st-faint);
   flex: 0 0 auto;
@@ -211,7 +252,8 @@
 }
 
 .st-ctx-label {
-  font-family: var(--st-mono);
+  font-family: var(--st-sans);
+  font-weight: 600;
   font-size: 9.5px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -230,8 +272,8 @@
 }
 
 .st-ctx-sess {
-  font-family: var(--st-mono);
-  font-size: 11px;
+  font-family: var(--st-sans);
+  font-size: 11.5px;
   color: var(--st-muted);
   padding: 3px 0;
 }
@@ -318,8 +360,8 @@
 
 .st-composer-ctx {
   padding: 8px 12px 0;
-  font-family: var(--st-mono);
-  font-size: 10px;
+  font-family: var(--st-sans);
+  font-size: 10.5px;
   color: var(--st-faintest);
 }
 
@@ -348,19 +390,20 @@
 }
 
 .st-composer-hint {
-  font-family: var(--st-mono);
-  font-size: 9.5px;
+  font-family: var(--st-sans);
+  font-size: 10px;
   color: var(--st-faintest);
 }
 
-/* Primary action = solid gold, dark glyph — the brand signature. */
+/* Send stays neutral: gold is never a routine CTA — only the amber engine's
+   single human-required item may hold it (C1/C2/C22a, codex Drop-1 ruling). */
 .st-send {
   width: 27px;
   height: 27px;
   border-radius: var(--st-r);
-  border: 0;
-  background: var(--st-gold);
-  color: var(--st-on-gold);
+  border: 1px solid var(--st-line-2);
+  background: var(--st-panel-3);
+  color: var(--st-ink);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -369,7 +412,7 @@
 }
 
 .st-send:hover:not(:disabled) {
-  background: var(--st-gold-bright);
+  background: var(--st-panel-4);
 }
 
 .st-send:disabled {

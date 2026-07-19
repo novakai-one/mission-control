@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StudioRail, StudioWorkHead, type ViewMode } from './studio/index.js';
 import { StudioChatPanel } from './studio/chat/index.js';
+import { StudioResizeSeams } from './studio/resize.js';
+import { OrganizationLens } from './workspace/organization/index.js';
 import { AgentBoard } from './board/index.js';
 import { buildToolPairs, selKey, visibilityPredicate } from './board/timelineModel.js';
 import { SelectedInspector } from './details/index.js';
@@ -16,8 +18,10 @@ import { CanvasView, CANVAS_CHANGED_EVENT } from './canvas/index.js';
 import { AnalyticsView, ANALYTICS_CHANGED_EVENT } from './analytics/index.js';
 import { DesignView, DESIGN_CHANGED_EVENT } from './design/index.js';
 import { useViewPanelState } from './viewpanel/index.js';
-import { WorkspaceTimeline } from './workspace/timeline/index.js';
+import { MessagesView } from './workspace/messages/index.js';
+import { MissionControl } from './workspace/missionControl/index.js';
 import { useProjectWorkspace } from '../lib/projectWorkspace/index.js';
+import { useAttention } from '../lib/attention/index.js';
 import { mergeEvents, upsertEvent } from '../lib/upsertEvents.js';
 import { fetchUsage, useCostSettings, type SessionUsage } from '../lib/cost/index.js';
 import { useTimeZone } from '../lib/timezone/index.js';
@@ -81,7 +85,7 @@ const COL_MIN = 280;
 const COL_MAX = 900;
 const VIEW_MODE_STORAGE_KEY = 'novakai-view-mode';
 const SESSION_STORAGE_KEY = 'novakai-selected-session';
-const VIEW_MODES = new Set<ViewMode>(['workspace', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
+const VIEW_MODES = new Set<ViewMode>(['workspace', 'organization', 'messages', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
 
 function restoredViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
@@ -133,6 +137,8 @@ export function DashboardShell() {
   const [viewMode, setViewMode] = useState<ViewMode>(restoredViewMode);
   const agentsState = useAgentsState();
   const workspace = useProjectWorkspace(agentsState.setActiveAgentId);
+  const attention = useAttention();
+  const immersiveView = viewMode === 'workspace' || viewMode === 'organization' || viewMode === 'messages';
   // Live agents belonging to the selected thread: chips in the work head, and
   // the newest one is the chat panel's runtime (same rule the old Projects
   // view used).
@@ -145,6 +151,7 @@ export function DashboardShell() {
     agentsState.setActiveAgentId(agentId);
     setViewMode('agents');
   }
+
   const [rulesetData, setRulesetData] = useState<RulesetData | null>(null);
   const [buildMessages, setBuildMessages] = useState<BuildMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -323,7 +330,14 @@ export function DashboardShell() {
       }
     };
 
-    return () => socket.close();
+    // StrictMode's mount/unmount/mount cycle closes the first socket while it
+    // is still CONNECTING, which makes the browser log a console error
+    // ("WebSocket is closed before the connection is established"). Defer the
+    // close until the handshake finishes; an open socket closes directly.
+    return () => {
+      if (socket.readyState === WebSocket.CONNECTING) socket.onopen = () => socket.close();
+      else socket.close();
+    };
   }, []);
 
   // Start watching when session is selected and in live mode
@@ -371,8 +385,17 @@ export function DashboardShell() {
 
   return (
     <div className="studio-stage">
-      <div className="studio-app">
-        <StudioRail
+      <div className={immersiveView ? 'studio-app studio-app-immersive' : 'studio-app'}>
+        <StudioWorkHead
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          sessionAgents={threadAgents}
+          agents={agentsState.agents}
+          project={workspace.selectedProject}
+          thread={workspace.selectedThread}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+        {!immersiveView && <StudioRail
           projects={workspace.projects}
           selectedProject={workspace.selectedProject}
           selectedThread={workspace.selectedThread}
@@ -380,14 +403,8 @@ export function DashboardShell() {
           onSelectThread={workspace.selectThread}
           onCreateProject={workspace.createProject}
           onCreateThread={workspace.createThread}
-        />
+        />}
         <main className="studio-work">
-          <StudioWorkHead
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            sessionAgents={threadAgents}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
           <div className="studio-work-body">
         {/* Left drawer is page-owned: the agents list only exists on the Agents
             tab (Files brings its own tree rail; other tabs have no drawer). */}
@@ -420,13 +437,27 @@ export function DashboardShell() {
         )}
         {/* Always mounted so the prototype's shadow DOM survives tab switches. */}
         <DesignView visible={viewMode === 'design'} />
-        {viewMode === 'workspace' ? (
-          <WorkspaceTimeline
+        {viewMode === 'messages' ? (
+          <MessagesView
+            agents={agentsState.agents}
+            projects={workspace.projects}
+            project={workspace.selectedProject}
+          />
+        ) : viewMode === 'organization' ? (
+          <OrganizationLens agents={agentsState.agents} />
+        ) : viewMode === 'workspace' ? (
+          <MissionControl
+            agents={agentsState.agents}
             project={workspace.selectedProject}
             thread={workspace.selectedThread}
             projection={workspace.projection}
-            loading={workspace.loading}
-            error={workspace.error}
+            attention={attention}
+            usage={sessionUsage}
+            selectedAgentId={agentsState.activeAgentId}
+            onSelectAgent={(agentId) => agentsState.setActiveAgentId(agentId)}
+            onReviewAttention={attention.goldThreadId
+              ? () => workspace.selectThread(attention.goldThreadId!)
+              : undefined}
           />
         ) : viewMode === 'files' ? (
           <FilesPanel
@@ -505,16 +536,18 @@ export function DashboardShell() {
         ) : null}
           </div>
         </main>
-        <StudioChatPanel
+        {!immersiveView && <StudioChatPanel
           project={workspace.selectedProject}
           thread={workspace.selectedThread}
           projection={workspace.projection}
           runtimeAgent={runtimeAgent}
+          sessionUsage={sessionUsage}
           agents={agentsState.agents}
           onLaunch={workspace.launchProvider}
           onAttach={workspace.attachSession}
           onOpenAgent={openAgent}
-        />
+        />}
+        {!immersiveView && <StudioResizeSeams />}
       </div>
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
