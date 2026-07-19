@@ -25,6 +25,7 @@
 }
 
 .msg-composer-box {
+  position: relative;
   width: 100%;
   max-width: var(--msg-content-max-w);
   margin-inline: auto;
@@ -106,4 +107,55 @@
 .msg-send:focus-visible {
   outline: 1px solid var(--msg-amber);
   outline-offset: 2px;
+}
+
+/* ---- @ mention picker (round 2) ---- */
+.msg-mentions {
+  position: absolute;
+  bottom: calc(100% + var(--msg-sp-6));
+  left: 0;
+  min-width: calc(160px * var(--msg-scale));
+  max-height: calc(190px * var(--msg-scale));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--msg-sp-2);
+  padding: var(--msg-sp-6);
+  border: 1px solid var(--msg-border-strong);
+  border-radius: var(--msg-r-item);
+  background: var(--msg-bg-raised);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  z-index: 25;
+}
+
+.msg-mention-option {
+  display: flex;
+  align-items: center;
+  gap: var(--msg-sp-7);
+  padding: var(--msg-sp-4) var(--msg-sp-6);
+  border: 0;
+  border-radius: var(--msg-r-button);
+  background: none;
+  font: var(--msg-fw-medium) var(--msg-fs-body) var(--msg-font-ui);
+  color: var(--msg-text-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--msg-t-fast), color var(--msg-t-fast);
+}
+
+.msg-mention-option:hover,
+.msg-mention-option.is-picked {
+  background: var(--msg-bg-selected);
+  color: var(--msg-text-primary);
+}
+
+.msg-mention-av {
+  width: var(--msg-sp-18);
+  height: var(--msg-sp-18);
+  display: grid;
+  place-items: center;
+  border-radius: var(--msg-r-button);
+  background: var(--msg-bg-avatar);
+  font-size: var(--msg-fs-meta);
+  color: var(--msg-text-avatar);
 }

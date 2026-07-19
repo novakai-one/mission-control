@@ -2,6 +2,7 @@
 // pure, testable data. Components stay dumb: they render what these
 // functions return. Change a rule here and the whole tab follows.
 import type { AgentInfo } from '../../../lib/agentSocket/index.js';
+import type { MentionTarget } from '../../../lib/mentions/index.js';
 import {
   CHRIS,
   isRoomId,
@@ -23,6 +24,10 @@ export interface MessagingTabSettings {
   messageDisplay: {
     collapseOverChars: number;
   };
+  /** @ mention picker in the composer. */
+  mentionPicker: {
+    maxSuggestions: number;
+  };
 }
 
 export const DENSITY_SCALE: Record<MessagingDensity, number> = {
@@ -35,7 +40,49 @@ export const DENSITY_SCALE: Record<MessagingDensity, number> = {
 export const MESSAGING_SETTINGS: MessagingTabSettings = {
   density: 'normal',
   messageDisplay: { collapseOverChars: 280 },
+  mentionPicker: { maxSuggestions: 6 },
 };
+
+/* ---------- @ mention picker (round 2 — composer) ---------------------------
+   Typing @ at a word boundary opens the picker; the query is the run of
+   non-space characters between the @ and the caret. Picking replaces
+   "@query" with "@label " — MentionText resolves the label downstream. */
+export interface MentionQuery {
+  /** Index of the '@' in the draft. */
+  start: number;
+  /** Text between the '@' and the caret. */
+  query: string;
+}
+
+export function mentionQueryAt(draft: string, caret: number): MentionQuery | null {
+  const before = draft.slice(0, caret);
+  const atIndex = before.lastIndexOf('@');
+  if (atIndex === -1) return null;
+  // The @ must open a token: start of draft, after whitespace, or after an
+  // abandoned @ (typing "@@" restarts the picker on the second sign).
+  if (atIndex > 0 && !/[\s@]/.test(before[atIndex - 1])) return null;
+  const query = before.slice(atIndex + 1);
+  return /\s/.test(query) ? null : { start: atIndex, query };
+}
+
+/** Prefix matches first, then substring matches, capped at the typed limit.
+ *  Labels dedupe — the roster can carry two agents under one exact name. */
+export function mentionSuggestions(
+  targets: MentionTarget[],
+  query: string,
+  limit: number,
+): MentionTarget[] {
+  const needle = query.toLowerCase();
+  const seen = new Set<string>();
+  const agents = targets.filter((target) => {
+    if (target.kind !== 'agent' || seen.has(target.label)) return false;
+    seen.add(target.label);
+    return true;
+  });
+  const prefix = agents.filter((target) => target.label.toLowerCase().startsWith(needle));
+  const rest = agents.filter((target) => !prefix.includes(target) && target.label.toLowerCase().includes(needle));
+  return [...prefix, ...rest].slice(0, limit);
+}
 
 /* ---------- Collapsible messages (round 2 — calm over walls of text) -------
    A body longer than the threshold renders as a flattened snippet; clicking

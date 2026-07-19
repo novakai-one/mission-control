@@ -11,6 +11,8 @@ import {
   initialFor,
   isCollapsible,
   laneStatsFor,
+  mentionQueryAt,
+  mentionSuggestions,
   parseRailWidths,
   presenceToneFor,
   recapNotesFor,
@@ -161,5 +163,37 @@ assert.deepEqual(parseRailWidths(null), DEFAULT_RAIL_WIDTHS);
 assert.deepEqual(parseRailWidths('not json'), DEFAULT_RAIL_WIDTHS);
 assert.deepEqual(parseRailWidths('{"rail":250}'), { rail: 250, context: 280 });
 assert.deepEqual(parseRailWidths('{"rail":1,"context":9999}'), { rail: 180, context: 440 });
+
+// @ mention picker: query detection + suggestion ranking.
+assert.deepEqual(mentionQueryAt('hello @may', 10), { start: 6, query: 'may' });
+assert.deepEqual(mentionQueryAt('@', 1), { start: 0, query: '' });
+assert.equal(mentionQueryAt('email a@b.com', 9), null);        // @ mid-word
+assert.equal(mentionQueryAt('done @maya now', 13), null);      // caret past a space
+assert.equal(mentionQueryAt('no sign', 7), null);
+// A fresh second @ opens a new empty query (picker shows all members).
+assert.deepEqual(mentionQueryAt('two @ma @', 9), { start: 8, query: '' });
+assert.deepEqual(mentionQueryAt('two @ma @x', 10), { start: 8, query: 'x' });
+assert.deepEqual(mentionQueryAt(' @@op', 5), { start: 2, query: 'op' }); // abandoned @ restarts
+const mentionTargets = [
+  { objectId: 'agent:maya', label: 'maya', kind: 'agent' as const },
+  { objectId: 'agent:atlas', label: 'atlas', kind: 'agent' as const },
+  { objectId: 'agent:maverick', label: 'maverick', kind: 'agent' as const },
+  { objectId: 'thread:t1', label: 'maya-thread', kind: 'thread' as const },
+];
+assert.deepEqual(
+  mentionSuggestions(mentionTargets, 'ma', 6).map((target) => target.label),
+  ['maya', 'maverick'], // prefix first, threads excluded
+);
+assert.deepEqual(
+  mentionSuggestions(mentionTargets, 'la', 6).map((target) => target.label),
+  ['atlas'], // substring match
+);
+assert.equal(mentionSuggestions(mentionTargets, '', 2).length, 2); // limit caps the open picker
+// Duplicate roster names (real-data collision) collapse to one option.
+const colliding = [
+  { objectId: 'agent:Worlds Greatest Team · claude', label: 'Worlds Greatest Team · claude', kind: 'agent' as const },
+  { objectId: 'agent:Worlds Greatest Team · claude', label: 'Worlds Greatest Team · claude', kind: 'agent' as const },
+];
+assert.equal(mentionSuggestions(colliding, '', 6).length, 1);
 
 console.log('messages/model tests passed');

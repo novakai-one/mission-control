@@ -238,7 +238,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
               targets={targets}
               onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
             />
-            <ComposerBar conversation={selected} onSend={send} />
+            <ComposerBar conversation={selected} targets={targets} onSend={send} />
           </>
         ) : (
           <div className="msg-temp">No conversations yet</div>
