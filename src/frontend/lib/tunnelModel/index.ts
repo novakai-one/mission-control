@@ -223,7 +223,29 @@ function subscribeFeed(setFeed: FeedUpdater, isLive: () => boolean): () => void 
   });
 }
 
-export function useTunnelFeed(): { feed: TunnelEnvelope[]; loadConversation: (id: ConversationId) => void } {
+function mountFeed(
+  setFeed: FeedUpdater,
+  mounted: { current: boolean },
+  loadConversation: (id: ConversationId) => void,
+): () => void {
+  mounted.current = true;
+  connect();
+  loadConversation(TEAM_CHANNEL);
+  const unsubscribe = subscribeFeed(setFeed, () => mounted.current);
+  return () => {
+    mounted.current = false;
+    unsubscribe();
+  };
+}
+
+export function useTunnelFeed(): {
+  feed: TunnelEnvelope[];
+  loadConversation: (id: ConversationId) => void;
+  /** Folds a settled envelope in without waiting for the ws echo — the POST
+   * /api/user/messages 201 carries the final status, so a sender's own row
+   * settles even if the amendment frame never reaches this client. */
+  ingestEnvelope: (envelope: TunnelEnvelope) => void;
+} {
   const [feed, setFeed] = useState<TunnelEnvelope[]>([]);
   const mounted = useRef(true);
   const loadConversation = useCallback((id: ConversationId): void => {
@@ -231,16 +253,11 @@ export function useTunnelFeed(): { feed: TunnelEnvelope[]; loadConversation: (id
       if (mounted.current) setFeed((live) => mergeFeed(messages, live));
     });
   }, []);
-  useEffect(() => {
-    mounted.current = true; connect();
-    loadConversation(TEAM_CHANNEL);
-    const unsubscribe = subscribeFeed(setFeed, () => mounted.current);
-    return () => {
-      mounted.current = false;
-      unsubscribe();
-    };
-  }, [loadConversation]);
-  return { feed, loadConversation };
+  const ingestEnvelope = useCallback((envelope: TunnelEnvelope): void => {
+    setFeed((current) => upsertEnvelope(current, envelope));
+  }, []);
+  useEffect(() => mountFeed(setFeed, mounted, loadConversation), [loadConversation]);
+  return { feed, loadConversation, ingestEnvelope };
 }
 
 function isTunnelRoom(candidate: unknown): candidate is TunnelRoom {

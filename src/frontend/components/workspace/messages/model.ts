@@ -28,6 +28,11 @@ export interface MessagingTabSettings {
   mentionPicker: {
     maxSuggestions: number;
   };
+  /** Delivery status grammar (see rowDeliveryFor). */
+  delivery: {
+    /** A 'queued' envelope younger than this shows "Sending…". */
+    sendingWindowMs: number;
+  };
 }
 
 export const DENSITY_SCALE: Record<MessagingDensity, number> = {
@@ -41,7 +46,26 @@ export const MESSAGING_SETTINGS: MessagingTabSettings = {
   density: 'normal',
   messageDisplay: { collapseOverChars: 280 },
   mentionPicker: { maxSuggestions: 6 },
+  delivery: { sendingWindowMs: 60_000 },
 };
+
+/* ---------- Delivery status grammar (round 2 — states settle honestly) -----
+   'queued' is transient by design: the router amends every envelope to
+   delivered/failed inside the send, and the UI folds the settled 201 copy
+   straight into the feed. A queued envelope older than the window lost its
+   receipt (process died mid-route, an outside writer bypassed the router, or
+   the ws amendment never reached this client) — "Sending…" forever is a lie.
+   Chris' own stale sends surface as "Not delivered"; other senders' stale
+   rows go quiet (for a human reader, the record you are reading IS arrival). */
+export type RowDelivery = 'sending' | 'failed' | 'undelivered' | 'quiet';
+
+export function rowDeliveryFor(envelope: TunnelEnvelope, nowMs: number): RowDelivery {
+  if (envelope.status === 'failed') return 'failed';
+  if (envelope.status !== 'queued') return 'quiet';
+  const ageMs = nowMs - Date.parse(envelope.createdAt);
+  if (ageMs >= 0 && ageMs < MESSAGING_SETTINGS.delivery.sendingWindowMs) return 'sending';
+  return envelope.from === CHRIS ? 'undelivered' : 'quiet';
+}
 
 /* ---------- @ mention picker (round 2 — composer) ---------------------------
    Typing @ at a word boundary opens the picker; the query is the run of

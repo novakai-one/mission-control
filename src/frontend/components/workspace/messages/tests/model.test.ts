@@ -4,6 +4,7 @@ import type { Conversation, TunnelEnvelope } from '../../../../lib/tunnelModel/i
 import {
   DEFAULT_RAIL_WIDTHS,
   DENSITY_SCALE,
+  MESSAGING_SETTINGS,
   clampRailWidth,
   dayLabelFor,
   displayNameFor,
@@ -19,6 +20,7 @@ import {
   replyLabelFor,
   roleFor,
   roomLabelFor,
+  rowDeliveryFor,
   snippetFor,
   splitRailSections,
   workingAgentFor,
@@ -195,5 +197,20 @@ const colliding = [
   { objectId: 'agent:Worlds Greatest Team · claude', label: 'Worlds Greatest Team · claude', kind: 'agent' as const },
 ];
 assert.equal(mentionSuggestions(colliding, '', 6).length, 1);
+
+// Delivery grammar: queued is transient; stale queued settles honestly.
+const windowMs = MESSAGING_SETTINGS.delivery.sendingWindowMs;
+const freshQueued = envelope({ status: 'queued', from: 'chris', createdAt: '2026-07-19T09:04:55.000Z' });
+assert.equal(rowDeliveryFor(freshQueued, nowMs), 'sending');
+const staleOwn = envelope({ status: 'queued', from: 'chris', createdAt: '2026-07-19T08:00:00.000Z' });
+assert.ok(nowMs - Date.parse(staleOwn.createdAt) > windowMs);
+assert.equal(rowDeliveryFor(staleOwn, nowMs), 'undelivered');
+const staleOther = envelope({ status: 'queued', from: 'claude-1', createdAt: '2026-07-19T08:00:00.000Z' });
+assert.equal(rowDeliveryFor(staleOther, nowMs), 'quiet');
+assert.equal(rowDeliveryFor(envelope({ status: 'failed' }), nowMs), 'failed');
+assert.equal(rowDeliveryFor(envelope({ status: 'delivered' }), nowMs), 'quiet');
+// The boundary: exactly at the window edge is no longer "Sending…".
+const edge = envelope({ status: 'queued', from: 'chris', createdAt: new Date(nowMs - windowMs).toISOString() });
+assert.equal(rowDeliveryFor(edge, nowMs), 'undelivered');
 
 console.log('messages/model tests passed');

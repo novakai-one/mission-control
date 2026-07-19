@@ -22,6 +22,7 @@ import {
   isCollapsible,
   replyLabelFor,
   roleFor,
+  rowDeliveryFor,
   snippetFor,
   workingAgentFor,
 } from '../model.js';
@@ -79,6 +80,7 @@ function MessageRow({ envelope, agents, targets, replyLabel, showWorking }: Mess
   const [expanded, setExpanded] = useState(false);
   const name = displayNameFor(envelope.from);
   const collapsible = isCollapsible(envelope.body);
+  const delivery = rowDeliveryFor(envelope, Date.now());
 
   // Row-wide click toggles collapse; clicks on links/chips/buttons keep
   // their own behavior (MentionChip already stops propagation).
@@ -111,8 +113,9 @@ function MessageRow({ envelope, agents, targets, replyLabel, showWorking }: Mess
           expanded={expanded}
           onToggle={() => setExpanded((current) => !current)}
         />
-        {envelope.status === 'failed' && <span className="msg-row-failed">Delivery failed</span>}
-        {envelope.status === 'queued' && <span className="msg-row-queued">Sending…</span>}
+        {delivery === 'failed' && <span className="msg-row-failed">Delivery failed</span>}
+        {delivery === 'undelivered' && <span className="msg-row-failed">Not delivered</span>}
+        {delivery === 'sending' && <span className="msg-row-queued">Sending…</span>}
         {showWorking && <span className="msg-row-working">Agent working…</span>}
       </div>
       <span className="msg-row-time">{formatClockTime(envelope.createdAt)}</span>

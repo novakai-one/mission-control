@@ -19,6 +19,7 @@ import {
   useTunnelRooms,
   type Conversation,
   type ConversationId,
+  type TunnelEnvelope,
   type TunnelRoom,
 } from '../../../lib/tunnelModel/index.js';
 import {
@@ -72,7 +73,7 @@ async function postJson(path: string, payload: unknown): Promise<unknown> {
 
 export function MessagesView({ agents, projects, openRequest }: MessagesViewProps) {
   const rootRef = useRef<HTMLElement | null>(null);
-  const { feed, loadConversation } = useTunnelFeed();
+  const { feed, loadConversation, ingestEnvelope } = useTunnelFeed();
   const { rooms, ingestRoom } = useTunnelRooms();
   const cursors = useReadCursors();
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
@@ -187,7 +188,10 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   async function send(body: string): Promise<void> {
     if (!selected) return;
     const recipient = selected.kind === 'dm' ? selected.title : selected.id;
-    await postJson('/api/user/messages', { 'to': recipient, delivery: 'normal', body });
+    const data = (await postJson('/api/user/messages', { 'to': recipient, delivery: 'normal', body })) as { envelope: TunnelEnvelope };
+    // The 201 carries the settled envelope — the row leaves "Sending…" on the
+    // response, never on the mercy of a dropped ws amendment frame.
+    ingestEnvelope(data.envelope);
   }
 
   // Review = scroll the thread to the failed row AND resolve its amber item.
