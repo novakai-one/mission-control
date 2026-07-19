@@ -4,8 +4,9 @@
 //   normal:    type + submit (both CLIs queue mid-turn input natively)
 //   interrupt: Esc first, settle, then type + submit
 // Every recipient kind sits behind MessageDeliveryAdapter so the router is
-// uniform: PtyDeliveryAdapter is today's typing, HumanDeliveryAdapter is the
-// log+ws record the human reads, and future API-native agents slot in here.
+// uniform: PtyDeliveryAdapter is today's typing, MailboxDeliveryAdapter is
+// the log+ws record a durable non-PTY identity reads, and future API-native
+// agents slot in here.
 import { formatInbound } from '../types.js';
 import type { ResolvedActor } from '../actors/index.js';
 import type { AgentAddress, DeliveryReceipt, MessageEnvelope } from '../types.js';
@@ -95,20 +96,23 @@ export class PtyDeliveryAdapter implements MessageDeliveryAdapter {
 }
 
 /**
- * The human reads the log + ws push, so "delivery" is the record itself —
- * persistence and the message-envelope broadcast already happen via
- * store.onAppend. The receipt honestly reports mode 'ui'.
+ * A durable mailbox identity reads the log + ws push, so "delivery" is the
+ * record itself — persistence and the message-envelope broadcast already
+ * happen via store.onAppend.
  */
-export class HumanDeliveryAdapter implements MessageDeliveryAdapter {
+export class MailboxDeliveryAdapter implements MessageDeliveryAdapter {
   deliver(target: ResolvedActor, envelope: MessageEnvelope): Promise<DeliveryReceipt> {
-    if (target.kind !== 'human') {
-      throw new DeliveryFailedError(`human delivery requires the human recipient, got ${target.kind}`);
+    if (target.kind !== 'mailbox') {
+      throw new DeliveryFailedError(`mailbox delivery requires a mailbox recipient, got ${target.kind}`);
     }
     const receipt: DeliveryReceipt = {
       messageId: envelope.id,
       deliveredAt: new Date().toISOString(),
-      mode: 'ui',
+      mode: 'mailbox',
     };
     return Promise.resolve(receipt);
   }
 }
+
+/** @deprecated Use MailboxDeliveryAdapter for every durable non-PTY identity. */
+export class HumanDeliveryAdapter extends MailboxDeliveryAdapter {}

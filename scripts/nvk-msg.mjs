@@ -112,15 +112,25 @@ if (cmd === 'send') {
   for (const m of msgs) printMessage(m);
 
 } else if (cmd === 'names') {
-  const response = await api('/api/agents');
-  if (response && response.ok) {
-    const { agents } = await response.json();
-    const live = agents.filter(a => a.status === 'running');
-    console.log(live.map(a => `${a.title} (${a.provider})`).join('\n') || '(no live agents)');
+  const addressBookResponse = await api('/api/messaging/address-book');
+  if (addressBookResponse && addressBookResponse.ok) {
+    const { mailboxes = [], presences = [] } = await addressBookResponse.json();
+    const mailboxLines = mailboxes.map(
+      (identity) => `${identity.memberName} (mailbox:${identity.role})`);
+    const presenceLines = presences.map(
+      (presence) => `${presence.name} (${presence.provider})`);
+    console.log([...mailboxLines, ...presenceLines].join('\n') || '(empty address book)');
   } else {
-    const names = new Set();
-    for (const m of foldAll()) { names.add(m.from); names.add(m.to); }
-    console.log([...names].join('\n') || '(empty store)');
+    const response = await api('/api/agents');
+    if (response && response.ok) {
+      const { agents } = await response.json();
+      const live = agents.filter(a => a.status === 'running');
+      console.log(live.map(a => `${a.title} (${a.provider})`).join('\n') || '(no live agents)');
+    } else {
+      const names = new Set();
+      for (const m of foldAll()) { names.add(m.from); names.add(m.to); }
+      console.log([...names].join('\n') || '(empty store)');
+    }
   }
 
 } else {

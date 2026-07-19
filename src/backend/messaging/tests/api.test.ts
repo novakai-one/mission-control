@@ -110,6 +110,11 @@ async function testFailureStatusCodes(): Promise<void> {
   assert.equal(missing.status, 404);
   assert.deepEqual(missing.json.roster.map((entry: { name: string }) => entry.name), ['claude-1', 'codex-1'],
     'not-found failure returns the live roster');
+  assert.deepEqual(
+    missing.json.mailboxes.map((entry: { memberName: string }) => entry.memberName),
+    ['chris', 'kimi'],
+    'not-found failure also returns durable mailbox addresses',
+  );
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await post({ from: 'claude-1', 'to': 'codex-1', body: 'urgent', delivery: 'interrupt' });
   }
@@ -197,14 +202,16 @@ async function postAgent(base: string, body: unknown): Promise<{ status: number 
 
 async function testReservedNamesRejected(): Promise<void> {
   await withAgentsHub(async (base, createdOptions) => {
-    for (const reserved of ['chris', '#team', 'room_x']) {
+    for (const reserved of ['chris', 'kimi', '#team', 'room_x']) {
       const { status } = await postAgent(base, { title: reserved, provider: 'kimi' });
       assert.equal(status, 409, `spawn titled ${reserved} is rejected`);
     }
-    const renamed = await fetch(`${base}/api/agents/agent_1`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'chris' }),
-    });
-    assert.equal(renamed.status, 409, 'renaming onto a reserved name is rejected');
+    for (const reserved of ['chris', 'kimi']) {
+      const renamed = await fetch(`${base}/api/agents/agent_1`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: reserved }),
+      });
+      assert.equal(renamed.status, 409, `renaming onto ${reserved} is rejected`);
+    }
     assert.equal(createdOptions.length, 0, 'no spawn ever reached the runtime');
   });
 }

@@ -21,12 +21,17 @@ import {
 import { RoomStore } from './rooms/index.js';
 import { SendApi, InvalidSendError } from './send/index.js';
 import { MessageStore } from './store/index.js';
-import { CHRIS_IDENTITY, CHRIS_MEMBER } from './types.js';
+import { CHRIS_IDENTITY, CHRIS_MEMBER, MAILBOX_IDENTITIES } from './types.js';
 import type { MessageQuery, Room, SendMessage } from './types.js';
 
 export { MessageStore } from './store/index.js';
 export { RoomStore } from './rooms/index.js';
-export { PtyDelivery, PtyDeliveryAdapter, HumanDeliveryAdapter } from './delivery/index.js';
+export {
+  PtyDelivery,
+  PtyDeliveryAdapter,
+  MailboxDeliveryAdapter,
+  HumanDeliveryAdapter,
+} from './delivery/index.js';
 export type { MessageDeliveryAdapter } from './delivery/index.js';
 export { resolveActor } from './actors/index.js';
 export type { ResolvedActor } from './actors/index.js';
@@ -86,6 +91,10 @@ export class MessagingHub {
     application.post('/api/user/messages', (request, response) => void this.handleUserSend(request, response));
     application.get('/api/messages', (request, response) => this.handleHistory(request, response));
     application.get('/api/identity', (_request, response) => response.json({ identity: CHRIS_IDENTITY }));
+    application.get('/api/messaging/address-book', (_request, response) => response.json({
+      mailboxes: MAILBOX_IDENTITIES,
+      presences: rosterFromAgents(this.terminals.list()),
+    }));
     application.post('/api/rooms', (request, response) => this.handleCreateRoom(request, response));
     application.post('/api/user/rooms', (request, response) => this.handleCreateUserRoom(request, response));
     application.get('/api/rooms', (_request, response) => response.json({ rooms: this.rooms.list() }));
@@ -181,6 +190,9 @@ export class MessagingHub {
 
   private async handleSend(request: Request, response: Response): Promise<void> {
     const payload = (request.body ?? {}) as Partial<SendMessage> & { from?: string; threadId?: string };
+    // SECURITY DEBT (M2): this agent route still trusts the submitted `from`
+    // string. Authenticate live agents and give orchestrators a server-owned
+    // send route before treating sender identity as an authorization fact.
     const sender = payload.from === CHRIS_MEMBER ? CHRIS_IDENTITY.memberName : payload.from as string;
     await this.sendPayload(sender, payload, response);
   }
@@ -213,7 +225,7 @@ export class MessagingHub {
     if (error instanceof InvalidSendError || error instanceof ChannelInterruptError) {
       response.status(400).json({ error: message });
     } else if (error instanceof RecipientNotFoundError) {
-      response.status(404).json({ error: message, roster: error.roster });
+      response.status(404).json({ error: message, roster: error.roster, mailboxes: MAILBOX_IDENTITIES });
     } else if (error instanceof RoomNotFoundError) {
       response.status(404).json({ error: message });
     } else if (error instanceof NotARoomMemberError) {

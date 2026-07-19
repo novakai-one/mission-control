@@ -3,12 +3,12 @@
 // AgentAddress roster maps name → agentId → PTY; only running agents are
 // addressable.
 import type { AgentInfo } from '../../terminal/manager.js';
-import { CHRIS_MEMBER, isChannel, isRoom } from '../types.js';
+import { isChannel, isRoom, mailboxIdentityFor } from '../types.js';
 import type { AgentAddress } from '../types.js';
 
 /** Names no agent may ever take: the human, every channel, every room id. */
 export function isReservedName(name: string): boolean {
-  return name === CHRIS_MEMBER || isChannel(name) || isRoom(name);
+  return mailboxIdentityFor(name) !== undefined || isChannel(name) || isRoom(name);
 }
 
 /** Live roster: running agents only, addressed by their title. */

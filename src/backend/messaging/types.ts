@@ -56,23 +56,42 @@ export interface ChannelQuery {
 
 export const TEAM_CHANNEL = '#team';
 export const CHRIS_MEMBER = 'chris';
+export const KIMI_MEMBER = 'kimi';
 
-export interface UserIdentity {
-  id: 'user:chris';
-  displayName: 'Chris';
-  memberName: typeof CHRIS_MEMBER;
-  role: 'owner';
-  permissions: readonly ['messages:send', 'rooms:send'];
+export interface MailboxIdentity {
+  readonly id: string;
+  readonly displayName: string;
+  readonly memberName: string;
+  readonly role: 'owner' | 'orchestrator';
+  readonly permissions: readonly ('messages:send' | 'rooms:send')[];
 }
 
 /** Browser-authored messages resolve to this server-owned principal. */
-export const CHRIS_IDENTITY: UserIdentity = {
+export const CHRIS_IDENTITY: MailboxIdentity = {
   id: 'user:chris',
   displayName: 'Chris',
   memberName: CHRIS_MEMBER,
   role: 'owner',
   permissions: ['messages:send', 'rooms:send'],
 };
+
+/** Task orchestration resolves to a durable inbox, independent of a live PTY. */
+export const KIMI_IDENTITY: MailboxIdentity = {
+  id: 'orchestrator:kimi',
+  displayName: 'Kimi',
+  memberName: KIMI_MEMBER,
+  role: 'orchestrator',
+  permissions: ['messages:send'],
+};
+
+export const MAILBOX_IDENTITIES: readonly MailboxIdentity[] = [
+  CHRIS_IDENTITY,
+  KIMI_IDENTITY,
+];
+
+export function mailboxIdentityFor(memberName: string): MailboxIdentity | undefined {
+  return MAILBOX_IDENTITIES.find((identity) => identity.memberName === memberName);
+}
 
 export function isChannel(recipient: string): boolean {
   return recipient.startsWith('#');

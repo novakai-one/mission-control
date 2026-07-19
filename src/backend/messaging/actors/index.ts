@@ -1,13 +1,13 @@
 // Actor resolution (messaging rework task 2): one pure resolver maps a
-// recipient name to its kind — the human (CHRIS_MEMBER), a live agent, a
-// room, or a channel. It persists nothing; the live roster and the room
-// store stay the sources of truth. The router picks a delivery adapter from
-// the resolved kind.
-import { CHRIS_MEMBER, isChannel, isRoom } from '../types.js';
-import type { AgentAddress, Room } from '../types.js';
+// recipient name to its kind — a durable mailbox identity, a live agent, a
+// room, or a channel. It persists nothing; the identity registry, live roster
+// and room store stay the sources of truth. The router picks a delivery
+// adapter from the resolved kind.
+import { isChannel, isRoom, mailboxIdentityFor } from '../types.js';
+import type { AgentAddress, MailboxIdentity, Room } from '../types.js';
 
 export type ResolvedActor =
-  | { kind: 'human'; name: string }
+  | { kind: 'mailbox'; identity: MailboxIdentity }
   | { kind: 'agent'; address: AgentAddress }
   | { kind: 'room'; room: Room }
   | { kind: 'channel'; name: string };
@@ -18,7 +18,8 @@ export function resolveActor(
   roster: AgentAddress[],
   rooms: Room[],
 ): ResolvedActor | null {
-  if (name === CHRIS_MEMBER) return { kind: 'human', name: CHRIS_MEMBER };
+  const identity = mailboxIdentityFor(name);
+  if (identity) return { kind: 'mailbox', identity };
   if (isChannel(name)) return { kind: 'channel', name };
   if (isRoom(name)) {
     const room = rooms.find((entry) => entry.roomId === name);
