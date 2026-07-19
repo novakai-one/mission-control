@@ -41,6 +41,8 @@ export interface MessagingTabSettings {
     /** How long to wait for the target row to render before giving up honestly. */
     scrollTimeoutMs: number;
   };
+  /** Send-and-know (round 3 M7 — see isOwnFreshSend / userScrollActive). */
+  sendFollow: { ownSendWindowMs: number; scrollGuardMs: number };
 }
 
 export const DENSITY_SCALE: Record<MessagingDensity, number> = {
@@ -56,6 +58,7 @@ export const MESSAGING_SETTINGS: MessagingTabSettings = {
   mentionPicker: { maxSuggestions: 6 },
   delivery: { sendingWindowMs: 60_000 },
   review: { scrollTimeoutMs: 2_000 },
+  sendFollow: { ownSendWindowMs: 10_000, scrollGuardMs: 1_200 },
 };
 
 /* ---------- Delivery status grammar (round 2 — states settle honestly) -----
@@ -100,11 +103,7 @@ export function mentionQueryAt(draft: string, caret: number): MentionQuery | nul
 
 /** Prefix matches first, then substring matches, capped at the typed limit.
  *  Labels dedupe — the roster can carry two agents under one exact name. */
-export function mentionSuggestions(
-  targets: MentionTarget[],
-  query: string,
-  limit: number,
-): MentionTarget[] {
+export function mentionSuggestions(targets: MentionTarget[], query: string, limit: number): MentionTarget[] {
   const needle = query.toLowerCase();
   const seen = new Set<string>();
   const agents = targets.filter((target) => {
@@ -297,12 +296,27 @@ export function roomIdentityFor(conversation: Conversation): string {
    A Review click targets a failed envelope. Where that envelope lives is a
    derivation, not an assumption: its lane ids, or null when it is gone from
    the feed entirely (stale notice — the honest "can't locate" case). */
-export function reviewLanesFor(
-  feed: TunnelEnvelope[],
-  envelopeId: string,
-): ConversationId[] | null {
+export function reviewLanesFor(feed: TunnelEnvelope[], envelopeId: string): ConversationId[] | null {
   const envelope = feed.find((entry) => entry.id === envelopeId);
   return envelope ? conversationIdsFor(envelope) : null;
+}
+
+/* ---------- Send-and-know (round 3 M7) --------------------------------------
+   Sending while scrolled up must not leave Chris wondering: the feed
+   smooth-scrolls to the new row so its status settles in view. The ONE
+   exception is a user caught mid-gesture — yanking the feed out from under
+   an active scroll is worse than a moment of not-knowing, so that case gets
+   a "New message ↓" dock instead (thread/index.tsx owns the dock). */
+export function isOwnFreshSend(envelope: TunnelEnvelope | undefined, nowMs: number): boolean {
+  if (!envelope || envelope.from !== CHRIS) return false;
+  const ageMs = nowMs - Date.parse(envelope.createdAt);
+  return ageMs >= 0 && ageMs < MESSAGING_SETTINGS.sendFollow.ownSendWindowMs;
+}
+
+/** True while the last wheel/touch gesture is fresh enough to mean the user
+ *  is actively scrolling right now. */
+export function userScrollActive(lastGestureAtMs: number | null, nowMs: number): boolean {
+  return lastGestureAtMs !== null && nowMs - lastGestureAtMs < MESSAGING_SETTINGS.sendFollow.scrollGuardMs;
 }
 
 /* ---------- Identity labels ------------------------------------------------- */
@@ -326,11 +340,7 @@ export function initialFor(sender: string): string {
    agent becomes the newest envelope and clears it. */
 export const WORKING_WINDOW_MS = 10 * 60 * 1000;
 
-export function workingAgentFor(
-  messages: TunnelEnvelope[],
-  agents: AgentInfo[],
-  nowMs: number,
-): string | null {
+export function workingAgentFor(messages: TunnelEnvelope[], agents: AgentInfo[], nowMs: number): string | null {
   const latest = messages[messages.length - 1];
   if (!latest || latest.to === CHRIS || isRoomId(latest.to) || latest.to.startsWith('#')) return null;
   const agent = agents.find((entry) => entry.title === latest.to);

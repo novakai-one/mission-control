@@ -20,16 +20,24 @@ import {
   groupByDay,
   initialFor,
   isCollapsible,
+  isOwnFreshSend,
   replyLabelFor,
   roleFor,
   rowDeliveryFor,
   snippetFor,
+  userScrollActive,
   workingAgentFor,
 } from '../model.js';
-import { FOLD_STYLE, resolveStyle } from '../styles/index.js';
+import { FOLD_STYLE, NEW_MESSAGE_STYLE, resolveStyle } from '../styles/index.js';
 import './index.css';
 
 const BOTTOM_SLACK_PX = 48;
+
+/** The M7 glide: smooth-scroll the feed to its live edge (the newest row). */
+function scrollToLiveEdge(body: HTMLDivElement): void {
+  // eslint-disable-next-line id-length -- ScrollToOptions keys are fixed by the DOM API
+  body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' });
+}
 
 export function messageRowId(envelopeId: string): string {
   return `msg-row-${envelopeId}`;
@@ -164,6 +172,10 @@ export function MessageFeed({ conversation, messages, feed, agents, targets, onS
   const atBottomRef = useRef(true);
   const restoreRef = useRef<{ lane: string; done: boolean }>({ lane: '', done: false });
   const anchorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // M7: the last wheel/touch gesture timestamp — "is the user actively
+  // scrolling right now" (derivation lives in model.userScrollActive).
+  const gestureAtRef = useRef<number | null>(null);
+  const [dockVisible, setDockVisible] = useState(false);
   const lastEnvelope = messages[messages.length - 1];
   const feedEdge = `${conversation.id}:${lastEnvelope?.id ?? ''}:${lastEnvelope?.status ?? ''}:${messages.length}`;
   const working = workingAgentFor(messages, agents, Date.now());
@@ -180,11 +192,23 @@ export function MessageFeed({ conversation, messages, feed, agents, targets, onS
     if (!body) return;
     atBottomRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < BOTTOM_SLACK_PX;
     reportSeen();
+    // Reaching the live edge by hand dismisses the M7 dock.
+    if (atBottomRef.current) setDockVisible(false);
     // The seat persists (debounced) so a reload restores this exact scroll.
     if (anchorTimer.current) clearTimeout(anchorTimer.current);
     const lane = conversation.id;
     const seatTop = body.scrollTop;
     anchorTimer.current = setTimeout(() => saveAnchor(lane, seatTop), 250);
+  }
+
+  function noteGesture(): void {
+    gestureAtRef.current = Date.now();
+  }
+
+  // M7: the dock's jump — same smooth glide as the automatic follow.
+  function jumpToNewest(): void {
+    setDockVisible(false);
+    if (bodyRef.current) scrollToLiveEdge(bodyRef.current);
   }
 
   // Opening a lane restores the saved seat; a lane never visited lands on the
@@ -209,6 +233,15 @@ export function MessageFeed({ conversation, messages, feed, agents, targets, onS
     if (atBottomRef.current) {
       body.scrollTop = body.scrollHeight;
       reportSeen();
+      return;
+    }
+    // Send-and-know (M7): Chris's own fresh send pulls the feed to its row
+    // with a smooth glide so "Sending… → Delivered" settles in view — unless
+    // he is actively scrolling right now; then the dock offers the jump
+    // instead of yanking the feed out from under him.
+    if (isOwnFreshSend(lastEnvelope, Date.now())) {
+      if (userScrollActive(gestureAtRef.current, Date.now())) setDockVisible(true);
+      else scrollToLiveEdge(body);
     }
   }, [feedEdge]);
 
@@ -221,7 +254,7 @@ export function MessageFeed({ conversation, messages, feed, agents, targets, onS
   }
 
   return (
-    <div className="msg-feed" ref={bodyRef} onScroll={trackScroll}>
+    <div className="msg-feed" ref={bodyRef} onScroll={trackScroll} onWheel={noteGesture} onTouchMove={noteGesture}>
       {groups.map((group) => (
         <React.Fragment key={group.dayKey}>
           <div className="msg-day">
@@ -239,6 +272,13 @@ export function MessageFeed({ conversation, messages, feed, agents, targets, onS
           ))}
         </React.Fragment>
       ))}
+      {dockVisible && (
+        <div className={resolveStyle(NEW_MESSAGE_STYLE.dock)}>
+          <button type="button" className={resolveStyle(NEW_MESSAGE_STYLE.pill)} onClick={jumpToNewest}>
+            New message ↓
+          </button>
+        </div>
+      )}
     </div>
   );
 }

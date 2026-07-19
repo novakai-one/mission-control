@@ -91,6 +91,22 @@ export const PICKER_STYLE = {
   }),
 };
 
+/** Send-and-know dock (round 3 M7 — thread/index.tsx). */
+export const NEW_MESSAGE_STYLE = {
+  dock: defineStyle({
+    id: 'new-message-dock',
+    name: 'MsgNewMessageDock-Style',
+    purpose: 'Sticky zero-height anchor pinning the pill to the feed viewport bottom.',
+    className: 'msg-new-dock',
+  }),
+  pill: defineStyle({
+    id: 'new-message-pill',
+    name: 'MsgNewMessagePill-Style',
+    purpose: 'Jump affordance offered when a send lands during active scrolling.',
+    className: 'msg-new-pill',
+  }),
+};
+
 /** Message-row fold states (thread/index.tsx — Show more/less). */
 export const FOLD_STYLE = {
   fold: defineStyle({

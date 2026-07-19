@@ -12,6 +12,7 @@ import {
   groupByDay,
   initialFor,
   isCollapsible,
+  isOwnFreshSend,
   knownAgentsFor,
   laneStatsFor,
   mentionQueryAt,
@@ -28,6 +29,7 @@ import {
   rowDeliveryFor,
   snippetFor,
   splitRailSections,
+  userScrollActive,
   workingAgentFor,
   WORKING_WINDOW_MS,
 } from '../model.js';
@@ -310,5 +312,19 @@ const derivedDm = lane('dm:maya', 'dm', 'maya');
 assert.equal(resolveSelectedLane([derivedDm], openedDm, 'dm:maya'), derivedDm); // the derived lane wins
 assert.equal(resolveSelectedLane([derivedDm], openedDm, 'dm:other'), null); // stale overlay never leaks
 assert.equal(resolveSelectedLane([], null, null), null);
+
+// Send-and-know (M7): only Chris's own FRESH send pulls a scrolled-up feed.
+const sendWindow = MESSAGING_SETTINGS.sendFollow.ownSendWindowMs;
+const ownFresh = envelope({ from: 'chris', 'to': 'claude-1', createdAt: '2026-07-19T09:04:58.000Z' });
+assert.ok(nowMs - Date.parse(ownFresh.createdAt) < sendWindow);
+assert.equal(isOwnFreshSend(ownFresh, nowMs), true);
+assert.equal(isOwnFreshSend(envelope({ from: 'claude-1' }), nowMs), false); // incoming never yanks
+assert.equal(isOwnFreshSend(envelope({ from: 'chris', createdAt: '2026-07-19T08:00:00.000Z' }), nowMs), false);
+assert.equal(isOwnFreshSend(undefined, nowMs), false);
+// Active-scroll guard: a gesture inside the window means "hands on the feed".
+const guardMs = MESSAGING_SETTINGS.sendFollow.scrollGuardMs;
+assert.equal(userScrollActive(null, nowMs), false);
+assert.equal(userScrollActive(nowMs - guardMs + 1, nowMs), true);
+assert.equal(userScrollActive(nowMs - guardMs, nowMs), false); // boundary: no longer active
 
 console.log('messages/model tests passed');
