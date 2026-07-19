@@ -10,7 +10,7 @@ export interface MessageEnvelope {
   body: string;
   threadId?: string;     // optional conversation grouping
   createdAt: string;     // ISO
-  status: 'queued' | 'delivered' | 'failed';
+  status: 'queued' | 'delivered' | 'partial' | 'failed';
 }
 
 export interface Room {
@@ -32,6 +32,7 @@ export interface DeliveryReceipt {
   messageId: string;
   deliveredAt: string;
   mode: string;
+  failed?: string[];   // room fan-out: members whose PTY write failed (status 'partial')
 }
 
 export interface AgentAddress {

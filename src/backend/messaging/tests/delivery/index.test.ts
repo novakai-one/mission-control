@@ -6,7 +6,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PtyDelivery } from '../../delivery/index.js';
-import { MessageRouter, RoomDeliveryFailedError } from '../../router/index.js';
+import { MessageRouter } from '../../router/index.js';
 import { RoomStore } from '../../rooms/index.js';
 import { MessageStore } from '../../store/index.js';
 import type { AgentAddress, MessageEnvelope } from '../../types.js';
@@ -47,15 +47,13 @@ function makeRouter(): { router: MessageRouter; store: MessageStore; rooms: Room
   return { router, store, rooms };
 }
 
-async function testRoomFailureFailsTheEnvelope(): Promise<void> {
+async function testRoomFailureIsPartialAndHonest(): Promise<void> {
   const { router, store, rooms } = makeRouter();
   const room = rooms.create({ name: 'ops', members: ['claude-1', 'codex-1', 'codex-2', 'chris'], createdBy: 'claude-1' });
-  const posted = envelope(room.roomId);
-  await assert.rejects(
-    () => router.route(posted),
-    (error: unknown) => error instanceof RoomDeliveryFailedError && /codex-2/.test(error.message),
-  );
-  assert.equal(store.history()[0]?.status, 'failed', 'any member failure marks the envelope failed');
+  const receipt = await router.route(envelope(room.roomId));
+  assert.equal(receipt.mode, 'room');
+  assert.deepEqual(receipt.failed, ['codex-2'], 'the dead PTY member is named on the receipt');
+  assert.equal(store.history()[0]?.status, 'partial', 'member failure settles the envelope partial');
   assert.ok(writes.some((entry) => entry.agentId === 'agent_2'), 'live members still receive the write');
   assert.ok(!writes.some((entry) => entry.agentId === 'agent_1'), 'sender is skipped');
 }
@@ -87,7 +85,7 @@ async function testAgentDirectAndUnknown(): Promise<void> {
   assert.equal(store.history({ limit: 1 })[0]?.status, 'failed', 'unknown recipient fails honestly');
 }
 
-await testRoomFailureFailsTheEnvelope();
+await testRoomFailureIsPartialAndHonest();
 await testRoomAllLiveDelivers();
 await testHumanDirectMessage();
 await testAgentDirectAndUnknown();

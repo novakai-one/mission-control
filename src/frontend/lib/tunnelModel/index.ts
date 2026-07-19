@@ -15,7 +15,7 @@ export interface TunnelEnvelope {
   body: string;
   threadId?: string;
   createdAt: string;
-  status: 'queued' | 'delivered' | 'failed';
+  status: 'queued' | 'delivered' | 'partial' | 'failed';
 }
 
 /** Same id replaces in place (status amendment); a new id appends. */
