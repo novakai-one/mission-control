@@ -13,7 +13,7 @@ import type {
 } from '../../../../lib/tunnelModel/index.js';
 import { PanelGlyph } from '../../../ui/index.js';
 import type { MissionHealthMeasure } from '../model.js';
-import { AgentRow } from './agentRow.js';
+import { AgentRow, DirectMessageRow } from './agentRow.js';
 import './index.css';
 
 const ROOM_LIMIT = 5;
@@ -179,14 +179,15 @@ export function MissionRail(props: MissionRailProps) {
       <div className="mc-rail-agents">
         {props.directMessages.map((conversation) => {
           const agent = props.agents.find((candidate) => candidate.title === conversation.title);
-          return agent ? (
-            <AgentRow
+          return (
+            <DirectMessageRow
               key={conversation.id}
+              lane={conversation}
               agent={agent}
               selected={conversation.id === props.selectedId}
-              onSelect={() => props.onSelectPerson(agent)}
+              onSelect={() => (agent ? props.onSelectPerson(agent) : props.onSelectConversation(conversation))}
             />
-          ) : null;
+          );
         })}
       </div>
     </aside>
