@@ -19,6 +19,10 @@ export type MessagingDensity = 'low' | 'normal' | 'high';
 
 export interface MessagingTabSettings {
   density: MessagingDensity;
+  /** Long messages collapse to a snippet past this many characters. */
+  messageDisplay: {
+    collapseOverChars: number;
+  };
 }
 
 export const DENSITY_SCALE: Record<MessagingDensity, number> = {
@@ -28,7 +32,25 @@ export const DENSITY_SCALE: Record<MessagingDensity, number> = {
   high: 1.7,
 };
 
-export const MESSAGING_SETTINGS: MessagingTabSettings = { density: 'normal' };
+export const MESSAGING_SETTINGS: MessagingTabSettings = {
+  density: 'normal',
+  messageDisplay: { collapseOverChars: 280 },
+};
+
+/* ---------- Collapsible messages (round 2 — calm over walls of text) -------
+   A body longer than the threshold renders as a flattened snippet; clicking
+   the row (or the more/less affordance) toggles the full markdown. Short
+   messages always render full and carry no affordance. */
+export function isCollapsible(body: string): boolean {
+  return body.length > MESSAGING_SETTINGS.messageDisplay.collapseOverChars;
+}
+
+/** The collapsed view: whitespace flattened, cut at the threshold. */
+export function snippetFor(body: string): string {
+  const flat = body.replace(/\s+/g, ' ').trim();
+  const limit = MESSAGING_SETTINGS.messageDisplay.collapseOverChars;
+  return flat.length > limit ? `${flat.slice(0, limit).trimEnd()}…` : flat;
+}
 
 /* ---------- Presence (D3 — invented heuristic; no backend presence) --------
    unread in the lane → amber "notification"; agent running → green;

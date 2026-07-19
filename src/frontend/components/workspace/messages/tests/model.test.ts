@@ -7,12 +7,14 @@ import {
   displayNameFor,
   groupByDay,
   initialFor,
+  isCollapsible,
   laneStatsFor,
   presenceToneFor,
   recapNotesFor,
   replyLabelFor,
   roleFor,
   roomLabelFor,
+  snippetFor,
   splitRailSections,
   workingAgentFor,
   WORKING_WINDOW_MS,
@@ -133,5 +135,16 @@ assert.equal(notes[0], '2 unread here.');
 assert.equal(notes[1], '2 members in this room.');
 assert.ok(notes[2].startsWith('Last word '));
 assert.equal(recapNotesFor(room, [], 0)[2], 'Nothing said yet.');
+
+// Collapsible messages: threshold is typed data; snippets flatten whitespace.
+const longBody = 'word '.repeat(120).trim(); // 600 chars > 280
+assert.equal(isCollapsible(longBody), true);
+assert.equal(isCollapsible('short note'), false);
+const snippet = snippetFor(longBody);
+assert.ok(snippet.endsWith('…'));
+assert.ok(snippet.length <= 282); // 280 + ellipsis, trimmed
+assert.equal(snippetFor('line one\n\nline   two'), 'line one line   two'.replace('   ', ' '));
+assert.equal(isCollapsible('x'.repeat(280)), false);
+assert.equal(isCollapsible('x'.repeat(281)), true);
 
 console.log('messages/model tests passed');

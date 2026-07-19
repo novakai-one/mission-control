@@ -4,7 +4,7 @@
 // advance are PORTED from studio/chat/tunnel/transcript (that shared
 // component can't change — C21 rules preserved exactly: open ≠ read, the
 // cursor moves only on genuine visibility at the live edge).
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import { anchorFor, saveAnchor } from '../../../../lib/readCursor/index.js';
 import type { MentionTarget } from '../../../../lib/mentions/index.js';
@@ -19,8 +19,10 @@ import {
   formatClockTime,
   groupByDay,
   initialFor,
+  isCollapsible,
   replyLabelFor,
   roleFor,
+  snippetFor,
   workingAgentFor,
 } from '../model.js';
 import './index.css';
@@ -29,6 +31,40 @@ const BOTTOM_SLACK_PX = 48;
 
 export function messageRowId(envelopeId: string): string {
   return `msg-row-${envelopeId}`;
+}
+
+/** Long bodies collapse to a snippet; a row click (outside links/buttons)
+ *  toggles the full text. Short bodies render full, no affordance. */
+function CollapsibleBody(props: {
+  body: string;
+  targets: MentionTarget[];
+  expanded: boolean;
+  onToggle(): void;
+}) {
+  const { body, targets, expanded, onToggle } = props;
+  return (
+    <>
+      <div className="msg-row-text">
+        {expanded || !isCollapsible(body)
+          ? <MarkdownText text={body} renderText={(plain) => <MentionText text={plain} targets={targets} />} />
+          : <MentionText text={snippetFor(body)} targets={targets} />}
+      </div>
+      {isCollapsible(body) && (
+        <button
+          type="button"
+          className="msg-row-toggle"
+          aria-expanded={expanded}
+          onClick={(click) => {
+            click.stopPropagation();
+            onToggle();
+          }}
+        >
+          <span className="msg-row-chevron" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </>
+  );
 }
 
 interface MessageRowProps {
@@ -40,9 +76,23 @@ interface MessageRowProps {
 }
 
 function MessageRow({ envelope, agents, targets, replyLabel, showWorking }: MessageRowProps) {
+  const [expanded, setExpanded] = useState(false);
   const name = displayNameFor(envelope.from);
+  const collapsible = isCollapsible(envelope.body);
+
+  // Row-wide click toggles collapse; clicks on links/chips/buttons keep
+  // their own behavior (MentionChip already stops propagation).
+  function handleRowClick(click: React.MouseEvent<HTMLElement>): void {
+    if (!collapsible || (click.target as HTMLElement).closest('a, button')) return;
+    setExpanded((current) => !current);
+  }
+
   return (
-    <article className="msg-row" id={messageRowId(envelope.id)}>
+    <article
+      className={collapsible ? 'msg-row msg-row-collapsible' : 'msg-row'}
+      id={messageRowId(envelope.id)}
+      onClick={handleRowClick}
+    >
       <span className="msg-row-av" aria-hidden="true">{initialFor(envelope.from)}</span>
       <div className="msg-row-body">
         <div className="msg-row-head">
@@ -55,12 +105,12 @@ function MessageRow({ envelope, agents, targets, replyLabel, showWorking }: Mess
             {replyLabel}
           </span>
         )}
-        <p className="msg-row-text">
-          <MarkdownText
-            text={envelope.body}
-            renderText={(plain) => <MentionText text={plain} targets={targets} />}
-          />
-        </p>
+        <CollapsibleBody
+          body={envelope.body}
+          targets={targets}
+          expanded={expanded}
+          onToggle={() => setExpanded((current) => !current)}
+        />
         {envelope.status === 'failed' && <span className="msg-row-failed">Delivery failed</span>}
         {envelope.status === 'queued' && <span className="msg-row-queued">Sending…</span>}
         {showWorking && <span className="msg-row-working">Agent working…</span>}

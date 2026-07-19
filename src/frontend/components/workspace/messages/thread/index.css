@@ -93,6 +93,40 @@
   overflow-wrap: anywhere;
 }
 
+/* ---- collapsible rows (round 2): calm snippets, click to expand ---- */
+.msg-row-collapsible {
+  cursor: pointer;
+  border-radius: var(--msg-r-item);
+}
+
+.msg-row-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--msg-sp-4);
+  border: 0;
+  padding: 0;
+  background: none;
+  font: var(--msg-fw-medium) var(--msg-fs-meta) var(--msg-font-ui);
+  color: var(--msg-text-muted);
+  cursor: pointer;
+  transition: color var(--msg-t-fast);
+}
+
+.msg-row-toggle:hover {
+  color: var(--msg-text-body);
+}
+
+.msg-row-toggle:focus-visible {
+  outline: 1px solid var(--msg-amber);
+  outline-offset: 2px;
+}
+
+.msg-row-chevron {
+  font-size: var(--msg-fs-meta);
+  color: var(--msg-amber);
+}
+
 .msg-row-time {
   padding-top: var(--msg-sp-2);
   font-size: var(--msg-fs-meta);
