@@ -34,6 +34,7 @@ import {
   MESSAGING_SETTINGS,
   clampRailWidth,
   loadRailWidths,
+  reviewLanesFor,
   roomLabelFor,
   saveRailWidths,
   workingAgentFor,
@@ -83,6 +84,8 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   const [railOpen, setRailOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const [pendingReview, setPendingReview] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState<string | null>(null);
   const [widths, setWidths] = useState<RailWidths>(() => loadRailWidths());
   const widthsRef = useRef(widths);
   widthsRef.current = widths;
@@ -200,13 +203,45 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
   }
 
   // Review = scroll the thread to the failed row AND resolve its amber item.
+  // The row may sit outside the current lane or the loaded window: locate it
+  // in the feed first, switch lane when it lives elsewhere (the lane-load
+  // effect backfills its history), and scroll only once the row is actually
+  // rendered. If it never renders, the panel says so — no silent no-op.
   function review(envelopeId: string): void {
     setDismissed((current) => new Set(current).add(messageItemId(envelopeId)));
-    document.getElementById(messageRowId(envelopeId))?.scrollIntoView({ block: 'center' });
+    setReviewNote(null);
+    const lanes = reviewLanesFor(feed, envelopeId);
+    if (!lanes) {
+      setReviewNote('That message is no longer in the loaded feed.');
+      return;
+    }
+    if (!selected || !lanes.includes(selected.id)) {
+      setSelectedId(lanes[0]);
+      saveLane(lanes[0]);
+    }
+    setPendingReview(envelopeId);
   }
 
   const laneMessages = selected ? messagesFor(feed, selected.id) : [];
   const working = workingAgentFor(laneMessages, agents, Date.now());
+
+  // Scroll the moment the review target's row exists — lane switches and
+  // history backfills land asynchronously…
+  useEffect(() => {
+    if (!pendingReview) return;
+    const target = document.getElementById(messageRowId(pendingReview));
+    target?.scrollIntoView({ block: 'center' });
+    if (target) setPendingReview(null);
+  }, [pendingReview, laneMessages]);
+
+  // …but never wait forever: past the typed timeout, say why honestly.
+  useEffect(() => {
+    if (!pendingReview) return;
+    const timer = setTimeout(() => {
+      setPendingReview(null); setReviewNote('Could not locate that message in this lane — it may sit outside the loaded history.');
+    }, MESSAGING_SETTINGS.review.scrollTimeoutMs);
+    return () => clearTimeout(timer);
+  }, [pendingReview]);
   // Panel state is a set of style-block attachments swapped through the one
   // resolver seam (doctrine §B) — never ad-hoc class string math.
   const viewClass = resolveStyle(
@@ -281,6 +316,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
           agents={agents}
           unreadCount={unread[selected.id] ?? 0}
           working={working}
+          reviewNote={reviewNote}
           onReview={review}
           onCollapse={() => setContextOpen(false)}
         />

@@ -1,6 +1,8 @@
 // ContextPanel — the storyboard's right rail. Room/channel selected →
-// Summary view: Notifications from REAL failed sends (Review scrolls the
-// thread to the row and resolves its amber item), derived Recap notes,
+// Summary view: identity header (name, kind, member count — same pattern as
+// the DM person header), Notifications from REAL failed sends (Review
+// scrolls the thread to the row and resolves its amber item; when the row
+// genuinely can't be located the panel says so), derived Recap notes,
 // Current = running members, Tasks = designed empty state (D10);
 // Artefacts/Links stay hidden — no data source. DM selected → person
 // context with Tasks / Stats (REAL derived counts, never dummy numbers) /
@@ -12,7 +14,7 @@ import {
   type Conversation,
   type TunnelEnvelope,
 } from '../../../../lib/tunnelModel/index.js';
-import { laneStatsFor, recapNotesFor } from '../model.js';
+import { laneStatsFor, recapNotesFor, roomIdentityFor, roomLabelFor } from '../model.js';
 import './index.css';
 
 type PersonTab = 'tasks' | 'stats' | 'settings';
@@ -24,6 +26,8 @@ interface ContextPanelProps {
   unreadCount: number;
   /** The agent "working" at this lane's live edge (model predicate), else null. */
   working: string | null;
+  /** Honest inline note when a Review click cannot locate its row; else null. */
+  reviewNote: string | null;
   onReview(envelopeId: string): void;
   onCollapse(): void;
 }
@@ -67,7 +71,7 @@ function EmptyPane(props: { title: string; note: string }) {
 }
 
 function SummaryView(props: Omit<ContextPanelProps, 'working'>) {
-  const { conversation, messages, agents, unreadCount, onReview, onCollapse } = props;
+  const { conversation, messages, agents, unreadCount, reviewNote, onReview, onCollapse } = props;
   const failed = messages.filter((entry) => entry.status === 'failed');
   const running = agents.filter((agent) => agent.status === 'running');
   const members = conversation.members ?? running.map((agent) => agent.title);
@@ -83,6 +87,10 @@ function SummaryView(props: Omit<ContextPanelProps, 'working'>) {
         <CollapseButton onCollapse={onCollapse} />
       </div>
       <div className="msg-context-body">
+        <div className="msg-person-head">
+          <strong>{roomLabelFor(conversation)}</strong>
+          <span>{roomIdentityFor(conversation)}</span>
+        </div>
         <section className="msg-panel">
           <div className="msg-section">Notifications</div>
           {failed.map((entry) => (
@@ -94,6 +102,7 @@ function SummaryView(props: Omit<ContextPanelProps, 'working'>) {
             </div>
           ))}
           {failed.length === 0 && <p className="msg-panel-quiet">No failed deliveries.</p>}
+          {reviewNote && <p className="msg-panel-quiet">{reviewNote}</p>}
         </section>
         <section className="msg-panel">
           <div className="msg-section">Recap</div>

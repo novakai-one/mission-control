@@ -18,7 +18,9 @@ import {
   presenceToneFor,
   recapNotesFor,
   replyLabelFor,
+  reviewLanesFor,
   roleFor,
+  roomIdentityFor,
   roomLabelFor,
   rowDeliveryFor,
   snippetFor,
@@ -143,6 +145,25 @@ assert.equal(notes[0], '2 unread here.');
 assert.equal(notes[1], '2 members in this room.');
 assert.ok(notes[2].startsWith('Last word '));
 assert.equal(recapNotesFor(room, [], 0)[2], 'Nothing said yet.');
+
+// Room identity header (M4): kind + honest member count. The #team channel
+// carries no member list, so it shows its kind alone — no invented number.
+assert.equal(roomIdentityFor(lane('#team', 'channel', '#team')), 'Channel');
+assert.equal(roomIdentityFor(room), 'Mission room · 2 members');
+assert.equal(
+  roomIdentityFor({ id: 'room_solo', kind: 'room', title: 'solo', members: ['chris'] }),
+  'Mission room · 1 member',
+);
+
+// Review resilience (M4): the target's lanes are derived from the envelope;
+// a stale notice (envelope gone from the feed) resolves to null honestly.
+const reviewFeed = [
+  envelope({ id: 'msg_room_fail', 'to': 'room_a' }),
+  envelope({ id: 'msg_dm_fail', 'to': 'claude-1' }),
+];
+assert.deepEqual(reviewLanesFor(reviewFeed, 'msg_room_fail'), ['room_a']);
+assert.deepEqual(reviewLanesFor(reviewFeed, 'msg_dm_fail'), ['dm:claude-1']);
+assert.equal(reviewLanesFor(reviewFeed, 'msg_gone'), null);
 
 // Collapsible messages: threshold is typed data; snippets flatten whitespace.
 const longBody = 'word '.repeat(120).trim(); // 600 chars > 280

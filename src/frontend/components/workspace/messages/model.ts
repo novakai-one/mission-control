@@ -5,8 +5,10 @@ import type { AgentInfo } from '../../../lib/agentSocket/index.js';
 import type { MentionTarget } from '../../../lib/mentions/index.js';
 import {
   CHRIS,
+  conversationIdsFor,
   isRoomId,
   type Conversation,
+  type ConversationId,
   type TunnelEnvelope,
 } from '../../../lib/tunnelModel/index.js';
 
@@ -33,6 +35,11 @@ export interface MessagingTabSettings {
     /** A 'queued' envelope younger than this shows "Sending…". */
     sendingWindowMs: number;
   };
+  /** Review button in the right panel (see reviewLanesFor). */
+  review: {
+    /** How long to wait for the target row to render before giving up honestly. */
+    scrollTimeoutMs: number;
+  };
 }
 
 export const DENSITY_SCALE: Record<MessagingDensity, number> = {
@@ -47,6 +54,7 @@ export const MESSAGING_SETTINGS: MessagingTabSettings = {
   messageDisplay: { collapseOverChars: 280 },
   mentionPicker: { maxSuggestions: 6 },
   delivery: { sendingWindowMs: 60_000 },
+  review: { scrollTimeoutMs: 2_000 },
 };
 
 /* ---------- Delivery status grammar (round 2 — states settle honestly) -----
@@ -218,6 +226,30 @@ export function splitRailSections(conversations: Conversation[]): RailSections {
 /** Rail/composer label for a room lane: '#team' → 'team', 'room_…' → its name. */
 export function roomLabelFor(conversation: Conversation): string {
   return conversation.title.replace(/^#/, '');
+}
+
+/* ---------- Right-panel identity header (round 3 M4) -----------------------
+   Rooms/channels get the same "where you are" header DMs have: name, kind,
+   member count. The count only appears when the room record carries a real
+   member list — the #team channel has none, so it shows its kind alone
+   rather than an invented number. */
+export function roomIdentityFor(conversation: Conversation): string {
+  const kind = conversation.kind === 'channel' ? 'Channel' : 'Mission room';
+  if (!conversation.members) return kind;
+  const count = conversation.members.length;
+  return `${kind} · ${count} member${count === 1 ? '' : 's'}`;
+}
+
+/* ---------- Review resilience (round 3 M4) ----------------------------------
+   A Review click targets a failed envelope. Where that envelope lives is a
+   derivation, not an assumption: its lane ids, or null when it is gone from
+   the feed entirely (stale notice — the honest "can't locate" case). */
+export function reviewLanesFor(
+  feed: TunnelEnvelope[],
+  envelopeId: string,
+): ConversationId[] | null {
+  const envelope = feed.find((entry) => entry.id === envelopeId);
+  return envelope ? conversationIdsFor(envelope) : null;
 }
 
 /* ---------- Identity labels ------------------------------------------------- */
