@@ -45,7 +45,7 @@ function RoomRow(props: {
       onClick={() => props.onSelect(props.lane)}
     >
       <span className="msg-hash" aria-hidden="true">#</span>
-      <span className="msg-room-name">{roomLabelFor(props.lane)}</span>
+      <span className="msg-room-name" title={roomLabelFor(props.lane)}>{roomLabelFor(props.lane)}</span>
       {props.count > 0 && <span className="msg-badge">{props.count}</span>}
     </button>
   );
@@ -73,8 +73,8 @@ function PersonRow(props: {
     >
       <span className="msg-person-av" aria-hidden="true">{initialFor(props.lane.title)}</span>
       <span className="msg-person-meta">
-        <strong>{props.lane.title}</strong>
-        <small>{role}</small>
+        <strong title={props.lane.title}>{props.lane.title}</strong>
+        <small title={role}>{role}</small>
       </span>
       <span className={`msg-dot msg-dot-${tone}`} aria-hidden="true" />
     </button>
