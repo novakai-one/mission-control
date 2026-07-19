@@ -54,6 +54,43 @@ export const SHELL_STYLE = {
   }),
 };
 
+/** Rail entry points + pickers (round 3 M5 — New room / New DM flows). */
+export const NEW_ACTION_STYLE = {
+  base: defineStyle({
+    id: 'new-action',
+    name: 'MsgNewAction-Style',
+    purpose: 'Labeled rail entry point; toggles its new-lane picker.',
+    className: 'msg-new-action',
+  }),
+  active: defineStyle({
+    id: 'new-action-active',
+    name: 'MsgNewActionActive-Style',
+    purpose: 'Entry point whose picker is currently open.',
+    className: 'is-active',
+  }),
+};
+
+export const PICKER_STYLE = {
+  base: defineStyle({
+    id: 'picker',
+    name: 'MsgPicker-Style',
+    purpose: 'Bordered picker card under a rail entry point.',
+    className: 'msg-picker',
+  }),
+  agent: defineStyle({
+    id: 'picker-agent',
+    name: 'MsgPickerAgent-Style',
+    purpose: 'One selectable known-agent row.',
+    className: 'msg-picker-agent',
+  }),
+  agentPicked: defineStyle({
+    id: 'picker-agent-picked',
+    name: 'MsgPickerAgentPicked-Style',
+    purpose: 'Row selected for room membership.',
+    className: 'is-picked',
+  }),
+};
+
 /** Message-row fold states (thread/index.tsx — Show more/less). */
 export const FOLD_STYLE = {
   fold: defineStyle({

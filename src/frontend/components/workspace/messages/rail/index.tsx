@@ -1,24 +1,26 @@
-// RoomsRail — the storyboard's left third: "All" tab + New room (plus glyph)
-// + desktop collapse toggle in the header; folded, the rail is a glyph strip
-// with a reopen button (M2). MISSION ROOMS (hash rows, unread badges),
-// DIRECT MESSAGES (avatar, name, role, presence dot). TEAMS is hidden by
-// owner decision (no backend "team"). All visuals come from tokens.css via
-// --msg-* vars; all derivation from model.ts. Change lives there, not here.
+// RoomsRail — the storyboard's left third: "All" tab + labeled New room /
+// New DM entry points (M5) + desktop collapse toggle in the header; folded,
+// the rail is a glyph strip with a reopen button (M2). MISSION ROOMS (hash
+// rows, unread badges), DIRECT MESSAGES (avatar, name, role, presence dot).
+// TEAMS is hidden by owner decision (no backend "team"). All visuals come
+// from tokens.css via --msg-* vars; all derivation from model.ts. Change
+// lives there, not here.
 import React, { useState } from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import type {
   Conversation,
   ConversationId,
-  RosterEntry,
 } from '../../../../lib/tunnelModel/index.js';
 import {
   PRESENCE_LABEL,
   initialFor,
   presenceToneFor,
-  roleFor,
   roomLabelFor,
   splitRailSections,
+  type KnownAgent,
 } from '../model.js';
+import { NEW_ACTION_STYLE, resolveStyle } from '../styles/index.js';
+import { NewDmPicker, NewRoomPicker } from './pickers.js';
 import './index.css';
 
 interface RoomsRailProps {
@@ -26,12 +28,14 @@ interface RoomsRailProps {
   unread: Record<ConversationId, number>;
   selectedId: ConversationId | null;
   agents: AgentInfo[];
-  roster: RosterEntry[];
+  /** Known agents (live + exited + feed-history names) for both pickers. */
+  knownAgents: KnownAgent[];
   /** Desktop fold state (M2) — the strip shows only the reopen glyph. */
   collapsed: boolean;
   onToggleCollapse(): void;
   onSelect(conversation: Conversation): void;
   onStartChat(members: string[], name: string): Promise<void>;
+  onOpenDm(name: string): void;
 }
 
 function RoomRow(props: {
@@ -85,83 +89,15 @@ function PersonRow(props: {
   );
 }
 
-function NewRoomPicker(props: {
-  roster: RosterEntry[];
-  onStartChat(members: string[], name: string): Promise<void>;
-  onClose(): void;
-}) {
-  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set<string>());
-  const [name, setName] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function toggle(agentName: string): void {
-    setPicked((current) => {
-      const next = new Set(current);
-      if (next.has(agentName)) next.delete(agentName);
-      else next.add(agentName);
-      return next;
-    });
-  }
-
-  async function create(): Promise<void> {
-    if (!name.trim() || picked.size === 0 || creating) return;
-    setCreating(true);
-    setError(null);
-    try {
-      await props.onStartChat([...picked], name.trim());
-      props.onClose();
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  function handleNameKey(press: React.KeyboardEvent<HTMLInputElement>): void {
-    if (press.key === 'Enter') void create();
-    if (press.key === 'Escape') props.onClose();
-  }
-
-  return (
-    <div className="msg-picker">
-      <div className="msg-picker-list">
-        {props.roster.map((entry) => (
-          <button
-            key={entry.name}
-            type="button"
-            className={picked.has(entry.name) ? 'msg-picker-agent is-picked' : 'msg-picker-agent'}
-            onClick={() => toggle(entry.name)}
-          >
-            <span className="msg-person-av msg-picker-av" aria-hidden="true">{initialFor(entry.name)}</span>
-            <span>{entry.name}</span>
-          </button>
-        ))}
-        {props.roster.length === 0 && <div className="msg-picker-quiet">No live agents</div>}
-      </div>
-      {picked.size > 0 && (
-        <div className="msg-picker-name">
-          <input
-            aria-label="Room name"
-            placeholder="Room name"
-            value={name}
-            autoFocus
-            onChange={(change) => setName(change.target.value)}
-            onKeyDown={handleNameKey}
-          />
-          <button type="button" disabled={!name.trim() || creating} onClick={() => void create()}>
-            {creating ? 'Creating…' : 'Create'}
-          </button>
-        </div>
-      )}
-      {error && <div className="msg-picker-error">{error}</div>}
-    </div>
-  );
-}
+type NewFlow = 'room' | 'dm';
 
 export function RoomsRail(props: RoomsRailProps) {
-  const [picking, setPicking] = useState(false);
+  const [flow, setFlow] = useState<NewFlow | null>(null);
   const sections = splitRailSections(props.conversations);
+
+  function toggleFlow(next: NewFlow): void {
+    setFlow((current) => (current === next ? null : next));
+  }
 
   return (
     <aside className="msg-rail" aria-label="Conversations">
@@ -184,15 +120,6 @@ export function RoomsRail(props: RoomsRailProps) {
             <button
               type="button"
               className="msg-ghost"
-              aria-label="New room"
-              title="New room"
-              onClick={() => setPicking((current) => !current)}
-            >
-              <span className="msg-ghost-glyph msg-glyph-plus" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="msg-ghost"
               aria-label="Hide conversations"
               title="Hide conversations"
               aria-expanded={!props.collapsed}
@@ -203,11 +130,36 @@ export function RoomsRail(props: RoomsRailProps) {
           </div>
         </div>
         <div className="msg-rail-body">
-          {picking && (
+          <div className="msg-new-actions">
+            <button
+              type="button"
+              className={resolveStyle(NEW_ACTION_STYLE.base, flow === 'room' && NEW_ACTION_STYLE.active)}
+              aria-expanded={flow === 'room'}
+              onClick={() => toggleFlow('room')}
+            >
+              New room
+            </button>
+            <button
+              type="button"
+              className={resolveStyle(NEW_ACTION_STYLE.base, flow === 'dm' && NEW_ACTION_STYLE.active)}
+              aria-expanded={flow === 'dm'}
+              onClick={() => toggleFlow('dm')}
+            >
+              New DM
+            </button>
+          </div>
+          {flow === 'room' && (
             <NewRoomPicker
-              roster={props.roster}
+              knownAgents={props.knownAgents}
               onStartChat={props.onStartChat}
-              onClose={() => setPicking(false)}
+              onClose={() => setFlow(null)}
+            />
+          )}
+          {flow === 'dm' && (
+            <NewDmPicker
+              knownAgents={props.knownAgents}
+              onOpenDm={props.onOpenDm}
+              onClose={() => setFlow(null)}
             />
           )}
           <div className="msg-section">Mission rooms</div>

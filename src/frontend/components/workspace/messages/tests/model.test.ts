@@ -8,9 +8,11 @@ import {
   clampRailWidth,
   dayLabelFor,
   displayNameFor,
+  dmLaneFor,
   groupByDay,
   initialFor,
   isCollapsible,
+  knownAgentsFor,
   laneStatsFor,
   mentionQueryAt,
   mentionSuggestions,
@@ -18,6 +20,7 @@ import {
   presenceToneFor,
   recapNotesFor,
   replyLabelFor,
+  resolveSelectedLane,
   reviewLanesFor,
   roleFor,
   roomIdentityFor,
@@ -28,7 +31,7 @@ import {
   workingAgentFor,
   WORKING_WINDOW_MS,
 } from '../model.js';
-import { FOLD_STYLE, SHELL_STYLE, resolveStyle } from '../styles/index.js';
+import { FOLD_STYLE, NEW_ACTION_STYLE, PICKER_STYLE, SHELL_STYLE, resolveStyle } from '../styles/index.js';
 
 function envelope(overrides: Partial<TunnelEnvelope>): TunnelEnvelope {
   return {
@@ -240,6 +243,10 @@ assert.ok(Object.isFrozen(SHELL_STYLE.base));
 assert.ok(Object.isFrozen(SHELL_STYLE.contextClosed));
 assert.ok(Object.isFrozen(FOLD_STYLE.fold));
 assert.ok(Object.isFrozen(FOLD_STYLE.open));
+assert.ok(Object.isFrozen(NEW_ACTION_STYLE.base));
+assert.ok(Object.isFrozen(PICKER_STYLE.agentPicked));
+assert.equal(resolveStyle(NEW_ACTION_STYLE.base, NEW_ACTION_STYLE.active), 'msg-new-action is-active');
+assert.equal(resolveStyle(PICKER_STYLE.agent, PICKER_STYLE.agentPicked), 'msg-picker-agent is-picked');
 assert.equal(SHELL_STYLE.base.className, 'msg-view');
 assert.equal(SHELL_STYLE.contextClosed.className, 'msg-context-closed');
 assert.ok(Object.isFrozen(SHELL_STYLE.railCollapsed));
@@ -253,5 +260,55 @@ assert.equal(
 assert.equal(resolveStyle(FOLD_STYLE.fold, FOLD_STYLE.open), 'msg-row-fold is-open');
 assert.equal(resolveStyle(FOLD_STYLE.fold, false, null, undefined), 'msg-row-fold');
 assert.equal(resolveStyle(), '');
+
+// Known agents (M5): the pickers' union of registered agents (any status)
+// and feed-history names — live first, then alphabetical.
+assert.deepEqual(knownAgentsFor([], []), []);
+const known = knownAgentsFor(
+  [
+    agent({ title: 'zeta', status: 'exited' }),
+    agent({ title: 'maya', status: 'running', provider: 'claude' }),
+  ],
+  [
+    envelope({ from: 'atlas', 'to': 'chris' }),
+    envelope({ from: 'chris', 'to': 'room_1' }),
+    envelope({ from: 'chris', 'to': '#team' }),
+  ],
+);
+assert.deepEqual(
+  known,
+  [
+    { name: 'maya', provider: 'claude', live: true },      // live sorts first
+    { name: 'atlas', provider: null, live: false },        // feed-only: name is all history knows
+    { name: 'zeta', provider: 'claude', live: false },     // exited stays known, provider kept
+  ],
+);
+// A live record beats an exited duplicate of the same title.
+assert.deepEqual(
+  knownAgentsFor(
+    [agent({ title: 'maya', status: 'exited' }), agent({ title: 'maya', status: 'running' })],
+    [],
+  ),
+  [{ name: 'maya', provider: 'claude', live: true }],
+);
+// chris, rooms, and channels are never agent candidates.
+assert.deepEqual(
+  knownAgentsFor([], [envelope({ from: 'chris', 'to': 'room_x' }), envelope({ from: 'chris', 'to': '#team' })]),
+  [],
+);
+// An agent record already known is not re-derived from the feed.
+assert.deepEqual(
+  knownAgentsFor([agent({ title: 'maya' })], [envelope({ from: 'maya', 'to': 'chris' })]),
+  [{ name: 'maya', provider: 'claude', live: true }],
+);
+
+// DM lane overlay (M5): a not-yet-derived lane resolves through the overlay.
+const openedDm = dmLaneFor('nova');
+assert.deepEqual(openedDm, { id: 'dm:nova', kind: 'dm', title: 'nova' });
+assert.equal(resolveSelectedLane([lane('#team', 'channel', '#team')], openedDm, 'dm:nova'), openedDm);
+const derivedDm = lane('dm:maya', 'dm', 'maya');
+assert.equal(resolveSelectedLane([derivedDm], openedDm, 'dm:maya'), derivedDm); // the derived lane wins
+assert.equal(resolveSelectedLane([derivedDm], openedDm, 'dm:other'), null); // stale overlay never leaks
+assert.equal(resolveSelectedLane([], null, null), null);
 
 console.log('messages/model tests passed');

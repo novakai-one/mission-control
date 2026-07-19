@@ -6,6 +6,7 @@ import type { MentionTarget } from '../../../lib/mentions/index.js';
 import {
   CHRIS,
   conversationIdsFor,
+  dmId,
   isRoomId,
   type Conversation,
   type ConversationId,
@@ -226,6 +227,58 @@ export function splitRailSections(conversations: Conversation[]): RailSections {
 /** Rail/composer label for a room lane: '#team' → 'team', 'room_…' → its name. */
 export function roomLabelFor(conversation: Conversation): string {
   return conversation.title.replace(/^#/, '');
+}
+
+/* ---------- Known agents (round 3 M5 — New room / New DM pickers) ----------
+   The live roster is empty whenever no agent process is running, but the tab
+   still KNOWS agents: every registered agent record (running or exited) and
+   every non-chris party the feed history carries. Pickers list this union —
+   live first, then alphabetical — so an empty roster never dead-ends a flow.
+   Feed-only names carry no provider and no live claim: history knows their
+   name, nothing more. */
+export interface KnownAgent {
+  name: string;
+  provider: AgentInfo['provider'] | null;
+  live: boolean;
+}
+
+export function knownAgentsFor(agents: AgentInfo[], feed: TunnelEnvelope[]): KnownAgent[] {
+  const known = new Map<string, KnownAgent>();
+  for (const agent of agents) {
+    const seen = known.get(agent.title);
+    if (!seen || (agent.status === 'running' && !seen.live)) {
+      known.set(agent.title, { name: agent.title, provider: agent.provider, live: agent.status === 'running' });
+    }
+  }
+  for (const envelope of feed) {
+    for (const party of [envelope.from, envelope.to]) {
+      if (party === CHRIS || isRoomId(party) || party.startsWith('#') || known.has(party)) continue;
+      known.set(party, { name: party, provider: null, live: false });
+    }
+  }
+  return [...known.values()].sort(
+    (left, right) => Number(right.live) - Number(left.live) || left.name.localeCompare(right.name),
+  );
+}
+
+/* ---------- DM lane overlay (round 3 M5) ------------------------------------
+   A freshly opened DM lane may not exist in `conversations` yet — the agent
+   is registered but exited and history has never heard from them, so
+   buildConversations derives no lane. The overlay stands in until Chris's
+   first envelope lands and the lane derives for real. */
+export function dmLaneFor(agentName: string): Conversation {
+  return { id: dmId(agentName), kind: 'dm', title: agentName };
+}
+
+/** The lane to render: the derived one when it exists, else the overlay —
+ *  but only while the overlay is what is actually selected (no stale leak). */
+export function resolveSelectedLane(
+  conversations: Conversation[],
+  overlay: Conversation | null,
+  selectedId: ConversationId | null,
+): Conversation | null {
+  return conversations.find((lane) => lane.id === selectedId)
+    ?? (overlay && overlay.id === selectedId ? overlay : null);
 }
 
 /* ---------- Right-panel identity header (round 3 M4) -----------------------

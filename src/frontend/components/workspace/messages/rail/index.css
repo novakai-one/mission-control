@@ -221,6 +221,40 @@
   outline-offset: -1px;
 }
 
+/* ---- new-lane entry points (round 3, M5): labeled, side by side ---- */
+.msg-new-actions {
+  display: flex;
+  gap: var(--msg-sp-6);
+  margin-top: var(--msg-sp-10);
+}
+
+.msg-new-action {
+  flex: 1;
+  padding: var(--msg-sp-6) var(--msg-sp-8);
+  border: 1px solid var(--msg-border);
+  border-radius: var(--msg-r-button);
+  background: none;
+  font: var(--msg-fw-semibold) var(--msg-fs-body) var(--msg-font-ui);
+  color: var(--msg-text-room);
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--msg-t-fast), color var(--msg-t-fast);
+}
+
+.msg-new-action:hover {
+  background: var(--msg-bg-control);
+}
+
+.msg-new-action.is-active {
+  background: var(--msg-bg-selected);
+  color: var(--msg-text-primary);
+}
+
+.msg-new-action:focus-visible {
+  outline: 1px solid var(--msg-amber);
+  outline-offset: -1px;
+}
+
 /* ---- new-room picker ---- */
 .msg-picker {
   margin-top: var(--msg-sp-10);
@@ -237,6 +271,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--msg-sp-2);
+  /* The known-agent union can be long — cap and scroll, never push the
+     name row / Create button out of reach. */
+  max-height: calc(180px * var(--msg-scale));
+  overflow-y: auto;
 }
 
 .msg-picker-agent {
@@ -266,6 +304,22 @@
   width: var(--msg-sp-18);
   height: var(--msg-sp-18);
   font-size: var(--msg-fs-meta);
+}
+
+/* Provenance tag on a picker row: "live" only — history knows nothing more
+   about a feed-only name, and registered titles already carry the provider. */
+.msg-picker-tag {
+  margin-left: auto;
+  font-size: var(--msg-fs-role);
+  color: var(--msg-presence-online);
+}
+
+.msg-picker-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 
 .msg-picker-name {

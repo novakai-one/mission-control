@@ -20,7 +20,6 @@ import {
   type Conversation,
   type ConversationId,
   type TunnelEnvelope,
-  type TunnelRoom,
 } from '../../../lib/tunnelModel/index.js';
 import {
   advanceCursor,
@@ -33,6 +32,7 @@ import {
   DENSITY_SCALE,
   MESSAGING_SETTINGS,
   clampRailWidth,
+  knownAgentsFor,
   loadRailWidths,
   reviewLanesFor,
   roomLabelFor,
@@ -41,6 +41,7 @@ import {
   type RailWidths,
 } from './model.js';
 import { SHELL_STYLE, resolveStyle } from './styles/index.js';
+import { postJson, useLaneFlows } from './flows/index.js';
 import { RoomsRail } from './rail/index.js';
 import { MessageFeed, messageRowId } from './thread/index.js';
 import { ComposerBar } from './composer/index.js';
@@ -57,20 +58,6 @@ interface MessagesViewProps {
 export interface MessagesOpenRequest {
   id: string;
   nonce: number;
-}
-
-async function postJson(path: string, payload: unknown): Promise<unknown> {
-  const response = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const failure = (await response.json().catch(() => null)) as { error?: string; roster?: string[] } | null;
-    const rosterHint = failure?.roster?.length ? ` (live: ${failure.roster.join(', ')})` : '';
-    throw new Error(`${failure?.error ?? `HTTP ${response.status}`}${rosterHint}`);
-  }
-  return response.json();
 }
 
 export function MessagesView({ agents, projects, openRequest }: MessagesViewProps) {
@@ -95,6 +82,12 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     () => buildConversations(feed, rooms, roster),
     [feed, rooms, roster],
   );
+  // Known agents (live + exited + feed-history names) feed the M5 pickers.
+  const knownAgents = useMemo(() => knownAgentsFor(agents, feed), [agents, feed]);
+  const flows = useLaneFlows({
+    ingestRoom,
+    openLane: (laneId) => { setSelectedId(laneId); saveLane(laneId); },
+  });
   const targets = useMemo(
     () => buildTargets(agents, projects.flatMap((entry) => entry.threads)),
     [agents, projects],
@@ -178,7 +171,7 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     if (selectedId) loadConversation(selectedId);
   }, [selectedId, loadConversation]);
 
-  const selected = conversations.find((lane) => lane.id === selectedId) ?? null;
+  const selected = flows.resolveSelected(conversations, selectedId);
 
   function select(conversation: Conversation): void {
     setSelectedId(conversation.id);
@@ -186,11 +179,11 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     setRailOpen(false); // phone layout: picking a lane dismisses the rail overlay
   }
 
-  async function startChat(members: string[], name: string): Promise<void> {
-    const data = (await postJson('/api/user/rooms', { name, members })) as { room: TunnelRoom };
-    ingestRoom(data.room);
-    setSelectedId(data.room.roomId);
-    saveLane(data.room.roomId);
+  // DM flow (M5): the lane is derived, so opening it IS creating it — the
+  // overlay in useLaneFlows covers the not-yet-derived lane until the first
+  // envelope lands.
+  function openDm(name: string): void {
+    select(flows.openDm(name));
   }
 
   async function send(body: string): Promise<void> {
@@ -259,11 +252,12 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
         unread={unread}
         selectedId={selectedId}
         agents={agents}
-        roster={roster}
+        knownAgents={knownAgents}
         collapsed={railCollapsed}
         onToggleCollapse={() => setRailCollapsed((current) => !current)}
         onSelect={select}
-        onStartChat={startChat}
+        onStartChat={flows.startRoom}
+        onOpenDm={openDm}
       />
       <main className="msg-thread">
         {selected && (
