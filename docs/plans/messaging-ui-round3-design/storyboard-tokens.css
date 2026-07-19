@@ -1,0 +1,42 @@
+/* Storyboard design tokens — distilled from html-builder project "messaging-styled".
+ * Source: projects/messaging-styled/styles/ (116 immutable Style Classes), revision 6f585a74.
+ * Generated 2026-07-19. Values are OBSERVED (frequency-ranked), names are proposed.
+ * NOTE: the storyboard defines LOOK only — zero transitions exist in the source.
+ * Motion comes from the app: --anim-slow: 700ms cubic-bezier(0.33,1,0.68,1). See plan M1.
+ */
+
+:root {
+  /* palette (frequency-ranked) */
+  --sb-paper: #f4f1ea;        /* primary text / headings (x9) */
+  --sb-paper-dim: #f1efec;    /* secondary text (x5) */
+  --sb-ink-0: #0b0b0d;        /* deepest surface */
+  --sb-ink-1: #101012;        /* app surface */
+  --sb-ink-2: #121214;        /* panel surface (x3) */
+  --sb-ink-3: #232225;        /* raised surface */
+  --sb-ink-4: #2a2a2e;        /* border / divider (x7) */
+  --sb-ink-5: #3a393e;        /* strong border */
+  --sb-muted-1: #67656d;      /* faint label (x4) */
+  --sb-muted-2: #77767d;      /* meta text (x5) */
+  --sb-muted-3: #8c8b91;      /* body-dim (x7) */
+  --sb-muted-4: #929097;      /* placeholder */
+  --sb-muted-5: #aaa7ad;      /* hover text */
+  --sb-amber: #d7a842;        /* accent: badges, active states (x7) */
+  --sb-amber-hi: #e4ae40;     /* accent hover / working indicator (x3) */
+  --sb-amber-ink: #17130b;    /* text on amber */
+
+  /* radii */
+  --sb-r-pill: 999px;   /* chips, badges, dots (x12) */
+  --sb-r-card: 8px;     /* cards, inputs, panels (x10) */
+  --sb-r-lg: 12px;      /* large containers */
+
+  /* type scale — the storyboard runs SMALL and dense; 10px micro-labels dominate (x27) */
+  --sb-fs-micro: 9px;   --sb-fs-label: 10px;  --sb-fs-meta: 11px;
+  --sb-fs-body: 12px;   --sb-fs-title: 13px;   --sb-fs-head: 18px;  --sb-fs-hero: 28px;
+
+  /* spacing (observed set) */
+  --sb-sp-1: 1px; --sb-sp-2: 2px; --sb-sp-6: 6px; --sb-sp-7: 7px;
+  --sb-sp-8: 8px; --sb-sp-9: 9px; --sb-sp-10: 10px; --sb-sp-14: 14px; --sb-sp-20: 20px;
+
+  /* elevation */
+  --sb-shadow-pop: 0 24px 80px rgba(0,0,0,0.34);
+}

@@ -106,6 +106,44 @@ ways — do not gold-plate while being principled.
   `StyleBlock` objects + a single `resolveStyle` seam); do NOT port
   html-builder's file/manifest machinery.
 
+## Design reference (added 2026-07-19, second pass)
+
+Static design target lives in `docs/plans/messaging-ui-round3-design/`,
+distilled from the html-builder project `messaging-styled` (revision
+6f585a74, exported via `project-export`, scenes screenshot-verified):
+
+- `storyboard-scene-01.png` — room lane + Summary right panel
+- `storyboard-scene-02.png` — DM lane + Tasks right panel (identity header:
+  name, role, live status)
+- `storyboard-scene-03.png` — DM lane + Stats right panel
+- `storyboard-tokens.css` — observed palette/radii/type/spacing, frequency-ranked
+- `storyboard-styles.md` — full 116-class catalog with purposes (lookup table
+  for "how does the storyboard style X")
+
+**Precedence rules (read first):**
+1. The app's `tokens.css` wins wherever it already defines a value. The
+   storyboard reference is the tie-breaker for net-new UI (M2 icons/toggle,
+   M4 room header, M5 flows) and for anything tokens.css does not cover.
+2. This is a LOOK reference, not a motion spec — the storyboard contains zero
+   transitions. All motion values come from M1 / `--anim-slow`.
+3. **Trap:** scene-01 renders a room WITHOUT an identity header — that is the
+   old state the storyboard inherited, not the target. M4's room header must
+   mirror the DM header in scenes 02/03. Do not copy scene-01's missing header.
+4. Scenes 02/03 show Tasks/Stats/Settings TABS in the right panel. Round 3
+   does NOT build panel tabs (YAGNI, principle 8) — reference the header
+   pattern and panel chrome only.
+5. The storyboard runs dense (9–10px micro-labels). Match its hierarchy and
+   chrome, not its exact type scale, where the app is already more spacious.
+6. Storyboard content (Maya/Orbit/Atlas/Nova/Sage) is fiction that happens to
+   share names with the seed fixtures — neither is real data. Item 17's
+   honesty rule still applies.
+
+Per-item verification (M9) now compares against these refs, not vibes:
+M1 → motion only, no visual diff expected. M2 → rail chrome vs scene-01 left
+rail. M3 → composer placement vs any scene (pinned, "Draft saved" subtext
+optional). M4 → room header vs scenes 02/03 DM header. M5 → pickers styled
+per `storyboard-styles.md` (ComposerShell/Picker classes where applicable).
+
 ## Method
 
 | # | Task | Done when |
