@@ -2,7 +2,7 @@
 
 .msg-composer {
   margin: 0;
-  padding: 0 var(--msg-sp-20) var(--msg-sp-18);
+  padding: 0 var(--msg-thread-pad-x) var(--msg-sp-18);
   display: flex;
   flex-direction: column;
 }
@@ -17,12 +17,17 @@
 }
 
 .msg-composer-error {
-  margin-bottom: var(--msg-sp-8);
+  width: 100%;
+  max-width: var(--msg-content-max-w);
+  margin: 0 auto var(--msg-sp-8);
   font-size: var(--msg-fs-body);
   color: var(--msg-amber);
 }
 
 .msg-composer-box {
+  width: 100%;
+  max-width: var(--msg-content-max-w);
+  margin-inline: auto;
   min-height: var(--msg-composer-min-h);
   display: flex;
   flex-direction: column;

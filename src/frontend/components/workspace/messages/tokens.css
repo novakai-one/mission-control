@@ -88,6 +88,11 @@
   --msg-rail-w: 230px;
   --msg-context-w: 280px;
 
+  /* ---------- Center column rhythm (round 2 — calm, scannable) ---------- */
+  --msg-thread-pad-x: calc(28px * var(--msg-scale));   /* real padding both sides */
+  --msg-content-max-w: calc(560px * var(--msg-scale)); /* message content measure */
+  --msg-feed-gap: calc(20px * var(--msg-scale));       /* vertical rhythm between rows */
+
   /* ---------- Component metrics (× density) ---------- */
   --msg-avatar-sm: calc(31px * var(--msg-scale));
   --msg-avatar-md: calc(34px * var(--msg-scale));

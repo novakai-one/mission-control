@@ -5,8 +5,16 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--msg-sp-14);
-  padding: var(--msg-sp-18) var(--msg-sp-16);
+  gap: var(--msg-feed-gap);
+  padding: var(--msg-sp-18) var(--msg-thread-pad-x);
+}
+
+/* The content column: centered, capped at a calm reading measure. */
+.msg-day,
+.msg-row {
+  width: 100%;
+  max-width: var(--msg-content-max-w);
+  margin-inline: auto;
 }
 
 .msg-feed-quiet {
