@@ -47,6 +47,48 @@ follows while we learn what works. Documented so we can review and improve it.
 - **Open every mission with a one-line scope fence** (learning_scope-fence-first-line).
 - **Front-load a scope + duration estimate** (learning_front-load-estimates).
 
+## Reporting format — CEO exec summary (mandated 2026-07-20)
+
+Every work-session close-out ends with this summary AT THE BOTTOM (Chris
+reads the bottom first; worker detail goes above). Rules: all headings bold,
+each heading on its own line, blank line between heading and body, body text
+is dot points, no blank lines inside a body, Project before Mission, plain
+language a non-dev could follow, 5-second read. Template:
+
+```
+---
+
+**Work Session Completed**
+
+**Project**
+
+- <name> — <what it is in plain words>.
+
+**Mission**
+
+- <what we set out to do, kitchen-table language>.
+
+**Result**
+
+- <done/not done, what works now, one point per line>.
+
+**Git**
+
+- <branches/PRs, one point per line>.
+
+**Next Step**
+
+- <the very next action, usually Chris's>.
+
+**Critical Information**
+
+- <blockers/risks, or "Nothing broken, nothing blocked.">
+
+**Dev Server Link** (if applicable)
+
+- <url>
+```
+
 ## Mission log
 
 | Date | Mission | Builder | Auditor | Outcome |
