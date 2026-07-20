@@ -9,8 +9,16 @@ function testBindsBrowserSession(): void {
 }
 
 function testOmitsBrowserSessionWhenUnset(): void {
-  const environment = providerEnvironment('claude');
-  assert.equal(environment.NVK_SESSION, undefined, 'no browser binding when none is requested');
+  // Deterministic regardless of the runner: agent shells carry their own
+  // NVK_SESSION, which providerEnvironment copies through from process.env.
+  const inherited = process.env.NVK_SESSION;
+  delete process.env.NVK_SESSION;
+  try {
+    const environment = providerEnvironment('claude');
+    assert.equal(environment.NVK_SESSION, undefined, 'no browser binding when none is requested');
+  } finally {
+    if (inherited !== undefined) process.env.NVK_SESSION = inherited;
+  }
 }
 
 function testStillScrubsProviderSecrets(): void {
@@ -29,11 +37,17 @@ function testPointsAgentAtOwnBackend(): void {
   );
 }
 
-function testHonoursInheritedCommandUrl(): void {
-  process.env.NVK_COMMAND_URL = 'http://127.0.0.1:9999';
+function testLaneLocalPrecedence(): void {
+  // Audit S2 regression: a backend on 3131 whose parent environment carries
+  // the Live tunnel URL must still route its agents to itself.
+  process.env.NVK_COMMAND_URL = 'http://127.0.0.1:3031';
   try {
-    const environment = providerEnvironment('claude', 'sess', 3931);
-    assert.equal(environment.NVK_COMMAND_URL, 'http://127.0.0.1:9999', 'explicit override wins');
+    const environment = providerEnvironment('claude', 'sess', 3131);
+    assert.equal(
+      environment.NVK_COMMAND_URL,
+      'http://127.0.0.1:3131',
+      'spawning backend port beats inherited NVK_COMMAND_URL',
+    );
   } finally {
     delete process.env.NVK_COMMAND_URL;
   }
@@ -43,5 +57,5 @@ testBindsBrowserSession();
 testOmitsBrowserSessionWhenUnset();
 testStillScrubsProviderSecrets();
 testPointsAgentAtOwnBackend();
-testHonoursInheritedCommandUrl();
+testLaneLocalPrecedence();
 console.log('PASS');

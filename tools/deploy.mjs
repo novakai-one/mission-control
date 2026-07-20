@@ -14,7 +14,8 @@
 //                   respawning on SIGHUP so `redeploy` swaps snapshots live.
 //   redeploy        snapshot HEAD, flip `current`, SIGHUP the running serve.
 //
-// Scratch dev is untouched: `npm run dev` still uses tsx watch + vite.
+// The dev lane is separate: `npm run dev` runs vite (:3130) + tsx watch
+// (:3131) and never contests the Live pair this supervisor owns (3030/3031).
 import { execFileSync } from 'node:child_process';
 import { spawn, execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -197,7 +198,7 @@ async function cmdServe() {
 
   // Fail loud on port clashes instead of a crash loop.
   if (await portInUse(APP_PORT)) {
-    fail(`app port ${APP_PORT} is in use — vite dev is probably holding it. Stop it (or use a scratch port) then retry.`);
+    fail(`app port ${APP_PORT} is in use — another Live serve or a legacy rig is holding it. Check \`lsof -nP -iTCP:${APP_PORT} -sTCP:LISTEN\`, stop it, then retry.`);
   }
   if (await portInUse(BACKEND_PORT)) {
     fail(`backend port ${BACKEND_PORT} is in use — a stale backend is running. Free it: lsof -ti:${BACKEND_PORT} | xargs kill`);

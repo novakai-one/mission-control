@@ -9,7 +9,8 @@ export async function bootstrapBackend(): Promise<ServerController> {
   const configuration = ConfigManager.load();
   const serverPort = Number(process.env.NOVAKAI_SERVER_PORT) || configuration.serverPort;
   // Production (deploy snapshot) serves the built frontend + a same-origin
-  // listener on NOVAKAI_APP_PORT; dev leaves both unset and vite owns 3030.
+  // listener on NOVAKAI_APP_PORT (3030); dev leaves both unset and vite owns
+  // the dev lane's app port (3130).
   const staticDir = process.env.NOVAKAI_STATIC_DIR || undefined;
   const appPort = Number(process.env.NOVAKAI_APP_PORT) || undefined;
 

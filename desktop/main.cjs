@@ -1,10 +1,12 @@
-// Electron thin shell for Novakai Command.
-// Attaches to a running server on :3030, or spawns `npm run prod` itself —
-// a no-watch deploy snapshot (tools/deploy.mjs) so main merges no longer
-// restart prod. A manual `npm run dev` still wins the :3030 attach for HMR work.
+// Electron thin shell for Novakai Command — the LIVE lane (3030 app / 3031 api).
+// Attaches only to a verified Live snapshot serve on :3030 (identity-checked
+// via /api/health), or spawns `npm run prod` itself — a no-watch deploy
+// snapshot (tools/deploy.mjs) so main merges never restart prod. The dev lane
+// (`npm run dev`, 3130/3131) is a separate stack this shell never attaches to;
+// an unknown 3030 responder fails loud instead of being loaded as Live.
 // The backend (tsx + node-pty) always runs in system Node, never inside Electron.
 const { app, BrowserWindow, shell } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
@@ -23,15 +25,36 @@ let win = null;
 let quitting = false;
 let recovery = null;
 
+// Identity probe — only a real Live snapshot serve counts:
+//   'live'    /api/health answered with our app id in static (snapshot) mode
+//   'foreign' something answered but it is NOT a Live serve (legacy dev rig,
+//             scratch server, unrelated listener) — never load it
+//   'free'    nothing usable on the port
 function probe() {
   return new Promise((resolve) => {
-    const req = http.get(PROBE_URL, { timeout: 1000 }, (res) => {
-      res.resume();
-      resolve(true);
+    const req = http.get(`${PROBE_URL}/api/health`, { timeout: 1000 }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try {
+          const health = JSON.parse(body);
+          resolve(health.application === 'novakai-command' && health.static === true ? 'live' : 'foreign');
+        } catch {
+          resolve('foreign');
+        }
+      });
     });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.on('error', () => resolve('free'));
+    req.on('timeout', () => { req.destroy(); resolve('free'); });
   });
+}
+
+/** Record who holds 3030 so the fail-loud splash has evidence in the log. */
+function logConflict() {
+  try {
+    const owners = execSync('lsof -nP -iTCP:3030 -sTCP:LISTEN', { encoding: 'utf8' });
+    fs.appendFileSync(LOG_FILE, `\n--- foreign :3030 responder ${new Date().toISOString()} ---\n${owners}`);
+  } catch { /* lsof empty or unavailable — nothing to record */ }
 }
 
 function startDevServer() {
@@ -71,21 +94,32 @@ function splashHtml(message) {
 async function waitForServer() {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await probe()) return true;
-    if (win?.isDestroyed() !== false) return false; // window closed while waiting
+    const status = await probe();
+    if (status !== 'free') return status; // 'live' or a foreign responder appeared
+    if (win?.isDestroyed() !== false) return 'timeout'; // window closed while waiting
     await new Promise((r) => setTimeout(r, 500));
   }
-  return false;
+  return 'timeout';
 }
 
 async function recover() {
   if (quitting || recovery) return recovery;
   recovery = (async () => {
     if (win && !win.isDestroyed()) await win.loadURL(splashHtml('Reconnecting&hellip;'));
-    if (!devServer) startDevServer();
-    if (await waitForServer()) {
-      if (win && !win.isDestroyed()) await win.loadURL(APP_URL);
-    } else if (win && !win.isDestroyed()) {
+    let status = await probe();
+    if (status === 'free') {
+      if (!devServer) startDevServer();
+      status = await waitForServer();
+    }
+    if (win?.isDestroyed() !== false) return;
+    if (status === 'live') {
+      await win.loadURL(APP_URL);
+    } else if (status === 'foreign') {
+      logConflict();
+      await win.loadURL(splashHtml(
+        `Port 3030 is held by a server that is not Novakai Command Live — not loading it. Details in ${LOG_FILE}`,
+      ));
+    } else {
       await win.loadURL(splashHtml(`Servers did not recover. See ${LOG_FILE}`));
     }
   })().finally(() => { recovery = null; });
@@ -109,16 +143,16 @@ async function launch() {
   });
   win.webContents.on('render-process-gone', () => void recover());
 
-  if (await probe()) {
+  if (await probe() === 'live') {
     try {
-      await win.loadURL(APP_URL); // attach to an already-running `npm run dev`
+      await win.loadURL(APP_URL); // attach to the already-running Live serve
     } catch {
       await recover();
     }
     return;
   }
 
-  await recover();
+  await recover(); // 'free' → spawn prod; 'foreign' → fail-loud splash
 }
 
 app.whenReady().then(launch);

@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const backendPort = process.env.NOVAKAI_BACKEND_PORT || '3031';
+// Dev lane: vite serves 3130 and proxies to the dev backend. One canonical
+// backend-port variable everywhere: NOVAKAI_SERVER_PORT (the Live lane keeps
+// 3030/3031 via tools/deploy.mjs and never goes through vite).
+const backendPort = process.env.NOVAKAI_SERVER_PORT || '3131';
 
 export default defineConfig({
   plugins: [react()],
@@ -11,7 +14,9 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 3030,
+    port: 3130,
+    // Never drift onto a neighboring port (3131 is the dev backend) — fail loud.
+    strictPort: true,
     host: true,
     proxy: {
       '/api': {

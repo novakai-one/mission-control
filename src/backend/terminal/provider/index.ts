@@ -106,10 +106,11 @@ export function providerEnvironment(
   // Bind each agent to its own isolated browser session. When the agent runs
   // `browse`, it auto-scopes to this id — parallel agents never share a tab.
   if (browserSession) scrubbed.NVK_SESSION = browserSession;
-  // Point the agent's nvk-msg / nvk-live at THIS backend, so a scratch stack's
-  // agents post into their own tunnel instead of leaking into prod's :3031.
-  // An explicit inherited NVK_COMMAND_URL wins.
-  if (serverPort && !scrubbed.NVK_COMMAND_URL) {
+  // Lane-local tunnel routing: THIS backend's own port is authoritative for
+  // its agents' nvk-msg / nvk-live, even when the parent environment carries
+  // another backend's NVK_COMMAND_URL — a dev backend started from a
+  // Live-spawned terminal must not route its agents to the Live tunnel.
+  if (serverPort) {
     scrubbed.NVK_COMMAND_URL = `http://127.0.0.1:${serverPort}`;
   }
   return scrubbed;
