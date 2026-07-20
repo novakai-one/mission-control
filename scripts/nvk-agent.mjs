@@ -1,0 +1,197 @@
+#!/usr/bin/env node
+// nvk agent — the M1 operator control path. ONE dependable surface for:
+//   spawn + brief an agent (with automatic post-spawn communication check)
+//   verify its process and actual activity
+//   show its latest useful message/status
+//   stop or retire it
+//
+// Every verb tells the truth from primary evidence (the process table and the
+// agent's own session transcript), never from "the bytes were written".
+//
+//   node scripts/nvk-agent.mjs spawn --provider kimi --title "Name" [--cwd D] [--brief "line"|--brief-file F]
+//   node scripts/nvk-agent.mjs send <agent> "single-line message"
+//   node scripts/nvk-agent.mjs status <agent>
+//   node scripts/nvk-agent.mjs tail <agent>
+//   node scripts/nvk-agent.mjs kill <agent>
+//   node scripts/nvk-agent.mjs mailbox <agent>     (report-only until org-rails)
+//
+// Server: NVK_COMMAND_URL (default http://127.0.0.1:3031).
+
+import { discoverAgents, normalizeBackends, resolveAgent } from './team/channel.mjs';
+import { sendAndConfirm } from './team/confirm.mjs';
+import { activityProof, checkProcess, latestUseful } from './team/liveness.mjs';
+
+const SERVER = process.env.NVK_COMMAND_URL || 'http://127.0.0.1:3031';
+
+const args = process.argv.slice(2);
+const cmd = args.shift();
+const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args.splice(i, 2)[1] : undefined; };
+const takeAll = (name) => { const v = []; while (args.includes(name)) v.push(opt(name)); return v.filter(Boolean); };
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function fail(message, extra) {
+  console.error(`FAIL ${message}`);
+  if (extra) console.error(JSON.stringify(extra, null, 2));
+  process.exit(2);
+}
+
+async function roster() {
+  const discovery = await discoverAgents(normalizeBackends([SERVER]));
+  if (discovery.unavailable.length > 0) fail(`backend unavailable: ${discovery.unavailable[0].error}`);
+  return discovery.agents;
+}
+
+async function findAgent(query) {
+  try {
+    return resolveAgent(await roster(), query);
+  } catch (error) {
+    fail(error.message);
+  }
+}
+
+async function waitForSession(agentId, timeoutMs = 60_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    const agents = await roster();
+    const agent = agents.find((entry) => entry.agentId === agentId);
+    if (!agent) return null;
+    if (agent.sessionId) return agent;
+    if (agent.status !== 'running') return agent;
+    await wait(1000);
+  }
+  return (await roster()).find((entry) => entry.agentId === agentId) ?? null;
+}
+
+function fmtAge(ageMs) {
+  if (ageMs === null || ageMs === undefined) return 'unknown';
+  const seconds = Math.round(ageMs / 1000);
+  return seconds < 90 ? `${seconds}s ago` : `${Math.round(seconds / 60)}min ago`;
+}
+
+async function cmdSpawn() {
+  const provider = opt('--provider');
+  const title = opt('--title');
+  const cwd = opt('--cwd') ?? process.cwd();
+  const brief = opt('--brief');
+  const briefFile = opt('--brief-file');
+  if (!provider || !title) fail('spawn requires --provider and --title');
+  if (brief && /\r|\n/.test(brief)) fail('--brief must be single-line (use --brief-file for long briefs)');
+  const briefText = brief ?? (briefFile ? `Your briefing is at ${briefFile} — read it first.` : null);
+
+  const response = await fetch(`${SERVER}/api/agents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, title, cwd }),
+  });
+  const body = await response.json();
+  if (!response.ok) fail(`spawn rejected: ${body.error ?? response.status}`);
+
+  const checks = [];
+  // 1. process truth: alive and actually the provider we asked for.
+  const proc = checkProcess(body);
+  checks.push({ name: 'process-alive', ok: proc.alive });
+  checks.push({ name: 'process-is-requested-provider', ok: proc.providerMatch, command: proc.command });
+
+  // 2. session resolved (async for kimi/codex — poll, never assume).
+  const agent = await waitForSession(body.agentId);
+  checks.push({ name: 'session-resolved', ok: Boolean(agent?.sessionId), sessionId: agent?.sessionId ?? null });
+
+  // 3. post-spawn communication check: brief delivery confirmed via transcript.
+  let confirmation = null;
+  if (briefText && agent?.sessionId) {
+    confirmation = await sendAndConfirm({ agent, body: briefText, from: 'nvk-agent-spawn' });
+    checks.push({ name: 'brief-delivery-confirmed', ok: confirmation.status === 'confirmed' });
+  } else if (briefText) {
+    checks.push({ name: 'brief-delivery-confirmed', ok: false, note: 'no sessionId — cannot confirm' });
+  }
+
+  const ok = checks.every((check) => check.ok);
+  const report = {
+    ok, agentId: body.agentId, title, provider, terminalPid: body.terminalPid,
+    sessionId: agent?.sessionId ?? null, checks,
+    confirmation: confirmation ? { status: confirmation.status, latencyMs: confirmation.latencyMs, evidence: confirmation.evidence } : null,
+  };
+  console.log(JSON.stringify(report, null, 2));
+  if (!ok) process.exit(2);
+}
+
+async function cmdSend(query, body) {
+  const agent = await findAgent(query);
+  const result = await sendAndConfirm({ agent, body, from: process.env.NVK_AGENT ?? 'nvk-agent' });
+  if (result.status === 'confirmed') {
+    console.log(`CONFIRMED ${agent.title} received it (${result.latencyMs}ms, id ${result.messageId})`);
+  } else {
+    fail(`UNCONFIRMED — ${agent.title} shows no new user turn containing the message`, { messageId: result.messageId, ...result.evidence });
+  }
+}
+
+async function cmdStatus(query) {
+  const agent = await findAgent(query);
+  const proc = checkProcess(agent);
+  const activity = activityProof(agent);
+  const latest = latestUseful(agent);
+  console.log(`${agent.title} · ${agent.provider} · roster:${agent.status}`);
+  console.log(`  process: ${proc.alive ? `pid ${proc.pid} alive` : 'DEAD'}${proc.alive ? (proc.providerMatch ? ' (matches provider)' : ` (MISMATCH — command is: ${proc.command})`) : ''}`);
+  console.log(`  activity: ${activity.transcript ? `${activity.events} events, ${activity.userTurns} user turns, last event ${fmtAge(activity.lastEventAgeMs)}` : 'no transcript found'}`);
+  console.log(`  latest: ${latest.text ?? '(nothing yet)'}`);
+  if (!proc.alive || !proc.providerMatch) process.exit(2);
+}
+
+async function cmdTail(query) {
+  const agent = await findAgent(query);
+  const latest = latestUseful(agent);
+  if (!latest.text) fail(`no assistant messages found for ${agent.title}`, { transcript: latest.transcript });
+  console.log(latest.text);
+}
+
+async function cmdKill(query) {
+  const agent = await findAgent(query);
+  const response = await fetch(`${SERVER}/api/agents/${agent.agentId}/kill`, { method: 'POST' });
+  if (!response.ok) fail(`kill rejected: HTTP ${response.status}`);
+  const deadline = Date.now() + 15_000;
+  while (Date.now() <= deadline) {
+    const proc = checkProcess(agent);
+    if (!proc.alive) {
+      console.log(`KILLED ${agent.title} — pid ${agent.terminalPid} exited (verified)`);
+      return;
+    }
+    await wait(500);
+  }
+  fail(`kill unverified — pid ${agent.terminalPid} still alive after 15s`);
+}
+
+async function cmdMailbox(query) {
+  const agent = await findAgent(query).catch(() => null);
+  // Report-only: the backend mailbox registry (MAILBOX_IDENTITIES) is
+  // code-static; nothing reads a file. The durable registry is the org-rails
+  // mission — this verb prints exactly what that mission must make loadable.
+  const record = {
+    id: `orchestrator:${(query ?? '').toLowerCase().replace(/\s+/g, '-')}`,
+    displayName: agent?.title ?? query,
+    memberName: agent?.title ?? query,
+    role: 'orchestrator',
+    permissions: ['messages:send'],
+  };
+  console.log('Durable mailbox (report-only — not yet honored by the backend):');
+  console.log(JSON.stringify(record, null, 2));
+  console.log('To make this real, org-rails must load mailbox identities from a');
+  console.log('registry file instead of the code-static MAILBOX_IDENTITIES list.');
+}
+
+if (cmd === 'spawn') await cmdSpawn();
+else if (cmd === 'send') {
+  const query = args.shift();
+  const body = args.join(' ');
+  if (!query || !body.trim()) fail('usage: nvk-agent.mjs send <agent> "single-line message"');
+  await cmdSend(query, body);
+} else if (cmd === 'status') await cmdStatus(args[0] ?? fail('status requires an agent'));
+else if (cmd === 'tail') await cmdTail(args[0] ?? fail('tail requires an agent'));
+else if (cmd === 'kill') await cmdKill(args[0] ?? fail('kill requires an agent'));
+else if (cmd === 'mailbox') await cmdMailbox(args[0] ?? fail('mailbox requires an agent'));
+else {
+  console.error('usage: nvk-agent.mjs <spawn|send|status|tail|kill|mailbox> ...');
+  process.exit(1);
+}

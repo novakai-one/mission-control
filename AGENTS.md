@@ -91,6 +91,10 @@ agents and for Chris.
   Agents are spawned via `POST /api/agents`, messaged via
   `scripts/nvk-msg.mjs` / `scripts/nvk-live.mjs`, killed via
   `POST /api/agents/:id/kill`. See `docs/plans/2026-07-19-kimi-orchestrator-plan.md`.
+- `scripts/nvk-agent.mjs` (M1) is the dependable operator path: spawn+brief
+  with automatic delivery-confirmed post-spawn check, process/activity truth,
+  latest message, verified kill. PTY "delivered" only means bytes written —
+  nvk-agent confirms receipt via the agent's own session transcript.
 - `CONTEXT.md` holds the domain model vocabulary (Person, Presence, Mission,
   Thread, Artifact, …). Use those terms in code and docs.
 
