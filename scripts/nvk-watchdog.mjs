@@ -115,7 +115,7 @@ function appendEvent(event) {
 function post(line, escalate) {
   const body = escalate === 'chris' ? `@chris ${line}` : line;
   try {
-    execFileSync('node', [path.join(ROOT, 'scripts', 'nvk-msg.mjs'),
+    execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'nvk-msg.mjs'),
       'send', '--from', WATCHDOG_NAME, '--to', '#team', body], { encoding: 'utf8' });
   } catch (error) {
     appendEvent({ type: 'watchdog-post-failed', detail: String(error).slice(0, 200) });
