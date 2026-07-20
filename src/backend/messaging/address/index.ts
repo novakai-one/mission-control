@@ -4,11 +4,11 @@
 // addressable.
 import type { AgentInfo } from '../../terminal/manager.js';
 import { isChannel, isRoom, mailboxIdentityFor } from '../types.js';
-import type { AgentAddress } from '../types.js';
+import type { AgentAddress, MailboxLookup } from '../types.js';
 
 /** Names no agent may ever take: the human, every channel, every room id. */
-export function isReservedName(name: string): boolean {
-  return mailboxIdentityFor(name) !== undefined || isChannel(name) || isRoom(name);
+export function isReservedName(name: string, lookup: MailboxLookup = mailboxIdentityFor): boolean {
+  return lookup(name) !== undefined || isChannel(name) || isRoom(name);
 }
 
 /** Live roster: running agents only, addressed by their title. */
@@ -31,7 +31,12 @@ export function nextSpawnName(provider: string, takenTitles: Iterable<string>): 
 }
 
 /** Backend-enforced uniqueness for spawn titles and renames; reserved names are always taken. */
-export function isNameTaken(name: string, agents: AgentInfo[], excludeAgentId?: string): boolean {
-  if (isReservedName(name)) return true;
+export function isNameTaken(
+  name: string,
+  agents: AgentInfo[],
+  excludeAgentId?: string,
+  lookup: MailboxLookup = mailboxIdentityFor,
+): boolean {
+  if (isReservedName(name, lookup)) return true;
   return agents.some((agent) => agent.title === name && agent.agentId !== excludeAgentId);
 }

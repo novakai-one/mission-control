@@ -24,3 +24,4 @@ desktop/package-lock.json
 .novakai-command/smoke/
 # symlinked in worktrees; the dir pattern above misses symlinks
 node_modules
+.novakai-command/mailboxes.jsonl

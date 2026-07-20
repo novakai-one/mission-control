@@ -165,20 +165,22 @@ async function cmdKill(query) {
 
 async function cmdMailbox(query) {
   const agent = await findAgent(query).catch(() => null);
-  // Report-only: the backend mailbox registry (MAILBOX_IDENTITIES) is
-  // code-static; nothing reads a file. The durable registry is the org-rails
-  // mission — this verb prints exactly what that mission must make loadable.
-  const record = {
-    id: `orchestrator:${(query ?? '').toLowerCase().replace(/\s+/g, '-')}`,
-    displayName: agent?.title ?? query,
-    memberName: agent?.title ?? query,
-    role: 'orchestrator',
-    permissions: ['messages:send'],
-  };
-  console.log('Durable mailbox (report-only — not yet honored by the backend):');
-  console.log(JSON.stringify(record, null, 2));
-  console.log('To make this real, org-rails must load mailbox identities from a');
-  console.log('registry file instead of the code-static MAILBOX_IDENTITIES list.');
+  // Durable mailbox for a persistent role (org rails): registers with the
+  // backend's file-loaded registry so replies route without a live PTY.
+  const memberName = agent?.title ?? query;
+  const response = await fetch(`${SERVER}/api/mailboxes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ displayName: memberName, memberName }),
+  });
+  const body = await response.json();
+  if (response.status === 409) {
+    console.log(`mailbox "${memberName}" already registered — nothing to do`);
+    return;
+  }
+  if (!response.ok) fail(`mailbox registration rejected: ${body.error ?? response.status}`);
+  console.log(`REGISTERED durable mailbox for ${memberName}:`);
+  console.log(JSON.stringify(body.identity, null, 2));
 }
 
 if (cmd === 'spawn') await cmdSpawn();

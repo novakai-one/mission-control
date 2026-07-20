@@ -9,8 +9,8 @@ import { MailboxDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../deli
 import { resolveActor } from '../actors/index.js';
 import type { ResolvedActor } from '../actors/index.js';
 import { RoomStore } from '../rooms/index.js';
-import { CHRIS_MEMBER, formatRoomInbound, isChannel, isRoom } from '../types.js';
-import type { AgentAddress, DeliveryReceipt, MessageEnvelope, Room } from '../types.js';
+import { CHRIS_MEMBER, formatRoomInbound, isChannel, isRoom, mailboxIdentityFor } from '../types.js';
+import type { AgentAddress, DeliveryReceipt, MailboxLookup, MessageEnvelope, Room } from '../types.js';
 
 /** Recipient not found / not running — the error carries the live roster (§5). */
 export class RecipientNotFoundError extends Error {
@@ -80,6 +80,7 @@ export class MessageRouter {
     private readonly rooms: RoomStore,
     private readonly roster: () => AgentAddress[],
     private readonly interruptLimiter = new InterruptRateLimiter(),
+    private readonly mailboxLookup: MailboxLookup = mailboxIdentityFor,
   ) {
     this.adapters = { agent: new PtyDeliveryAdapter(delivery), mailbox: new MailboxDeliveryAdapter() };
   }
@@ -147,7 +148,7 @@ export class MessageRouter {
 
   private async routeDirect(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     const roster = this.roster();
-    const actor = resolveActor(envelope.to, roster, []);
+    const actor = resolveActor(envelope.to, roster, [], this.mailboxLookup);
     if (actor?.kind === 'mailbox') return this.deliverResolved(envelope, actor);
     if (actor?.kind !== 'agent') throw this.fail(envelope, new RecipientNotFoundError(envelope.to, roster));
     if (envelope.delivery === 'interrupt' && !this.interruptLimiter.tryAcquire(envelope.from)) {

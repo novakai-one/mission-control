@@ -63,8 +63,46 @@ async function testDeadPtyThrows(): Promise<void> {
   await assert.rejects(() => delivery.deliver(address, envelope()), DeliveryFailedError);
 }
 
+const kimiAddress: AgentAddress = { agentId: 'agent_k', name: 'kimi-1', provider: 'kimi' };
+const FLUSHY = { interruptSettleMs: 0, submitDelayMs: 0, flushDelayMs: 30 };
+
+async function testKimiGetsOneFlush(): Promise<void> {
+  const writer = recordingWriter();
+  await new PtyDelivery(writer, FLUSHY).deliver(kimiAddress, envelope({ ['to']: 'kimi-1' }));
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.deepEqual(writer.writes.map((entry) => entry.data), [
+    '[nvk-msg from claude-1 id msg_1] rebase onto main',
+    '\r',
+    '\r',
+  ], 'kimi delivery ends with a settle-\\r plus exactly one flush-\\r');
+}
+
+async function testCodexGetsNoFlush(): Promise<void> {
+  const writer = recordingWriter();
+  await new PtyDelivery(writer, FLUSHY).deliver(address, envelope());
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.deepEqual(writer.writes.map((entry) => entry.data), [
+    '[nvk-msg from claude-1 id msg_1] rebase onto main',
+    '\r',
+  ], 'flush is kimi-gated — other providers keep the classic two writes');
+}
+
+async function testFlushNeverThrowsOnDeadPty(): Promise<void> {
+  let calls = 0;
+  const flaky = new PtyDelivery({
+    write: () => { calls += 1; return calls <= 2; }, // PTY "dies" before the flush lands
+  }, FLUSHY);
+  await flaky.deliver(kimiAddress, envelope({ ['to']: 'kimi-1' }));
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(calls, 3, 'flush was attempted');
+  // Reaching here means the failed flush did not crash the process.
+}
+
 await testNormalTypesInboundFormatThenSubmits();
 await testInterruptSendsEscapeFirst();
 await testNewlinesNeverSubmitEarly();
 await testDeadPtyThrows();
+await testKimiGetsOneFlush();
+await testCodexGetsNoFlush();
+await testFlushNeverThrowsOnDeadPty();
 console.log('PASS');

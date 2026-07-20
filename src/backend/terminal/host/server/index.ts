@@ -22,6 +22,7 @@ export class TerminalHostServer {
   constructor(
     private readonly socketPath: string,
     private readonly terminals: TerminalRuntime,
+    private readonly snapshotId?: string,
   ) {
     this.server = createServer((socket) => this.accept(socket));
     this.terminals.onData((agentId, data) => this.handleData(agentId, data));
@@ -84,6 +85,7 @@ export class TerminalHostServer {
       protocol: TERMINAL_HOST_PROTOCOL,
       hostPid: process.pid,
       agents: this.snapshots(),
+      snapshotId: this.snapshotId,
     });
   }
 
