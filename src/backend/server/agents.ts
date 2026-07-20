@@ -10,6 +10,8 @@ import type { ProviderId } from '../../shared/project/schema.js';
 import { TerminalManager, type AgentInfo, type CreateAgentOptions } from '../terminal/manager.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 import { nextSpawnName, isNameTaken } from '../messaging/address/index.js';
+import { mailboxIdentityFor } from '../messaging/types.js';
+import type { MailboxLookup } from '../messaging/types.js';
 import { ConfigManager } from '../config/index.js';
 import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.js';
 import { SubagentWatcher } from '../transcript/subagents/index.js';
@@ -50,6 +52,8 @@ export class AgentsHub {
   constructor(
     private readonly sockets: Set<WebSocket>,
     private readonly manager: TerminalRuntime = new TerminalManager(),
+    /** Durable mailbox names are always taken; defaults to the static seeds. */
+    private readonly mailboxLookup: MailboxLookup = mailboxIdentityFor,
   ) {
     this.sessionControl = new SessionControl(this.manager);
     this.manager.onData((agentId, data) => {
@@ -256,7 +260,7 @@ export class AgentsHub {
     // Messaging addressing (§5): every agent gets a short unique name at
     // spawn — provider + ordinal when none is supplied, 409 on collisions.
     const requested = typeof request.body?.title === 'string' ? request.body.title : undefined;
-    if (requested !== undefined && isNameTaken(requested, this.manager.list())) {
+    if (requested !== undefined && isNameTaken(requested, this.manager.list(), undefined, this.mailboxLookup)) {
       response.status(409).json({ error: `agent name "${requested}" is already taken` });
       return;
     }
@@ -274,7 +278,7 @@ export class AgentsHub {
       response.status(400).json({ error: 'title is required' });
       return;
     }
-    if (isNameTaken(title, this.manager.list(), request.params.agentId)) {
+    if (isNameTaken(title, this.manager.list(), request.params.agentId, this.mailboxLookup)) {
       response.status(409).json({ error: `agent name "${title}" is already taken` });
       return;
     }

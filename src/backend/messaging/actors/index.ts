@@ -4,7 +4,7 @@
 // and room store stay the sources of truth. The router picks a delivery
 // adapter from the resolved kind.
 import { isChannel, isRoom, mailboxIdentityFor } from '../types.js';
-import type { AgentAddress, MailboxIdentity, Room } from '../types.js';
+import type { AgentAddress, MailboxIdentity, MailboxLookup, Room } from '../types.js';
 
 export type ResolvedActor =
   | { kind: 'mailbox'; identity: MailboxIdentity }
@@ -17,8 +17,9 @@ export function resolveActor(
   name: string,
   roster: AgentAddress[],
   rooms: Room[],
+  lookup: MailboxLookup = mailboxIdentityFor,
 ): ResolvedActor | null {
-  const identity = mailboxIdentityFor(name);
+  const identity = lookup(name);
   if (identity) return { kind: 'mailbox', identity };
   if (isChannel(name)) return { kind: 'channel', name };
   if (isRoom(name)) {

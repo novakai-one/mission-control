@@ -2,13 +2,18 @@
 // typed into every agent's PTY at spawn — its name, the live roster, the send
 // protocol (CLI + curl), and channel etiquette. No per-provider config files.
 import { MAILBOX_IDENTITIES, TEAM_CHANNEL } from '../types.js';
-import type { AgentAddress } from '../types.js';
+import type { AgentAddress, MailboxIdentity } from '../types.js';
 
-export function composeSpawnBriefing(name: string, peers: AgentAddress[], serverPort: number): string {
+export function composeSpawnBriefing(
+  name: string,
+  peers: AgentAddress[],
+  serverPort: number,
+  mailboxIdentities: readonly MailboxIdentity[] = MAILBOX_IDENTITIES,
+): string {
   const roster = peers.length
     ? peers.map((peer) => `${peer.name} (${peer.provider})`).join(', ')
     : 'none yet';
-  const mailboxes = MAILBOX_IDENTITIES
+  const mailboxes = mailboxIdentities
     .map((identity) => `${identity.memberName} (${identity.role})`)
     .join(', ');
   return [

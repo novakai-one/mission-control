@@ -12,7 +12,11 @@ function option(name: string): string {
 const workspace = option('--workspace');
 const socketPath = option('--socket');
 const registryPath = option('--registry');
-const host = new TerminalHostServer(socketPath, new TerminalManager(registryPath));
+// Optional: the src/ content hash this host was built from (absent on pre-fix hosts).
+const snapshotId = process.argv.includes('--snapshot')
+  ? process.argv[process.argv.indexOf('--snapshot') + 1]
+  : undefined;
+const host = new TerminalHostServer(socketPath, new TerminalManager(registryPath), snapshotId);
 
 await host.listen();
 console.log(`[TerminalHost] pid ${process.pid} listening at ${socketPath}`);

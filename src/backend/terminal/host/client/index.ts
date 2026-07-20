@@ -35,6 +35,7 @@ export class TerminalHostClient implements TerminalRuntime {
   private readonly pendingCreates = new Map<string, PendingCreate>();
   private socket: Socket | null = null;
   private connectedHostPid: number | null = null;
+  private connectedSnapshotId: string | null = null;
   private dataCallback: ((agentId: string, data: string) => void) | null = null;
   private exitCallback: ((agentId: string, exitCode: number | null) => void) | null = null;
   private sessionCallback: ((info: AgentInfo) => void) | null = null;
@@ -109,6 +110,11 @@ export class TerminalHostClient implements TerminalRuntime {
 
   hostPid(): number | null {
     return this.connectedHostPid;
+  }
+
+  /** The src/ snapshot the connected host was built from; null on pre-handshake hosts. */
+  hostSnapshotId(): string | null {
+    return this.connectedSnapshotId;
   }
 
   private open(): Promise<TerminalHostClient> {
@@ -186,6 +192,7 @@ export class TerminalHostClient implements TerminalRuntime {
     }
     this.replaceSnapshots(frame.agents);
     this.connectedHostPid = frame.hostPid;
+    this.connectedSnapshotId = frame.snapshotId ?? null;
     resolve(this);
   }
 

@@ -19,7 +19,7 @@ import { ProjectsHub } from './projects/index.js';
 import { CanvasHub } from './canvas/index.js';
 import { AnalyticsHub } from './analytics/index.js';
 import { DesignHub } from './design/index.js';
-import { MessagingHub } from '../messaging/index.js';
+import { MailboxRegistry, MessagingHub } from '../messaging/index.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
@@ -75,6 +75,7 @@ export class ServerController {
   private readonly analyticsHub: AnalyticsHub;
   private readonly designHub: DesignHub;
   private readonly messagingHub: MessagingHub;
+  private readonly mailboxRegistry: MailboxRegistry;
 
   constructor(
     private readonly port: number,
@@ -83,7 +84,13 @@ export class ServerController {
     terminals: TerminalRuntime,
     private readonly options: ServerOptions = {},
   ) {
-    this.agentsHub = new AgentsHub(this.activeSockets, terminals);
+    // One durable mailbox registry shared by messaging routing and spawn-name checks.
+    this.mailboxRegistry = new MailboxRegistry();
+    this.agentsHub = new AgentsHub(
+      this.activeSockets,
+      terminals,
+      (name) => this.mailboxRegistry.identityFor(name),
+    );
     this.projectsHub = new ProjectsHub(this.agentsHub);
     [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
     this.messagingHub = this.buildMessagingHub();
@@ -119,7 +126,7 @@ export class ServerController {
     const messagingHub = new MessagingHub(
       this.agentsHub.terminals,
       (event, payload) => this.broadcastEvent(event, payload),
-      { serverPort: this.port },
+      { serverPort: this.port, mailboxRegistry: this.mailboxRegistry },
     );
     this.agentsHub.onLaunch((info) => messagingHub.handleAgentSpawned(info));
     return messagingHub;

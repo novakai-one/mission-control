@@ -17,7 +17,7 @@ export type HostCommand =
   | { type: 'archive'; agentId: string };
 
 export type HostFrame =
-  | { type: 'ready'; protocol: number; hostPid: number; agents: AgentSnapshot[] }
+  | { type: 'ready'; protocol: number; hostPid: number; agents: AgentSnapshot[]; snapshotId?: string }
   | { type: 'created'; requestId: string; info?: AgentInfo; error?: string }
   | { type: 'data'; agentId: string; data: string; cursor: number }
   | { type: 'exit'; agentId: string; exitCode: number | null }

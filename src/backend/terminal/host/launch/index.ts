@@ -69,6 +69,7 @@ function spawnHost(workspace: string, socketPath: string, registryPath: string):
     '--workspace', workspace,
     '--socket', socketPath,
     '--registry', registryPath,
+    '--snapshot', path.basename(snapshot),
   ], {
     cwd: workspace,
     detached: true,
@@ -76,6 +77,35 @@ function spawnHost(workspace: string, socketPath: string, registryPath: string):
   });
   closeSync(logFile);
   child.unref();
+}
+
+/**
+ * What to do about a connected host built from a different src/ snapshot.
+ * A host with no snapshotId predates the handshake — always treated as stale.
+ * 'restart' is only ever chosen with zero running agents: a stale host keeps
+ * its live PTYs, and killing those would be worse than stale code.
+ */
+export function staleHostAction(
+  hostSnapshotId: string | null,
+  currentSnapshotId: string,
+  runningAgents: number,
+): 'ok' | 'restart' | 'warn' {
+  if (hostSnapshotId === currentSnapshotId) return 'ok';
+  return runningAgents === 0 ? 'restart' : 'warn';
+}
+
+/** Poll until the pid is gone (SIGTERM drain) so the socket frees before respawn. */
+async function waitForPidExit(pid: number, timeoutMs = 10_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+    await delay(100);
+  }
+  return false;
 }
 
 function openHostLog(workspace: string, snapshot: string): number {
@@ -114,7 +144,12 @@ async function connectEventually(socketPath: string): Promise<TerminalHostClient
   throw lastError instanceof Error ? lastError : new Error('terminal host failed to start');
 }
 
-/** Production uses the detached host; scratch-port rigs stay isolated in-process. */
+/** Production uses the detached host; scratch-port rigs stay isolated in-process. *//**
+ * Connect to the detached host, then check it runs the CURRENT src/ snapshot —
+ * a stale host (e.g. provider-launch code from weeks ago) silently applies old
+ * behavior. Stale + empty fleet: terminate and respawn fresh. Stale + live
+ * agents: warn loudly and keep it (its PTYs matter more than its code).
+ */
 export async function createTerminalRuntime(workspace = process.cwd()): Promise<TerminalRuntime> {
   const scratchPort = process.env.NOVAKAI_SERVER_PORT;
   const safePort = scratchPort?.replace(/[^0-9A-Za-z_-]/g, '_');
@@ -125,10 +160,42 @@ export async function createTerminalRuntime(workspace = process.cwd()): Promise<
   }
 
   const socketPath = terminalSocketPath(workspace, safePort);
+  let client: TerminalHostClient;
   try {
-    return await TerminalHostClient.connect(socketPath);
+    client = await TerminalHostClient.connect(socketPath);
   } catch {
     spawnHost(workspace, socketPath, registryPath);
     return connectEventually(socketPath);
   }
+
+  const currentSnapshotId = path.basename(snapshotSource(workspace));
+  const running = client.list().filter((agent) => agent.status === 'running').length;
+  const action = staleHostAction(client.hostSnapshotId(), currentSnapshotId, running);
+  if (action === 'warn') {
+    console.error(
+      `[terminal-host] STALE: host runs snapshot ${client.hostSnapshotId() ?? '(pre-handshake)'}, `
+      + `current src is ${currentSnapshotId}; ${running} agent(s) running — kept alive. `
+      + 'Provider-launch code changes will NOT apply until the fleet is empty and the backend restarts.',
+    );
+    return client;
+  }
+  if (action === 'restart') {
+    const stalePid = client.hostPid();
+    console.error(
+      `[terminal-host] stale snapshot ${client.hostSnapshotId() ?? '(pre-handshake)'} `
+      + `(current ${currentSnapshotId}), empty fleet — restarting host`,
+    );
+    client.disconnect();
+    if (stalePid) {
+      try {
+        process.kill(stalePid, 'SIGTERM');
+      } catch {
+        // already gone
+      }
+      await waitForPidExit(stalePid);
+    }
+    spawnHost(workspace, socketPath, registryPath);
+    return connectEventually(socketPath);
+  }
+  return client;
 }

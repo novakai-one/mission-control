@@ -89,6 +89,9 @@ export const MAILBOX_IDENTITIES: readonly MailboxIdentity[] = [
   KIMI_IDENTITY,
 ];
 
+/** Lookup seam: the file-loaded registry and the static list both satisfy it. */
+export type MailboxLookup = (memberName: string) => MailboxIdentity | undefined;
+
 export function mailboxIdentityFor(memberName: string): MailboxIdentity | undefined {
   return MAILBOX_IDENTITIES.find((identity) => identity.memberName === memberName);
 }

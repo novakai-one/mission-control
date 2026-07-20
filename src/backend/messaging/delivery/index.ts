@@ -21,9 +21,13 @@ export interface DeliveryTimings {
   interruptSettleMs: number;
   /** Pause between typing the line and submitting it. */
   submitDelayMs: number;
+  /** After submitting, one bare \r at this delay flushes unsubmitted input.
+   * kimi's TUI swallows an \r sent right after typed text (drops it or makes
+   * it a newline); a bare \r on a settled box submits. Omit = no flush. */
+  flushDelayMs?: number;
 }
 
-const DEFAULT_TIMINGS: DeliveryTimings = { interruptSettleMs: 400, submitDelayMs: 150 };
+const DEFAULT_TIMINGS: DeliveryTimings = { interruptSettleMs: 400, submitDelayMs: 900, flushDelayMs: 6000 };
 
 export class DeliveryFailedError extends Error {}
 
@@ -56,6 +60,27 @@ export class PtyDelivery {
     this.write(address, text.replace(/\r?\n/g, '\\n'));
     await delay(this.timings.submitDelayMs);
     this.write(address, '\r');
+    this.scheduleFlush(address);
+  }
+
+  /**
+   * kimi-only flush: one bare \r after the box settles, submitting anything the
+   * first \r missed. Hazard (accepted, documented): at +6s this submits whatever
+   * sits in the input box, and on a menu/dialog a bare \r can pick the
+   * highlighted option — so it fires only for kimi, where the swallowed-\r bug
+   * is proven. Never throws: a dead PTY at flush time is a silent no-op, not a
+   * backend-crashing uncaught exception.
+   */
+  private scheduleFlush(address: AgentAddress): void {
+    if (address.provider !== 'kimi' || !this.timings.flushDelayMs) return;
+    const timer = setTimeout(() => {
+      try {
+        this.writer.write(address.agentId, '\r');
+      } catch {
+        // best-effort flush — the PTY may be gone; nothing to do
+      }
+    }, this.timings.flushDelayMs);
+    timer.unref?.();
   }
 
   /** Esc breaks the current turn in both CLIs today; provider divergence slots in here. */
