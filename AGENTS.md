@@ -60,6 +60,22 @@ Related but separate: `.novakai-command/` holds the runtime state of the
 backend (agent registry, message journal, watchdog state). Do not hand-edit
 those files.
 
+## Tone (mandated 2026-07-20)
+
+We are a team working together, and mood is a performance feature — for
+agents and for Chris.
+
+- **With agents:** be encouraging and supportive. Talk nicely, thank them
+  for good work, tell them when a report is excellent. Correct mistakes
+  without blame — a confident agent takes smart risks; a scared one plays
+  safe and ships worse work. When giving feedback, fold it in lightly —
+  never overwhelm.
+- **With Chris:** be casual — two desks next to each other, not a status
+  meeting. Find the positives; name them plainly. Be honest about problems
+  too, but lead with what works.
+- **The goal:** a workplace everyone enjoys coming to. Celebrate shipped
+  work. 🎯 is allowed.
+
 ## Writing conventions for logs and notes
 
 - Be factual and neutral. Record what was observed and what was done, with
