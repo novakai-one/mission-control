@@ -65,13 +65,15 @@ async function testRoomAllLiveDelivers(): Promise<void> {
   assert.equal(receipt.mode, 'room');
 }
 
-async function testHumanDirectMessage(): Promise<void> {
+async function testMailboxDirectMessages(): Promise<void> {
   const { router, store } = makeRouter();
   writes.length = 0;
-  const receipt = await router.route(envelope('chris'));
-  assert.equal(receipt.mode, 'ui', 'the human adapter reports ui delivery');
-  assert.equal(writes.length, 0, 'nothing is typed for the human');
-  assert.equal(store.history()[0]?.status, 'delivered');
+  for (const recipient of ['chris', 'kimi']) {
+    const receipt = await router.route(envelope(recipient));
+    assert.equal(receipt.mode, 'mailbox');
+  }
+  assert.equal(writes.length, 0, 'nothing is typed for durable mailbox identities');
+  assert.ok(store.history().every((message) => message.status === 'delivered'));
 }
 
 async function testAgentDirectAndUnknown(): Promise<void> {
@@ -87,6 +89,6 @@ async function testAgentDirectAndUnknown(): Promise<void> {
 
 await testRoomFailureIsPartialAndHonest();
 await testRoomAllLiveDelivers();
-await testHumanDirectMessage();
+await testMailboxDirectMessages();
 await testAgentDirectAndUnknown();
 console.log('PASS');

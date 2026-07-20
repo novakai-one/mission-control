@@ -1,16 +1,20 @@
 // Spawn briefing (docs/agent-messaging.md R5, phase 5): standing instructions
 // typed into every agent's PTY at spawn — its name, the live roster, the send
 // protocol (CLI + curl), and channel etiquette. No per-provider config files.
-import { TEAM_CHANNEL } from '../types.js';
+import { MAILBOX_IDENTITIES, TEAM_CHANNEL } from '../types.js';
 import type { AgentAddress } from '../types.js';
 
 export function composeSpawnBriefing(name: string, peers: AgentAddress[], serverPort: number): string {
   const roster = peers.length
     ? peers.map((peer) => `${peer.name} (${peer.provider})`).join(', ')
     : 'none yet';
+  const mailboxes = MAILBOX_IDENTITIES
+    .map((identity) => `${identity.memberName} (${identity.role})`)
+    .join(', ');
   return [
     `[nvk-msg briefing] You are agent "${name}" in Novakai Command's messaging tunnel.`,
     `Live peers: ${roster}.`,
+    `Routable mailboxes: ${mailboxes}. Reply to the task sender shown in the inbound prefix; mailbox identities do not need a live terminal.`,
     `DM a peer: node scripts/nvk-msg.mjs send --from ${name} --to <peer> "body" — add --interrupt ONLY for real urgency (interrupts are rate-capped per minute).`,
     `Post to the team channel: node scripts/nvk-msg.mjs send --from ${name} --to '${TEAM_CHANNEL}' "body" (channel posts are pull-only; interrupt is rejected).`,
     `Read your mail / the channel: node scripts/nvk-msg.mjs read ${name} and node scripts/nvk-msg.mjs read '${TEAM_CHANNEL}' — check ${TEAM_CHANNEL} at natural pauses.`,

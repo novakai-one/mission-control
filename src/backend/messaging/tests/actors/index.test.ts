@@ -8,6 +8,7 @@ import type { AgentAddress, Room } from '../../types.js';
 const roster: AgentAddress[] = [
   { agentId: 'agent_1', name: 'claude-1', provider: 'claude' },
   { agentId: 'agent_2', name: 'kimi-1', provider: 'kimi' },
+  { agentId: 'agent_shadow', name: 'kimi', provider: 'kimi' },
 ];
 
 const rooms: Room[] = [{
@@ -19,9 +20,13 @@ const rooms: Room[] = [{
   archived: false,
 }];
 
-function testResolvesTheHuman(): void {
-  const actor = resolveActor('chris', roster, rooms);
-  assert.deepEqual(actor, { kind: 'human', name: 'chris' }, 'chris is a first-class human actor');
+function testResolvesMailboxesBeforeLivePresences(): void {
+  const chris = resolveActor('chris', roster, rooms);
+  assert.equal(chris?.kind, 'mailbox');
+  assert.equal(chris?.kind === 'mailbox' ? chris.identity.role : null, 'owner');
+  const kimi = resolveActor('kimi', roster, rooms);
+  assert.equal(kimi?.kind, 'mailbox', 'durable mailbox wins over a colliding live Presence title');
+  assert.equal(kimi?.kind === 'mailbox' ? kimi.identity.role : null, 'orchestrator');
 }
 
 function testResolvesAgentsRoomsChannels(): void {
@@ -37,7 +42,7 @@ function testResolvesAgentsRoomsChannels(): void {
 }
 
 function testReservedNames(): void {
-  for (const reserved of ['chris', '#team', '#anything', 'room_x']) {
+  for (const reserved of ['chris', 'kimi', '#team', '#anything', 'room_x']) {
     assert.equal(isReservedName(reserved), true, `${reserved} is reserved`);
     assert.equal(isNameTaken(reserved, []), true, `${reserved} is taken even with an empty roster`);
   }
@@ -46,7 +51,7 @@ function testReservedNames(): void {
   assert.equal(isNameTaken('claude-2', []), false, 'ordinary free names pass');
 }
 
-testResolvesTheHuman();
+testResolvesMailboxesBeforeLivePresences();
 testResolvesAgentsRoomsChannels();
 testReservedNames();
 console.log('PASS');

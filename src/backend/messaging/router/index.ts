@@ -5,7 +5,7 @@
 // Failures are part of the audit record: the envelope is appended first,
 // and every outcome lands as a status amendment.
 import { MessageStore } from '../store/index.js';
-import { HumanDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../delivery/index.js';
+import { MailboxDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../delivery/index.js';
 import { resolveActor } from '../actors/index.js';
 import type { ResolvedActor } from '../actors/index.js';
 import { RoomStore } from '../rooms/index.js';
@@ -72,7 +72,7 @@ export class InterruptRateLimiter {
 }
 
 export class MessageRouter {
-  private readonly adapters: { agent: PtyDeliveryAdapter; human: HumanDeliveryAdapter };
+  private readonly adapters: { agent: PtyDeliveryAdapter; mailbox: MailboxDeliveryAdapter };
 
   constructor(
     private readonly store: MessageStore,
@@ -81,7 +81,7 @@ export class MessageRouter {
     private readonly roster: () => AgentAddress[],
     private readonly interruptLimiter = new InterruptRateLimiter(),
   ) {
-    this.adapters = { agent: new PtyDeliveryAdapter(delivery), human: new HumanDeliveryAdapter() };
+    this.adapters = { agent: new PtyDeliveryAdapter(delivery), mailbox: new MailboxDeliveryAdapter() };
   }
 
   async route(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
@@ -148,7 +148,7 @@ export class MessageRouter {
   private async routeDirect(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     const roster = this.roster();
     const actor = resolveActor(envelope.to, roster, []);
-    if (actor?.kind === 'human') return this.deliverResolved(envelope, actor);
+    if (actor?.kind === 'mailbox') return this.deliverResolved(envelope, actor);
     if (actor?.kind !== 'agent') throw this.fail(envelope, new RecipientNotFoundError(envelope.to, roster));
     if (envelope.delivery === 'interrupt' && !this.interruptLimiter.tryAcquire(envelope.from)) {
       throw this.fail(envelope, new InterruptRateLimitError(envelope.from, this.interruptLimiter.maxPerMinute));
@@ -157,7 +157,7 @@ export class MessageRouter {
   }
 
   private async deliverResolved(envelope: MessageEnvelope, actor: ResolvedActor): Promise<DeliveryReceipt> {
-    const adapter = actor.kind === 'human' ? this.adapters.human : this.adapters.agent;
+    const adapter = actor.kind === 'mailbox' ? this.adapters.mailbox : this.adapters.agent;
     try {
       const receipt = await adapter.deliver(actor, envelope);
       this.settle(envelope, 'delivered');

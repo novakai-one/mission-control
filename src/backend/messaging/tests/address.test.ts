@@ -45,6 +45,10 @@ function testBriefingNamesProtocolAndEtiquette(): void {
   ], 3031);
   assert.match(briefing, /You are agent "claude-2"/, 'briefing states the agent name');
   assert.match(briefing, /codex-1 \(codex\)/, 'briefing lists the live roster');
+  assert.match(briefing, /Routable mailboxes: chris \(owner\), kimi \(orchestrator\)/,
+    'briefing distinguishes durable mailboxes from live peers');
+  assert.match(briefing, /Reply to the task sender shown in the inbound prefix/,
+    'briefing routes task completion back to its durable sender');
   assert.match(briefing, /nvk-msg\.mjs send --from claude-2/, 'briefing teaches the send protocol');
   assert.match(briefing, /check #team at natural pauses/, 'briefing teaches channel etiquette');
   assert.match(briefing, /nvk-live\.mjs room create/, 'briefing teaches room verbs');
