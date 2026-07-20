@@ -58,6 +58,11 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+/** The inbound line format agents see in their prompt (shared with confirm.mjs). */
+export function composeLiveLine(from, messageId, body) {
+  return `[nvk-live from ${from} id ${messageId}] ${body.trim()}`;
+}
+
 export async function deliverMessage({
   agent,
   body,
@@ -67,7 +72,7 @@ export async function deliverMessage({
 }) {
   if (!body.trim()) throw new Error('Message body is required');
   const messageId = `live_${crypto.randomUUID()}`;
-  const text = `[nvk-live from ${from} id ${messageId}] ${body.trim()}`;
+  const text = composeLiveLine(from, messageId, body);
   await new Promise((resolve, reject) => {
     const socket = new WebSocketCtor(websocketUrl(agent.backend));
     socket.addEventListener('open', async () => {

@@ -13,7 +13,10 @@ assert.deepEqual(providerArguments('codex', 'unused'), [
 const root = mkdtempSync(path.join(tmpdir(), 'codex-discovery-'));
 const locator = new CodexSessionLocator(root, 5, 300);
 const known = locator.snapshot();
-const startedAt = Date.now();
+// Margin against coarse fs mtime granularity: on CI filesystems a just-written
+// file can stamp BEFORE Date.now(), and the mtime>=startedAt filter would then
+// exclude it (flake). The `known` snapshot is what excludes old files, not the clock.
+const startedAt = Date.now() - 5000;
 const dated = path.join(root, '2026', '07', '16');
 mkdirSync(dated, { recursive: true });
 writeFileSync(path.join(dated, 'rollout-other.jsonl'), JSON.stringify({
