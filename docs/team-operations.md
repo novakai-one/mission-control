@@ -67,7 +67,9 @@ Backend and frontend processes restart independently. The desktop shell retries
 failed loads. Its stable process owns the host lease; quitting the desktop ends
 that lease and reaps the detached host.
 
-Scratch backends using `NOVAKAI_SERVER_PORT` receive isolated in-process
+The dev lane (`npm run dev`, vite :3130 + backend :3131) is the standing
+second stack; ad-hoc scratch backends should pick 3231+ so they never collide
+with it. Backends using `NOVAKAI_SERVER_PORT` receive isolated in-process
 terminals and a port-specific registry. They never attach production PTYs.
 Restart acceptance rigs may add `NOVAKAI_TERMINAL_RUNTIME=host`; this starts a
 port-specific detached host and still cannot attach production PTYs.

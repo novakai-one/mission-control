@@ -55,7 +55,8 @@ function validateProjectSession(
  * Production ('npm run prod') serves the browser from a pinned deploy snapshot:
  * `staticDir` points at the snapshot's built frontend, `appPort` (3030) adds a
  * second listener so the app is same-origin — API, ws, and static assets all
- * come from one process. Dev leaves both unset; vite still owns 3030.
+ * come from one process. Dev leaves both unset; vite owns the dev lane's app
+ * port (3130) and the Live pair 3030/3031 stays with the snapshot serve.
  */
 export interface ServerOptions {
   staticDir?: string;
@@ -187,7 +188,39 @@ export class ServerController {
     });
   }
 
+  /**
+   * Identity/health: lets the desktop shell prove a :3030 responder really is
+   * a Live snapshot serve (`static: true`) before attaching, and lets deploy
+   * verification read the serving snapshot's sha. A vite-proxied dev backend
+   * answers `static: false` and is refused by the shell.
+   */
+  private healthPayload(): Record<string, unknown> {
+    return {
+      application: 'novakai-command',
+      serverPort: this.port,
+      appPort: this.options.appPort ?? null,
+      static: Boolean(this.options.staticDir),
+      snapshotSha: this.snapshotSha(),
+    };
+  }
+
+  /** Full sha from the serving snapshot's manifest (staticDir = <snap>/dist/frontend). */
+  private snapshotSha(): string | null {
+    if (!this.options.staticDir) return null;
+    try {
+      const manifestPath = path.join(this.options.staticDir, '..', '..', 'manifest.json');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { sha?: string };
+      return manifest.sha ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private configureRoutes(): void {
+    this.app.get('/api/health', (_request, response) => {
+      response.json(this.healthPayload());
+    });
+
     this.agentsHub.registerRoutes(this.app);
     this.projectsHub.registerRoutes(this.app);
     this.canvasHub.registerRoutes(this.app);

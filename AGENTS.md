@@ -87,7 +87,10 @@ agents and for Chris.
 
 ## Operating context
 
-- The backend server (`npm run dev:backend`, port 3031) owns agent PTYs.
+- Two lanes share the machine. **Live**: app 3030 + backend 3031, run by the
+  deploy-snapshot supervisor (`npm run prod` / the desktop app); this backend
+  owns the production agent PTYs. **Dev**: vite 3130 + backend 3131, run by
+  `npm run dev` (tsx watch). Neither lane's start/stop touches the other.
   Agents are spawned via `POST /api/agents`, messaged via
   `scripts/nvk-msg.mjs` / `scripts/nvk-live.mjs`, killed via
   `POST /api/agents/:id/kill`. See `docs/plans/2026-07-19-kimi-orchestrator-plan.md`.
