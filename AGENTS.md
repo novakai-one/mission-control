@@ -101,39 +101,23 @@ agents and for Chris.
 - `CONTEXT.md` holds the domain model vocabulary (Person, Presence, Mission,
   Thread, Artifact, …). Use those terms in code and docs.
 
-## Taking over as chief (next Kimi, start here)
+## Workforce operations
 
-You are the COO. You lead the agent team; Chris sets direction. Do these in
-order:
+Canonical workforce procedures start at `docs/operations/START-HERE.md`.
+Read only the route for your current role; do not load the whole folder.
 
-1. **Read this file** — the store layout and conventions below are the law.
-2. **Read the captains log tail** (`.novakai/stores/captains-log.jsonl`, last
-   ~15 entries) — what happened, factual, newest chief entries carry
-   `author:"chief-kimi"`.
-3. **Check the inbox** (`.novakai/stores/requests.jsonl`) — anything
-   `pending` is waiting on Chris; surface it.
-4. **Read the open missions** (`.novakai/stores/missions.jsonl`) — what's in
-   flight, who owns it, what stage.
-5. **Read the learnings** (`.novakai/stores/learnings.jsonl`) — banked
-   lessons, each with evidence. Apply them before making new mistakes.
-6. **Read the chief playbook**
-   (`docs/plans/2026-07-20-chief-delegation-method.md`) — the 6-step
-   delegation method (onboard → plan → cross-provider audit → bounded build
-   → verify → close) and the mandated exec-summary reporting format.
-7. **Check the fleet** — `node scripts/nvk-status.mjs`; backend on :3031.
-   After spawning any agent, verify its wire-log activity within ~5 min
-   (learning_verify-wire-after-spawn).
-8. **Know your authority** — `DEC-2026-07-20-004` in
-   `.novakai/stores/decisions.jsonl`: full standing authority (agents,
-   branches, PRs, merged-branch deletion) EXCEPT merging PRs to main.
-   Chris reviews every PR personally.
-9. **Reviewing an agent run?** Use
-   `.novakai/docs/operational-review/METHOD.md` — the repeatable
-   operational-review process (trace, verify live, evidence, report).
-10. **Report back in the mandated format** — exec summary at the BOTTOM of
-    every work-session close-out (template in the playbook, step 6).
+- `AGENTS.md` owns repository laws, authority pointers, tone, and routing.
+- `docs/operations/` owns Chief, Manager, scaling, mission-packet, and
+  process-review procedures.
+- `.novakai/stores/` owns live operating state.
+- `.novakai/docs/operational-review/METHOD.md`, when present locally, owns
+  deep trace/report artifact production; it is not the general onboarding path.
 
-Process docs live in three places, all in this repo: this file (law +
-conventions), `docs/plans/` (playbooks), and `.novakai/docs/` (review
-method + reports). The stores themselves are local (gitignored) — they are
-the system of record; novakai-docs renders them read-only.
+When Chris gives natural or overloaded mission direction, explicitly invoke
+`$compile-mission-brief`. Preserve the raw prompt and compiled Mission Contract
+using `docs/operations/MISSION-PACKET.md`. Do not rely on implicit skill
+selection, and do not pass the raw brain-dump downstream as a second brief.
+
+The operations manual is in trial until reviewed live missions show that the
+instruction chain holds. Process Reviewers propose changes; Chris decides what
+becomes standard.
