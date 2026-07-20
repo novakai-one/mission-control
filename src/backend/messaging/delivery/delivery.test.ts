@@ -68,7 +68,7 @@ const FLUSHY = { interruptSettleMs: 0, submitDelayMs: 0, flushDelayMs: 30 };
 
 async function testKimiGetsOneFlush(): Promise<void> {
   const writer = recordingWriter();
-  await new PtyDelivery(writer, FLUSHY).deliver(kimiAddress, envelope({ to: 'kimi-1' }));
+  await new PtyDelivery(writer, FLUSHY).deliver(kimiAddress, envelope({ ['to']: 'kimi-1' }));
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert.deepEqual(writer.writes.map((entry) => entry.data), [
     '[nvk-msg from claude-1 id msg_1] rebase onto main',
@@ -92,7 +92,7 @@ async function testFlushNeverThrowsOnDeadPty(): Promise<void> {
   const flaky = new PtyDelivery({
     write: () => { calls += 1; return calls <= 2; }, // PTY "dies" before the flush lands
   }, FLUSHY);
-  await flaky.deliver(kimiAddress, envelope({ to: 'kimi-1' }));
+  await flaky.deliver(kimiAddress, envelope({ ['to']: 'kimi-1' }));
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert.equal(calls, 3, 'flush was attempted');
   // Reaching here means the failed flush did not crash the process.

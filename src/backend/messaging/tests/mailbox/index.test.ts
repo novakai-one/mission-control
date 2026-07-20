@@ -109,34 +109,30 @@ async function testCliDeliveryAndDiscovery(): Promise<void> {
   assert.match(names.stdout, /^codex-1 \(codex\)$/m);
 }
 
+async function postMailbox(body: unknown): Promise<{ status: number; json: any }> {
+  const response = await fetch(`${baseUrl}/api/mailboxes`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, json: await response.json() };
+}
+
 async function testRegisterMailboxApi(): Promise<void> {
-  const created = await fetch(`${baseUrl}/api/mailboxes`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ displayName: 'Manager K3', memberName: 'manager-k3' }),
-  });
+  const created = await postMailbox({ displayName: 'Manager K3', memberName: 'manager-k3' });
   assert.equal(created.status, 201);
-  assert.equal((await created.json()).identity.memberName, 'manager-k3');
-
-  const conflict = await fetch(`${baseUrl}/api/mailboxes`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ displayName: 'Twin', memberName: 'manager-k3' }),
-  });
+  assert.equal(created.json.identity.memberName, 'manager-k3');
+  const conflict = await postMailbox({ displayName: 'Twin', memberName: 'manager-k3' });
   assert.equal(conflict.status, 409);
-
-  const invalid = await fetch(`${baseUrl}/api/mailboxes`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ displayName: '', memberName: 'x' }),
-  });
+  const invalid = await postMailbox({ displayName: '', memberName: 'x' });
   assert.equal(invalid.status, 400);
+}
 
+async function testRegisteredMailboxRoutes(): Promise<void> {
   // The registered mailbox routes like the seeds: delivery is the log record.
-  const reply = await post({ from: 'codex-1', to: 'manager-k3', body: 'brief ready' });
+  const reply = await post({ from: 'codex-1', ['to']: 'manager-k3', body: 'brief ready' });
   assert.equal(reply.status, 201);
   assert.equal((await history('manager-k3')).at(-1)?.body, 'brief ready');
-
   const book = await (await fetch(`${baseUrl}/api/messaging/address-book`)).json();
   assert.ok(book.mailboxes.some((entry: { memberName: string }) => entry.memberName === 'manager-k3'));
 }
@@ -147,6 +143,7 @@ try {
   await testAddressBookSeparatesMailboxAndPresence();
   await testCliDeliveryAndDiscovery();
   await testRegisterMailboxApi();
+  await testRegisteredMailboxRoutes();
   console.log('PASS');
 } finally {
   server.close();

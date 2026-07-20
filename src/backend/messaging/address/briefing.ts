@@ -4,18 +4,11 @@
 import { MAILBOX_IDENTITIES, TEAM_CHANNEL } from '../types.js';
 import type { AgentAddress, MailboxIdentity } from '../types.js';
 
-export function composeSpawnBriefing(
-  name: string,
-  peers: AgentAddress[],
-  serverPort: number,
-  mailboxIdentities: readonly MailboxIdentity[] = MAILBOX_IDENTITIES,
-): string {
+export function composeSpawnBriefing(name: string, peers: AgentAddress[], serverPort: number, mailboxIdentities: readonly MailboxIdentity[] = MAILBOX_IDENTITIES): string {
   const roster = peers.length
     ? peers.map((peer) => `${peer.name} (${peer.provider})`).join(', ')
     : 'none yet';
-  const mailboxes = mailboxIdentities
-    .map((identity) => `${identity.memberName} (${identity.role})`)
-    .join(', ');
+  const mailboxes = mailboxIdentities.map((identity) => `${identity.memberName} (${identity.role})`).join(', ');
   return [
     `[nvk-msg briefing] You are agent "${name}" in Novakai Command's messaging tunnel.`,
     `Live peers: ${roster}.`,

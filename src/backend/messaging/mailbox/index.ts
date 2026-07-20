@@ -47,7 +47,7 @@ export class MailboxRegistry {
     for (const line of readFileSync(this.storePath, 'utf8').split('\n')) {
       if (!line.trim()) continue;
       try {
-        this.add(JSON.parse(line), { persist: false });
+        this.addIdentity(JSON.parse(line), { persist: false });
       } catch {
         // torn line (writer mid-append) — skip, never block boot
       }
@@ -56,21 +56,24 @@ export class MailboxRegistry {
 
   private healSeeds(): void {
     for (const seed of SEEDS) {
-      if (!this.identities.has(seed.memberName)) this.add(seed, { persist: true });
+      if (!this.identities.has(seed.memberName)) this.addIdentity(seed, { persist: true });
     }
   }
 
-  private add(identity: unknown, { persist }: { persist: boolean }): void {
+  private persistIdentity(identity: MailboxIdentity): void {
+    if (!this.storePath) return;
+    mkdirSync(path.dirname(this.storePath), { recursive: true });
+    appendFileSync(this.storePath, `${JSON.stringify(identity)}\n`);
+  }
+
+  private addIdentity(identity: unknown, { persist }: { persist: boolean }): void {
     if (!isMailboxIdentity(identity)) throw new Error('invalid mailbox identity record');
     if (this.identities.has(identity.memberName)) {
       console.warn(`[mailboxes] duplicate memberName "${identity.memberName}" skipped (first wins)`);
       return;
     }
     this.identities.set(identity.memberName, identity);
-    if (persist && this.storePath) {
-      mkdirSync(path.dirname(this.storePath), { recursive: true });
-      appendFileSync(this.storePath, `${JSON.stringify(identity)}\n`);
-    }
+    if (persist) this.persistIdentity(identity);
   }
 
   identityFor(memberName: string): MailboxIdentity | undefined {
@@ -98,10 +101,7 @@ export class MailboxRegistry {
       permissions: ['messages:send'],
     };
     this.identities.set(memberName, identity);
-    if (this.storePath) {
-      mkdirSync(path.dirname(this.storePath), { recursive: true });
-      appendFileSync(this.storePath, `${JSON.stringify(identity)}\n`);
-    }
+    this.persistIdentity(identity);
     return identity;
   }
 }

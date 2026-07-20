@@ -80,17 +80,12 @@ export class ServerController {
   constructor(
     private readonly port: number,
     private readonly coordinator: AgentCoordinator,
-    private readonly stateManager: StateManager,
-    terminals: TerminalRuntime,
+    private readonly stateManager: StateManager, terminals: TerminalRuntime,
     private readonly options: ServerOptions = {},
   ) {
     // One durable mailbox registry shared by messaging routing and spawn-name checks.
     this.mailboxRegistry = new MailboxRegistry();
-    this.agentsHub = new AgentsHub(
-      this.activeSockets,
-      terminals,
-      (name) => this.mailboxRegistry.identityFor(name),
-    );
+    this.agentsHub = this.buildAgentsHub(terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
     this.messagingHub = this.buildMessagingHub();
@@ -115,6 +110,14 @@ export class ServerController {
   private buildStudioHubs(): [CanvasHub, AnalyticsHub, DesignHub] {
     const broadcast = (event: string, payload: unknown): void => this.broadcastEvent(event, payload);
     return [new CanvasHub(broadcast), new AnalyticsHub(broadcast), new DesignHub(broadcast)];
+  }
+
+  private buildAgentsHub(terminals: TerminalRuntime): AgentsHub {
+    return new AgentsHub(
+      this.activeSockets,
+      terminals,
+      (name) => this.mailboxRegistry.identityFor(name),
+    );
   }
 
   /**

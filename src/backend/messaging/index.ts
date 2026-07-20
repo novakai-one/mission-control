@@ -82,7 +82,13 @@ export class MessagingHub {
     this.store.onAppend((envelope) => this.broadcast('message-envelope', envelope));
     this.rooms.onAppend(() => this.broadcast('rooms-changed', { rooms: this.rooms.list() }));
     this.delivery = new PtyDelivery(this.terminals, options.timings);
-    const router = new MessageRouter(
+    this.sendApi = new SendApi(this.buildRouter(options));
+    this.spawnBriefingDelayMs = options.spawnBriefingDelayMs ?? 3000;
+    this.serverPort = options.serverPort ?? 3031;
+  }
+
+  private buildRouter(options: MessagingOptions): MessageRouter {
+    return new MessageRouter(
       this.store,
       this.delivery,
       this.rooms,
@@ -90,9 +96,6 @@ export class MessagingHub {
       new InterruptRateLimiter(options.maxInterruptsPerMinute),
       (name) => this.mailboxes.identityFor(name),
     );
-    this.sendApi = new SendApi(router);
-    this.spawnBriefingDelayMs = options.spawnBriefingDelayMs ?? 3000;
-    this.serverPort = options.serverPort ?? 3031;
   }
 
   /** The durable mailbox registry — shared with AgentsHub for name checks. */
