@@ -19,5 +19,6 @@ jobs:
           for t in $(find src -name '*.test.ts' -not -path '*/node_modules/*'); do
             npx tsx "$t"
           done
+      - run: npm run stores:test
       - run: npm run lint
       - run: npm run build
