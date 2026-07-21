@@ -292,7 +292,9 @@ function evidenceAttention(facts: MissionFacts): AttentionItem[] {
  */
 function communicationAttention(facts: MissionFacts, rooms: RoomRecord[]): AttentionItem[] {
   if (rooms.length > 0) return [];
-  const mentions = facts.journal.filter((envelope) => envelope.body.includes(facts.missionId)).length;
+  const mentions = facts.journal.filter((envelope) => (
+    typeof envelope.body === 'string' && envelope.body.includes(facts.missionId)
+  )).length;
   const bound = facts.journal.filter((envelope) => envelope.threadId === facts.missionId).length;
   return [{
     id: 'attention:no-thread-ref',

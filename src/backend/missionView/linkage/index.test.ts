@@ -48,6 +48,27 @@ function testReverseAndHop(): void {
   assert.deepEqual(linkage.problems, []);
 }
 
+function testReverseRequiresTypedRefs(): void {
+  const wrongMissionRef = '{"id":"task_wrong_ref","kind":"task","ts":"2026-07-21T10:30:00+10:00","title":"t","refs":[{"kind":"project","value":"mission_a"}]}';
+  const wrongTaskRef = '{"id":"issue_wrong_ref","kind":"issue","ts":"2026-07-21T11:10:00+10:00","title":"i",'
+    + '"status":"open","refs":[{"kind":"log","value":"task_a"}]}';
+  const wrongRequestRef = '{"id":"req_wrong_ref","kind":"request","ts":"2026-07-21T09:30:00+10:00",'
+    + '"status":"pending","question":"q?","refs":[{"kind":"project","value":"mission_a"}]}';
+  const stores = storesOf({
+    'missions': [record('missions', 1, missionLine('mission_a'))],
+    'tasks': [record('tasks', 1, taskLine('task_a', 'mission_a')), record('tasks', 2, wrongMissionRef)],
+    'issues': [record('issues', 1, wrongTaskRef)],
+    'requests': [record('requests', 1, wrongRequestRef)],
+  });
+  const linkage = resolved(resolveLinkage('mission_a', stores));
+  assert.deepEqual(
+    linkage.linked.map((entry) => entry.record.block.id),
+    ['task_a'],
+    'only kind=mission proves reverse linkage, and only kind=task proves the bounded issue hop',
+  );
+  assert.equal(linkage.needsChris, false, 'a same-valued non-mission request ref never proves the mission needs Chris');
+}
+
 function testDuplicateReverse(): void {
   const stores = storesOf({
     'missions': [record('missions', 1, missionLine('mission_a'))],
@@ -134,6 +155,7 @@ function main(): void {
   testAbsent();
   testAmbiguous();
   testReverseAndHop();
+  testReverseRequiresTypedRefs();
   testDuplicateReverse();
   testWrongKind();
   testInvalidTarget();

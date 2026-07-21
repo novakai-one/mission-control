@@ -152,7 +152,7 @@ function collectLinked(missionId: string, stores: Record<StoreName, RawRecord[]>
   const tasks: LinkedRecord[] = [];
   for (const storeName of ['tasks', 'captains-log', 'issues'] as StoreName[]) {
     for (const record of stores[storeName]) {
-      if (!readRefs(record, problems).some((entry) => entry.value === missionId)) continue;
+      if (!readRefs(record, problems).some((entry) => entry.kind === 'mission' && entry.value === missionId)) continue;
       validateRecord(record, problems);
       flagDuplicate(record, stores[storeName], problems);
       const item = { record, refPath: [missionId, describe(record)] };
@@ -168,7 +168,7 @@ function collectIssueHop(tasks: LinkedRecord[], stores: Record<StoreName, RawRec
   const taskIds = new Set(tasks.map((item) => String(item.record.block.id)));
   const hops: LinkedRecord[] = [];
   for (const record of stores.issues) {
-    const viaRef = readRefs(record, problems).find((entry) => taskIds.has(entry.value));
+    const viaRef = readRefs(record, problems).find((entry) => entry.kind === 'task' && taskIds.has(entry.value));
     if (!viaRef) continue;
     validateRecord(record, problems);
     flagDuplicate(record, stores.issues, problems);
@@ -208,7 +208,7 @@ function isPendingFor(record: RawRecord, missionId: string): boolean {
   if (record.block.status !== 'pending') return false;
   const rawRefs = record.block.refs;
   if (!Array.isArray(rawRefs)) return false;
-  return rawRefs.some((entry) => isRefValue(entry) && entry.value === missionId);
+  return rawRefs.some((entry) => isRefValue(entry) && entry.kind === 'mission' && entry.value === missionId);
 }
 
 /** Duplicate ids in a store are a visible issue — joined records are never silently picked. */
