@@ -6,6 +6,7 @@
 // append/updateStatus/POST anywhere in this module.
 import path from 'node:path';
 import type { Express, Request, Response } from 'express';
+import type { ReadIssue } from '../../shared/missionView/schema.js';
 import type {
   MissionSnapshot,
   MissionSnapshotError,
@@ -62,7 +63,7 @@ export class MissionViewHub {
   }
 
   /** Impure reads gathered at the edge; the derive itself is pure. */
-  private collectFacts(missionId: string, linkage: MissionLinkage, storeProblems: string[]): MissionFacts {
+  private collectFacts(missionId: string, linkage: MissionLinkage, storeProblems: ReadIssue[]): MissionFacts {
     const journal = readJournal(this.roots.journalPath);
     const registry = readRegistry(this.roots.registryPath);
     const rooms = readRooms(this.roots.roomsPath);

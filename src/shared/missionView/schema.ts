@@ -33,6 +33,12 @@ export interface AttentionItem {
   sourceRefs: SourceRef[];
 }
 
+/** A recoverable read/validation problem, with the provenance that produced it (R2). */
+export interface ReadIssue {
+  message: string;
+  sourceRefs: SourceRef[];
+}
+
 /** The six-second answer, derived deterministically per the plan Delta v2 M6 table. */
 export interface MissionPulse {
   outcome: Sourced<string | null>;
@@ -118,8 +124,8 @@ export interface MissionSnapshot {
   attention: AttentionItem[];
   /** Snapshot generation time (ISO). */
   asOf: string;
-  /** Recoverable read problems (corrupt line, missing file, mid-read change). Always visible. */
-  issues: string[];
+  /** Recoverable read/validation problems, each with provenance. Always visible (R2). */
+  issues: ReadIssue[];
 }
 
 /** 200 response shape for GET /api/missions/:missionId/snapshot. */

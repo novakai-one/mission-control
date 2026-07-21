@@ -2,7 +2,7 @@
 // Thin read-only edge over the four data roots: .novakai/stores JSONL, the message
 // journal, the agent registry, and mission packet directories. Every root is injected
 // as an absolute path by the hub (S1 — no process.cwd() defaults inside the module);
-// nothing here opens a write handle. Read problems surface as `problems` strings and
+// nothing here opens a write handle. Read problems surface as ReadIssue values and
 // render as visible issues — never thrown away, never fatal (MessageStore tolerance).
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -10,6 +10,7 @@ import path from 'node:path';
 import { MessageStore } from '../../messaging/store/index.js';
 import type { MessageEnvelope } from '../../messaging/types.js';
 import type { AgentInfo } from '../../terminal/manager.js';
+import type { ReadIssue, SourceRef } from '../../../shared/missionView/schema.js';
 
 /** Absolute read roots injected at hub construction (S1). */
 export interface MissionViewRoots {
@@ -34,11 +35,11 @@ export interface RawRecord {
 /** Result of one coherent read of the stores (S5 checksum bracket). */
 export interface StoresRead {
   records: Record<StoreName, RawRecord[]>;
-  problems: string[];
+  problems: ReadIssue[];
 }
 
-/** A registry entry — AgentInfo plus registry-only flags and a future typed mission binding. */
-export type RegistryEntry = AgentInfo & { archived?: boolean; missionId?: string };
+/** A registry entry — AgentInfo plus the registry-only archived flag. */
+export type RegistryEntry = AgentInfo & { archived?: boolean };
 
 /** One parsed room record with its provenance; folded by roomId, last line wins. */
 export interface RoomRecord {
@@ -53,7 +54,7 @@ export interface RegistryRead {
   entries: RegistryEntry[];
   /** Registry file mtime — observation time, not production time (L2). */
   observedAt: string | null;
-  problems: string[];
+  problems: ReadIssue[];
 }
 
 /** One file observed inside a mission packet directory (L2: mtime = observation). */
@@ -61,6 +62,11 @@ export interface PacketFile {
   name: string;
   path: string;
   observedModifiedAt: string;
+}
+
+/** One ReadIssue with the provenance that produced it (R2). */
+function issue(message: string, sourceRefs: SourceRef[]): ReadIssue {
+  return { message, sourceRefs };
 }
 
 const STORE_FILES: ReadonlyArray<{ name: StoreName; file: string }> = [
@@ -88,7 +94,7 @@ export function readStores(storesDir: string, onAttempt?: ReadAttemptHook): Stor
   if (attempt.stable) return attempt;
   attempt = readStoresAttempt(storesDir, 1, onAttempt);
   if (!attempt.stable) {
-    attempt.problems.push('store file changed during read twice; snapshot reflects the final read');
+    attempt.problems.push(issue('store file changed during read twice; snapshot reflects the final read', [{ store: 'stores', path: storesDir }]));
   }
   return attempt;
 }
@@ -101,7 +107,7 @@ function readStoresAttempt(storesDir: string, attempt: number, onAttempt?: ReadA
   const before = hashStores(storesDir);
   onAttempt?.(attempt, storesDir);
   const records = {} as Record<StoreName, RawRecord[]>;
-  const problems: string[] = [];
+  const problems: ReadIssue[] = [];
   for (const { name, file } of STORE_FILES) {
     const result = readStoreFile(storesDir, name, file);
     records[name] = result.records;
@@ -123,16 +129,16 @@ function hashFile(filePath: string): string | null {
   return createHash('sha256').update(readFileSync(filePath)).digest('hex');
 }
 
-function readStoreFile(storesDir: string, name: StoreName, file: string): { records: RawRecord[]; problems: string[] } {
+function readStoreFile(storesDir: string, name: StoreName, file: string): { records: RawRecord[]; problems: ReadIssue[] } {
   const filePath = path.join(storesDir, file);
-  if (!existsSync(filePath)) return { records: [], problems: [`store file missing: ${file}`] };
+  if (!existsSync(filePath)) return { records: [], problems: [issue(`store file missing: ${file}`, [{ store: name, path: filePath }])] };
   const records: RawRecord[] = [];
-  const problems: string[] = [];
+  const problems: ReadIssue[] = [];
   readFileSync(filePath, 'utf8').split('\n').forEach((entry, index) => {
     if (entry.trim() === '') return;
     const parsed = parseStoreLine(entry);
     if (parsed === null) {
-      problems.push(`corrupt line skipped: ${file}:${index + 1}`);
+      problems.push(issue(`corrupt line skipped: ${file}:${index + 1}`, [{ store: name, path: filePath, line: index + 1 }]));
       return;
     }
     records.push({ store: name, path: filePath, line: index + 1, block: parsed });
@@ -154,8 +160,8 @@ function parseStoreLine(entry: string): Record<string, unknown> | null {
 }
 
 /** Read-only journal fold — history() only; never append/updateStatus (R3). */
-export function readJournal(journalPath: string): { envelopes: MessageEnvelope[]; problems: string[] } {
-  if (!existsSync(journalPath)) return { envelopes: [], problems: [`journal missing: ${journalPath}`] };
+export function readJournal(journalPath: string): { envelopes: MessageEnvelope[]; problems: ReadIssue[] } {
+  if (!existsSync(journalPath)) return { envelopes: [], problems: [issue(`journal missing: ${journalPath}`, [{ store: 'journal', path: journalPath }])] };
   return { envelopes: new MessageStore(journalPath).history(), problems: [] };
 }
 
@@ -164,15 +170,15 @@ export function readJournal(journalPath: string): { envelopes: MessageEnvelope[]
  * roomId with last line winning — room amendments append copies, exactly like
  * journal status transitions. Archived rooms are excluded from the fold.
  */
-export function readRooms(roomsPath: string): { rooms: RoomRecord[]; problems: string[] } {
-  if (!existsSync(roomsPath)) return { rooms: [], problems: [`rooms store missing: ${roomsPath}`] };
-  const problems: string[] = [];
+export function readRooms(roomsPath: string): { rooms: RoomRecord[]; problems: ReadIssue[] } {
+  if (!existsSync(roomsPath)) return { rooms: [], problems: [issue(`rooms store missing: ${roomsPath}`, [{ store: 'rooms', path: roomsPath }])] };
+  const problems: ReadIssue[] = [];
   const folded = new Map<string, RoomRecord>();
   readFileSync(roomsPath, 'utf8').split('\n').forEach((entry, index) => {
     if (entry.trim() === '') return;
     const parsed = parseStoreLine(entry);
     if (parsed === null || typeof parsed.roomId !== 'string') {
-      problems.push(`corrupt line skipped: rooms.jsonl:${index + 1}`);
+      problems.push(issue(`corrupt line skipped: rooms.jsonl:${index + 1}`, [{ store: 'rooms', path: roomsPath, line: index + 1 }]));
       return;
     }
     folded.set(parsed.roomId as string, { roomId: parsed.roomId as string, path: roomsPath, line: index + 1, block: parsed });
@@ -184,14 +190,14 @@ export function readRooms(roomsPath: string): { rooms: RoomRecord[]; problems: s
 /** Live registry read: archived entries filtered, observedAt = file mtime (L2). */
 export function readRegistry(registryPath: string): RegistryRead {
   if (!existsSync(registryPath)) {
-    return { entries: [], observedAt: null, problems: [`registry missing: ${registryPath}`] };
+    return { entries: [], observedAt: null, problems: [issue(`registry missing: ${registryPath}`, [{ store: 'registry', path: registryPath }])] };
   }
   try {
     const parsed: unknown = JSON.parse(readFileSync(registryPath, 'utf8'));
     const entries = Array.isArray(parsed) ? (parsed as RegistryEntry[]).filter((entry) => !entry.archived) : [];
     return { entries, observedAt: statSync(registryPath).mtime.toISOString(), problems: [] };
   } catch {
-    return { entries: [], observedAt: null, problems: [`registry unreadable: ${registryPath}`] };
+    return { entries: [], observedAt: null, problems: [issue(`registry unreadable: ${registryPath}`, [{ store: 'registry', path: registryPath }])] };
   }
 }
 
@@ -200,7 +206,7 @@ export function readRegistry(registryPath: string): RegistryRead {
  * The mission id is containment-checked before any fs touch (S1); a missing
  * packet dir is not a read problem — the snapshot decides what absence means.
  */
-export function readPacket(workDir: string, missionId: string): { files: PacketFile[]; problems: string[] } {
+export function readPacket(workDir: string, missionId: string): { files: PacketFile[]; problems: ReadIssue[] } {
   const empty = { files: [], problems: [] };
   if (!isSafeMissionId(missionId)) return empty;
   const packetDir = path.join(workDir, missionId);

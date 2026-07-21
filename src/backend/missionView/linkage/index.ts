@@ -5,7 +5,7 @@
 // record the join touches is validated (id/kind/ts, kind↔store, per-kind shape,
 // ref-kind allowlist, dangling store-id refs); every violation is a visible
 // problem string — duplicates are never silently picked.
-import type { SourceRef } from '../../../shared/missionView/schema.js';
+import type { ReadIssue, SourceRef } from '../../../shared/missionView/schema.js';
 import type { RawRecord, StoreName } from '../sources/index.js';
 
 /** A typed ref as stored in a block's refs[] (AGENTS.md ref kinds). */
@@ -40,7 +40,7 @@ export interface MissionLinkage {
   needsChrisSource: RawRecord | null;
   /** exp/session refs: no store exists — attention items, never dangling (S5). */
   unresolvableRefs: RefValue[];
-  problems: string[];
+  problems: ReadIssue[];
 }
 
 /** Linkage outcome: absent → 404, ambiguous → 409 with candidates, else resolved. */
@@ -85,18 +85,18 @@ export function resolveLinkage(missionId: string, stores: Record<StoreName, RawR
 
 /** Walk + validate the whole graph for a resolved (single) target record. */
 function assemble(missionId: string, mission: RawRecord, stores: Record<StoreName, RawRecord[]>): LinkageResult {
-  const problems: string[] = [];
+  const problems: ReadIssue[] = [];
   const missionValid = validateRecord(mission, problems);
   const forwardRefs = readRefs(mission, problems);
   const linked = dedupeLinked(collectLinked(missionId, stores, problems));
-  const objective = resolveObjective(forwardRefs, stores, problems);
+  const objective = resolveObjective(mission, forwardRefs, stores, problems);
   const needsChrisSource = stores.requests.find((record) => isPendingFor(record, missionId)) ?? null;
   checkDangling(mission, forwardRefs, stores, problems);
   for (const item of linked) checkDangling(item.record, readRefs(item.record, problems), stores, problems);
   const unresolvableRefs = forwardRefs.filter((entry) => UNRESOLVABLE_KINDS.has(entry.kind));
   const linkage: MissionLinkage = {
     mission, missionValid, forwardRefs, objective, linked,
-    needsChris: needsChrisSource !== null, needsChrisSource, unresolvableRefs, problems: [...new Set(problems)],
+    needsChris: needsChrisSource !== null, needsChrisSource, unresolvableRefs, problems: dedupeIssues(problems),
   };
   return { status: 'resolved', linkage };
 }
@@ -106,40 +106,40 @@ function assemble(missionId: string, mission: RawRecord, stores: Record<StoreNam
  * match its store file, and the per-kind shape rule — a mission needs a
  * non-empty string title beyond id/kind/ts.
  */
-function validateRecord(record: RawRecord, problems: string[]): boolean {
+function validateRecord(record: RawRecord, problems: ReadIssue[]): boolean {
   const before = problems.length;
   const block = record.block;
   const where = `${record.store}:${record.line} record '${describe(record)}'`;
   for (const field of ['id', 'kind', 'ts']) {
     if (typeof block[field] !== 'string' || (block[field] as string).trim() === '') {
-      problems.push(`${where} missing required field '${field}'`);
+      problems.push(issueOf(record, `${where} missing required field '${field}'`));
     }
   }
   if (typeof block.kind === 'string' && !KINDS_BY_STORE[record.store].includes(block.kind)) {
-    problems.push(`${where} has kind '${block.kind}' not allowed in ${record.store}.jsonl`);
+    problems.push(issueOf(record, `${where} has kind '${block.kind}' not allowed in ${record.store}.jsonl`));
   }
   if (record.store === 'missions' && (typeof block.title !== 'string' || block.title.trim() === '')) {
-    problems.push(`${where} has no non-empty string title (mission per-kind shape rule)`);
+    problems.push(issueOf(record, `${where} has no non-empty string title (mission per-kind shape rule)`));
   }
   return problems.length === before;
 }
 
 /** A block's refs[], shape-checked; a malformed refs field is a visible issue. */
-function readRefs(record: RawRecord, problems: string[]): RefValue[] {
+function readRefs(record: RawRecord, problems: ReadIssue[]): RefValue[] {
   const rawRefs = record.block.refs;
   if (rawRefs === undefined) return [];
   if (!Array.isArray(rawRefs)) {
-    problems.push(`${record.store}:${record.line} record '${describe(record)}' has a non-array refs field`);
+    problems.push(issueOf(record, `${record.store}:${record.line} record '${describe(record)}' has a non-array refs field`));
     return [];
   }
   const refs: RefValue[] = [];
   for (const entry of rawRefs as unknown[]) {
     if (!isRefValue(entry)) {
-      problems.push(`${record.store}:${record.line} record '${describe(record)}' has a malformed ref`);
+      problems.push(issueOf(record, `${record.store}:${record.line} record '${describe(record)}' has a malformed ref`));
       continue;
     }
     if (!REF_KINDS.has(entry.kind)) {
-      problems.push(`${record.store}:${record.line} ref kind '${entry.kind}' outside the typed-ref allowlist`);
+      problems.push(issueOf(record, `${record.store}:${record.line} ref kind '${entry.kind}' outside the typed-ref allowlist`));
     }
     refs.push(entry);
   }
@@ -147,7 +147,7 @@ function readRefs(record: RawRecord, problems: string[]): RefValue[] {
 }
 
 /** Reverse refs + one bounded hop (M4): mission ← task/log/issue, then mission ← task ← issue. */
-function collectLinked(missionId: string, stores: Record<StoreName, RawRecord[]>, problems: string[]): LinkedRecord[] {
+function collectLinked(missionId: string, stores: Record<StoreName, RawRecord[]>, problems: ReadIssue[]): LinkedRecord[] {
   const linked: LinkedRecord[] = [];
   const tasks: LinkedRecord[] = [];
   for (const storeName of ['tasks', 'captains-log', 'issues'] as StoreName[]) {
@@ -164,7 +164,7 @@ function collectLinked(missionId: string, stores: Record<StoreName, RawRecord[]>
 }
 
 /** The one allowed transitive hop: issues ref'ing an already-linked task (M4). */
-function collectIssueHop(tasks: LinkedRecord[], stores: Record<StoreName, RawRecord[]>, problems: string[]): LinkedRecord[] {
+function collectIssueHop(tasks: LinkedRecord[], stores: Record<StoreName, RawRecord[]>, problems: ReadIssue[]): LinkedRecord[] {
   const taskIds = new Set(tasks.map((item) => String(item.record.block.id)));
   const hops: LinkedRecord[] = [];
   for (const record of stores.issues) {
@@ -179,26 +179,26 @@ function collectIssueHop(tasks: LinkedRecord[], stores: Record<StoreName, RawRec
 }
 
 /** Resolve an explicit objective ref into the okrs store; absent/dup is visible. */
-function resolveObjective(refs: RefValue[], stores: Record<StoreName, RawRecord[]>, problems: string[]): RawRecord | null {
+function resolveObjective(carrier: RawRecord, refs: RefValue[], stores: Record<StoreName, RawRecord[]>, problems: ReadIssue[]): RawRecord | null {
   const target = refs.find((entry) => entry.kind === 'objective');
   if (!target) return null;
   const matches = stores.okrs.filter((record) => record.block.id === target.value);
   if (matches.length === 0) {
-    problems.push(`dangling ref: objective '${target.value}' absent from okrs.jsonl`);
+    problems.push(issueOf(carrier, `dangling ref: objective '${target.value}' absent from okrs.jsonl`));
     return null;
   }
-  if (matches.length > 1) problems.push(`duplicate id '${target.value}' in okrs.jsonl — objective resolution ambiguous`);
+  if (matches.length > 1) problems.push(issueOf(matches[0], `duplicate id '${target.value}' in okrs.jsonl — objective resolution ambiguous`));
   validateRecord(matches[0], problems);
   return matches[0];
 }
 
 /** Dangling check for ref kinds backed by a store we read (S5); doc/exp/session excluded. */
-function checkDangling(record: RawRecord, refs: RefValue[], stores: Record<StoreName, RawRecord[]>, problems: string[]): void {
+function checkDangling(record: RawRecord, refs: RefValue[], stores: Record<StoreName, RawRecord[]>, problems: ReadIssue[]): void {
   for (const entry of refs) {
     const storeName = STORE_BY_REF_KIND.get(entry.kind);
     if (!storeName) continue;
     if (!stores[storeName].some((target) => target.block.id === entry.value)) {
-      problems.push(`dangling ref: ${record.store}:${record.line} refs ${entry.kind} '${entry.value}' — absent from ${storeName}.jsonl`);
+      problems.push(issueOf(record, `dangling ref: ${record.store}:${record.line} refs ${entry.kind} '${entry.value}' — absent from ${storeName}.jsonl`));
     }
   }
 }
@@ -212,11 +212,11 @@ function isPendingFor(record: RawRecord, missionId: string): boolean {
 }
 
 /** Duplicate ids in a store are a visible issue — joined records are never silently picked. */
-function flagDuplicate(record: RawRecord, records: RawRecord[], problems: string[]): void {
+function flagDuplicate(record: RawRecord, records: RawRecord[], problems: ReadIssue[]): void {
   const recordId = record.block.id;
   if (typeof recordId !== 'string') return;
   if (records.filter((other) => other.block.id === recordId).length > 1) {
-    problems.push(`duplicate id '${recordId}' in ${record.store}.jsonl — joined records are never silently picked`);
+    problems.push(issueOf(record, `duplicate id '${recordId}' in ${record.store}.jsonl — joined records are never silently picked`));
   }
 }
 
@@ -226,6 +226,21 @@ function dedupeLinked(linked: LinkedRecord[]): LinkedRecord[] {
     const seenKey = `${item.record.store}:${item.record.line}`;
     if (seen.has(seenKey)) return false;
     seen.add(seenKey);
+    return true;
+  });
+}
+
+/** One validation issue citing the record that produced it (R2). */
+function issueOf(record: RawRecord, message: string): ReadIssue {
+  return { message, sourceRefs: [{ store: record.store, recordId: String(record.block.id ?? ''), path: record.path, line: record.line }] };
+}
+
+/** Duplicate problem strings collapse; provenance of the first occurrence is kept. */
+function dedupeIssues(problems: ReadIssue[]): ReadIssue[] {
+  const seen = new Set<string>();
+  return problems.filter((problem) => {
+    if (seen.has(problem.message)) return false;
+    seen.add(problem.message);
     return true;
   });
 }

@@ -5,6 +5,7 @@
 import type {
   ArtifactView,
   AttentionItem,
+  ReadIssue,
   CurrentActivityView,
   MissionAssignmentView,
   MissionSnapshot,
@@ -65,7 +66,7 @@ export interface MissionRoomViewModel {
   /** THE trust feature: every ambiguous fact, labeled, calmly grouped (UI law: scarce amber). */
   attention: AttentionSectionModel;
   /** Freshness + recoverable read problems — always visible (M6). */
-  trust: { asOf: string; issues: string[] };
+  trust: { asOf: string; issues: ReadIssue[] };
 }
 
 function sourcedFact(label: string, sourced: Sourced<string | null>, empty: string): RoomFact {

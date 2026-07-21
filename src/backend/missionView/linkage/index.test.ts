@@ -55,7 +55,7 @@ function testDuplicateReverse(): void {
   });
   const linkage = resolved(resolveLinkage('mission_a', stores));
   assert.equal(linkage.linked.length, 2, 'both duplicates stay visible');
-  assert.ok(linkage.problems.some((entry) => entry.includes("duplicate id 'task_a'")));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes("duplicate id 'task_a'")));
 }
 
 function testWrongKind(): void {
@@ -66,15 +66,15 @@ function testWrongKind(): void {
     'tasks': [record('tasks', 7, wrong)],
   });
   const linkage = resolved(resolveLinkage('mission_a', stores));
-  assert.ok(linkage.problems.some((entry) => entry.includes("kind 'mission' not allowed in tasks.jsonl")));
-  assert.ok(linkage.problems.some((entry) => entry.includes('tasks:7')));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes("kind 'mission' not allowed in tasks.jsonl")));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes('tasks:7')));
 }
 
 function testInvalidTarget(): void {
   const noTitle = '{"id":"mission_bad","kind":"mission","ts":"2026-07-21T10:00:00+10:00","status":"done"}';
   const linkage = resolved(resolveLinkage('mission_bad', storesOf({ missions: [record('missions', 3, noTitle)] })));
   assert.equal(linkage.missionValid, false, 'invalid target is served but flagged (never rendered clean)');
-  assert.ok(linkage.problems.some((entry) => entry.includes('no non-empty string title')));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes('no non-empty string title')));
 }
 
 function testMissingTs(): void {
@@ -84,7 +84,7 @@ function testMissingTs(): void {
     'tasks': [record('tasks', 1, noTs)],
   });
   const linkage = resolved(resolveLinkage('mission_a', stores));
-  assert.ok(linkage.problems.some((entry) => entry.includes("missing required field 'ts'")));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes("missing required field 'ts'")));
 }
 
 function testDangling(): void {
@@ -93,8 +93,8 @@ function testDangling(): void {
     + '"refs":[{"kind":"mission","value":"mission_a"},{"kind":"log","value":"log_missing"}]}';
   const stores = storesOf({ 'missions': [record('missions', 1, mission)], 'tasks': [record('tasks', 1, task)] });
   const linkage = resolved(resolveLinkage('mission_a', stores));
-  assert.ok(linkage.problems.some((entry) => entry.includes("objective 'okr_missing' absent from okrs.jsonl")));
-  assert.ok(linkage.problems.some((entry) => entry.includes("log 'log_missing' — absent from captains-log.jsonl")));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes("objective 'okr_missing' absent from okrs.jsonl")));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes("log 'log_missing' — absent from captains-log.jsonl")));
   assert.equal(linkage.objective, null);
 }
 
@@ -102,7 +102,7 @@ function testUnresolvable(): void {
   const mission = missionLine('mission_a', ',"refs":[{"kind":"exp","value":"EXP-1"},{"kind":"session","value":"live_x"}]');
   const linkage = resolved(resolveLinkage('mission_a', storesOf({ missions: [record('missions', 1, mission)] })));
   assert.deepEqual(linkage.unresolvableRefs.map((entry) => entry.value), ['EXP-1', 'live_x']);
-  assert.ok(!linkage.problems.some((entry) => entry.includes('dangling')), 'exp/session are attention, never dangling');
+  assert.ok(!linkage.problems.some((entry) => entry.message.includes('dangling')), 'exp/session are attention, never dangling');
 }
 
 function testObjectiveResolves(): void {
@@ -124,7 +124,7 @@ function testNeedsChris(): void {
 function testRefKindAllowlist(): void {
   const mission = missionLine('mission_a', ',"refs":[{"kind":"bogus","value":"x"}]');
   const linkage = resolved(resolveLinkage('mission_a', storesOf({ missions: [record('missions', 1, mission)] })));
-  assert.ok(linkage.problems.some((entry) => entry.includes("ref kind 'bogus' outside the typed-ref allowlist")));
+  assert.ok(linkage.problems.some((entry) => entry.message.includes("ref kind 'bogus' outside the typed-ref allowlist")));
 }
 
 function main(): void {

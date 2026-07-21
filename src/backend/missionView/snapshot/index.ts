@@ -9,6 +9,7 @@ import type {
   MissionPulse,
   MissionSnapshot,
   PresenceView,
+  ReadIssue,
   SourceRef,
   Sourced,
   TimelineEntry,
@@ -29,7 +30,7 @@ export interface MissionFacts {
   rooms: RoomRecord[];
   roomsPath: string;
   packet: PacketFile[];
-  readProblems: string[];
+  readProblems: ReadIssue[];
   asOf: string;
 }
 
@@ -45,7 +46,7 @@ export function deriveSnapshot(facts: MissionFacts): MissionSnapshot {
     pulse: buildPulse(facts, attention, issues),
     objective: buildObjective(facts.linkage),
     assignments: buildAssignments(facts.linkage.mission),
-    presences: buildPresences(facts),
+    presences: buildPresences(),
     currentActivity: buildActivity(),
     timeline: buildTimeline(facts, rooms),
     artifacts: buildArtifacts(facts),
@@ -69,7 +70,7 @@ function buildMission(record: RawRecord): MissionSnapshot['mission'] {
 }
 
 /** Pulse fields derived exactly per the M6 table, each with its sourceRef. */
-function buildPulse(facts: MissionFacts, attention: AttentionItem[], issues: string[]): MissionPulse {
+function buildPulse(facts: MissionFacts, attention: AttentionItem[], issues: ReadIssue[]): MissionPulse {
   const block = facts.linkage.mission.block;
   const source = [refOf(facts.linkage.mission)];
   const closed = CLOSED_STATUSES.has(stringOrNull(block.status) ?? '');
@@ -84,18 +85,18 @@ function buildPulse(facts: MissionFacts, attention: AttentionItem[], issues: str
 }
 
 /** M6: attention/issues → 'attention'; invalid mission record → 'unknown'; else 'on-track'. */
-function healthOf(facts: MissionFacts, attention: AttentionItem[], issues: string[]): 'on-track' | 'attention' | 'unknown' {
+function healthOf(facts: MissionFacts, attention: AttentionItem[], issues: ReadIssue[]): 'on-track' | 'attention' | 'unknown' {
   if (!facts.linkage.missionValid) return 'unknown';
   return attention.length > 0 || issues.length > 0 ? 'attention' : 'on-track';
 }
 
 /** C3: health cites the mission row PLUS the refs of every contributing attention item (deduped). */
-function healthRefs(facts: MissionFacts, attention: AttentionItem[], issues: string[]): SourceRef[] {
+function healthRefs(facts: MissionFacts, attention: AttentionItem[], issues: ReadIssue[]): SourceRef[] {
   const missionRef = refOf(facts.linkage.mission);
   if (attention.length === 0 && issues.length === 0) return [missionRef];
   const seen = new Set<string>();
   const refs: SourceRef[] = [];
-  for (const sourceRef of [missionRef, ...attention.flatMap((item) => item.sourceRefs)]) {
+  for (const sourceRef of [missionRef, ...attention.flatMap((item) => item.sourceRefs), ...issues.flatMap((problem) => problem.sourceRefs)]) {
     const refKey = `${sourceRef.store}|${sourceRef.recordId ?? ''}|${sourceRef.path ?? ''}|${sourceRef.line ?? ''}`;
     if (seen.has(refKey)) continue;
     seen.add(refKey); refs.push(sourceRef);
@@ -128,27 +129,14 @@ function buildAssignments(record: RawRecord): MissionAssignmentView[] {
 }
 
 /**
- * Mission-explicit bound presences only (S4/C2): a TYPED mission binding —
- * `entry.missionId === missionId`. A registry `threadId` names a Thread, not
- * a Mission, so threadId equality is never a binding.
+ * Mission-explicit bound presences (S4/C2/R1): today's registry CANNOT express
+ * a mission binding — projectId/threadId name a project or a Thread, never a
+ * Mission, and no typed binding field exists on canonical AgentInfo. So this
+ * is unconditionally empty; the attention item states that honest fact. The
+ * future sanctioned binding is recorded as follow-up work (result.md risks).
  */
-function buildPresences(facts: MissionFacts): PresenceView[] {
-  return facts.registry
-    .filter((entry) => entry.missionId === facts.missionId)
-    .map((entry) => presenceView(entry, facts));
-}
-
-function presenceView(entry: RegistryEntry, facts: MissionFacts): PresenceView {
-  return {
-    agentId: entry.agentId,
-    title: entry.title,
-    provider: entry.provider,
-    sessionId: entry.sessionId ?? null,
-    sessionError: entry.sessionError ?? null,
-    status: entry.status,
-    observedAt: facts.registryObservedAt ?? '',
-    sourceRefs: [{ store: 'registry', recordId: entry.agentId, path: facts.registryPath }],
-  };
+function buildPresences(): PresenceView[] {
+  return [];
 }
 
 /** Explicit current work (S3/C2): availability is never converted into work — empty until an explicit current-work source exists. */
@@ -242,15 +230,12 @@ function assignmentAttention(facts: MissionFacts): AttentionItem[] {
 }
 
 function presenceAttention(facts: MissionFacts): AttentionItem[] {
-  const items: AttentionItem[] = [];
-  if (buildPresences(facts).length === 0) {
-    items.push({
-      id: 'attention:no-presences',
-      label: 'no mission-explicit bound presence',
-      detail: 'The agent registry has no mission binding; projectId/threadId bind to a project or thread, not a mission — no explicitly linked active session exists.',
-      sourceRefs: [{ store: 'registry', path: facts.registryPath }],
-    });
-  }
+  const items: AttentionItem[] = [{
+    id: 'attention:no-presences',
+    label: 'no mission-explicit bound presence',
+    detail: 'The agent registry has no mission binding; projectId/threadId bind to a project or thread, not a mission — no explicitly linked active session exists.',
+    sourceRefs: [{ store: 'registry', path: facts.registryPath }],
+  }];
   return items.concat(projectOnlyAttention(facts));
 }
 
@@ -258,7 +243,7 @@ function presenceAttention(facts: MissionFacts): AttentionItem[] {
 function projectOnlyAttention(facts: MissionFacts): AttentionItem[] {
   const projects = new Set(facts.linkage.forwardRefs.filter((entry) => entry.kind === 'project').map((entry) => entry.value));
   return facts.registry
-    .filter((entry) => entry.projectId !== undefined && projects.has(entry.projectId) && entry.missionId !== facts.missionId)
+    .filter((entry) => entry.projectId !== undefined && projects.has(entry.projectId))
     .map((entry) => ({
       id: `attention:presence-candidate:${entry.agentId}`,
       label: 'unlinked presence candidates',

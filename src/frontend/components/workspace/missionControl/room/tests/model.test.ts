@@ -58,7 +58,7 @@ function unlinkedSnapshot(): MissionSnapshot {
     artifacts: [],
     attention: unlinkedAttention(),
     asOf: '2026-07-21T01:00:00.000Z',
-    issues: ['tasks.jsonl:10 — task_store-validator missing required field ts'],
+    issues: [{ message: 'tasks:10 task_store-validator missing required field ts', sourceRefs: [{ store: 'tasks', recordId: 'task_store-validator', line: 10 }] }],
   };
 }
 
@@ -210,6 +210,8 @@ assert.ok(
 
 // Trust: freshness line + every read issue visible (M6).
 assert.ok(unlinked.trust.asOf.length > 0);
-assert.deepEqual(unlinked.trust.issues, ['tasks.jsonl:10 — task_store-validator missing required field ts']);
+assert.equal(unlinked.trust.issues.length, 1);
+assert.ok(unlinked.trust.issues[0].message.includes('missing required field'));
+assert.equal(unlinked.trust.issues[0].sourceRefs[0].store, 'tasks', 'trust issues carry provenance (R2)');
 
 console.log('room/model.test.ts: all assertions passed');

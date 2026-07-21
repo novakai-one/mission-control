@@ -26,9 +26,9 @@ function testStoresRead(env: Rig): void {
   assert.equal(result.records.missions.length, 1);
   assert.equal(result.records.missions[0].line, 1);
   assert.equal(result.records.tasks.length, 1, 'corrupt line is skipped, not fatal');
-  assert.ok(result.problems.some((entry) => entry.includes('corrupt line skipped: tasks.jsonl:2')));
-  assert.ok(result.problems.some((entry) => entry.includes('store file missing: okrs.jsonl')));
-  assert.ok(result.problems.some((entry) => entry.includes('store file missing: captains-log.jsonl')));
+  assert.ok(result.problems.some((entry) => entry.message.includes('corrupt line skipped: tasks.jsonl:2')));
+  assert.ok(result.problems.some((entry) => entry.message.includes('store file missing: okrs.jsonl')));
+  assert.ok(result.problems.some((entry) => entry.message.includes('store file missing: captains-log.jsonl')));
 }
 
 function testBracketRetry(env: Rig): void {
@@ -39,7 +39,7 @@ function testBracketRetry(env: Rig): void {
   };
   const result = readStores(env.roots.storesDir, once);
   assert.equal(result.records.missions.length, 2, 'one full retry re-reads after a mid-read change');
-  assert.ok(!result.problems.some((entry) => entry.includes('changed during read')));
+  assert.ok(!result.problems.some((entry) => entry.message.includes('changed during read')));
 }
 
 function testBracketDoubleMismatch(env: Rig): void {
@@ -51,14 +51,14 @@ function testBracketDoubleMismatch(env: Rig): void {
     appendFileSync(target, `${missionLine(`mission_x${counter}`)}\n`);
   };
   const result = readStores(env.roots.storesDir, always);
-  assert.ok(result.problems.some((entry) => entry.includes('changed during read twice')));
+  assert.ok(result.problems.some((entry) => entry.message.includes('changed during read twice')));
   assert.equal(result.records.missions.length, 3, 'still serves the final read honestly');
 }
 
 function testJournal(env: Rig): void {
   const missing = readJournal(env.roots.journalPath);
   assert.deepEqual(missing.envelopes, []);
-  assert.ok(missing.problems[0].includes('journal missing'));
+  assert.ok(missing.problems[0].message.includes('journal missing'));
   writeJournal(env, [envelopeLine('msg_1', 'hello'), envelopeLine('msg_1', 'hello amended'), envelopeLine('msg_2', 'mission_a mentioned')]);
   const folded = readJournal(env.roots.journalPath);
   assert.equal(folded.envelopes.length, 2, 'history() folds by id, last line wins');
@@ -76,7 +76,7 @@ function testEmptyJournal(env: Rig): void {
 function testRegistry(env: Rig): void {
   const missing = readRegistry(env.roots.registryPath);
   assert.deepEqual(missing.entries, []);
-  assert.ok(missing.problems[0].includes('registry missing'));
+  assert.ok(missing.problems[0].message.includes('registry missing'));
   writeRegistry(env, [agentEntry('agent_live'), agentEntry('agent_gone', true)]);
   const result = readRegistry(env.roots.registryPath);
   assert.equal(result.entries.length, 1, 'archived entries are filtered');
@@ -100,7 +100,7 @@ function testPacket(env: Rig): void {
 function testRooms(env: Rig): void {
   const missing = readRooms(env.roots.roomsPath);
   assert.deepEqual(missing.rooms, []);
-  assert.ok(missing.problems[0].includes('rooms store missing'));
+  assert.ok(missing.problems[0].message.includes('rooms store missing'));
   writeRooms(env, [
     roomLine('room_a', 'alpha'),
     roomLine('room_a', 'alpha amended'),
@@ -112,7 +112,7 @@ function testRooms(env: Rig): void {
   const result = readRooms(env.roots.roomsPath);
   assert.equal(result.rooms.length, 2, 'folded by roomId (last wins), archived excluded');
   assert.equal(result.rooms[0].block.name, 'alpha amended');
-  assert.ok(result.problems.some((problem) => problem.includes('corrupt line')), 'corrupt line is a visible problem');
+  assert.ok(result.problems.some((problem) => problem.message.includes('corrupt line')), 'corrupt line is a visible problem');
 }
 
 async function main(): Promise<void> {

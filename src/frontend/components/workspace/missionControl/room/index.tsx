@@ -211,7 +211,12 @@ function TrustSection({ model }: { model: MissionRoomViewModel }) {
       {model.trust.issues.length === 0
         ? <p className="mr-empty">No read issues during snapshot generation.</p>
         : model.trust.issues.map((issue, index) => (
-          <p className="mr-issue" key={`${index}`}>{issue}</p>
+          <p className="mr-issue" key={`${index}`}>
+            {issue.message}
+            {issue.sourceRefs.length > 0 && (
+              <small className="mr-source" title={sourceTag(issue.sourceRefs)}>{sourceTag(issue.sourceRefs)}</small>
+            )}
+          </p>
         ))}
     </section>
   );

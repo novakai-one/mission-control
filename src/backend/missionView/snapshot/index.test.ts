@@ -8,7 +8,7 @@ import type { MissionLinkage } from '../linkage/index.js';
 import type { PacketFile, RawRecord, RegistryEntry, RoomRecord, StoreName } from '../sources/index.js';
 import type { MessageEnvelope } from '../../messaging/types.js';
 import type { MissionSnapshot } from '../../../shared/missionView/schema.js';
-import { agentEntry, envelopeLine, issueLine, logLine, missionBoundEntry, missionLine, okrLine, requestLine, roomLine, taskLine } from '../tests/fixtures.js';
+import { agentEntry, envelopeLine, issueLine, logLine, missionLine, okrLine, requestLine, roomLine, taskLine } from '../tests/fixtures.js';
 
 const MISSION_REFS = ',"refs":[{"kind":"project","value":"proj_a"},'
   + '{"kind":"exp","value":"EXP-1"},'
@@ -147,18 +147,16 @@ function testCommunicationStatesVerifiedRooms(): void {
   assert.ok(item?.sourceRefs.some((sourceRef) => sourceRef.store === 'rooms'), 'the room store is cited');
 }
 
-// C2: threadId equals the mission id — still NOT a binding (Thread namespace);
-// availability is never current work. Only a typed missionId binds.
+// C2/R1: threadId equals the mission id — still NOT a binding (Thread
+// namespace), and no typed binding exists on canonical AgentInfo, so
+// presences/currentActivity are unconditionally empty with attention items.
 function testPresenceInferenceRemoved(): void {
   const threadTwin = { ...agentEntry('agent_thread'), threadId: 'mission_a' } as unknown as RegistryEntry;
-  const inferred = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), { registry: [threadTwin] }));
-  assert.deepEqual(inferred.presences, [], 'threadId matching the mission id is NOT a mission binding (C2)');
-  assert.deepEqual(inferred.currentActivity, [], 'availability never becomes current work (C2)');
-  const typed = missionBoundEntry('agent_bound', 'mission_a') as unknown as RegistryEntry;
-  const bound = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), { registry: [typed] }));
-  assert.equal(bound.presences.length, 1, 'a typed missionId field IS an explicit mission binding');
-  assert.deepEqual(bound.currentActivity, [], 'even a bound presence makes no current-work claim');
-  assert.ok(bound.attention.some((entry) => entry.id === 'attention:no-current-activity'), 'the activity gap stays visible');
+  const snapshot = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), { registry: [threadTwin] }));
+  assert.deepEqual(snapshot.presences, [], 'threadId matching the mission id is NOT a mission binding (C2)');
+  assert.deepEqual(snapshot.currentActivity, [], 'availability never becomes current work (C2)');
+  assert.ok(snapshot.attention.some((entry) => entry.id === 'attention:no-presences'), 'the presence gap stays visible');
+  assert.ok(snapshot.attention.some((entry) => entry.id === 'attention:no-current-activity'), 'the activity gap stays visible');
 }
 
 // C3: health derives from attention + issues, so it cites beyond the mission row.
@@ -171,6 +169,22 @@ function testHealthProvenance(): void {
   assert.ok(
     cited.has('registry') || cited.has('journal') || cited.has('packet') || cited.has('rooms'),
     'at least one contributing source beyond the stores is cited',
+  );
+}
+
+// R2: a validation issue carries provenance, and health folds it in — the
+// tasks store is cited when the missing-ts issue contributes to 'attention'.
+function testHealthCitesIssueSource(): void {
+  const noTs = '{"id":"task_nots","kind":"task","title":"No ts","status":"done","refs":[{"kind":"mission","value":"mission_a"}]}';
+  const stores = storesOf({ ...fullStores(), 'tasks': [record('tasks', 10, noTs)] });
+  const snapshot = deriveSnapshot(makeFacts(linked('mission_a', stores)));
+  const issue = snapshot.issues.find((entry) => entry.message.includes("missing required field 'ts'"));
+  assert.ok(issue, 'the missing-ts validation issue exists');
+  assert.equal(issue?.sourceRefs[0].store, 'tasks', 'the issue cites the tasks store and line');
+  assert.equal(issue?.sourceRefs[0].line, 10);
+  assert.ok(
+    snapshot.pulse.health.sourceRefs.some((sourceRef) => sourceRef.store === 'tasks'),
+    'health cites the tasks store when the issue contributes (R2)',
   );
 }
 
@@ -189,7 +203,7 @@ function testInvalidHealth(): void {
   const noTitle = '{"id":"mission_bad","kind":"mission","ts":"2026-07-21T10:00:00+10:00","status":"done"}';
   const snapshot = deriveSnapshot(makeFacts(linked('mission_bad', storesOf({ missions: [record('missions', 3, noTitle)] }))));
   assert.equal(snapshot.pulse.health.value, 'unknown', 'invalid mission record → unknown, never rendered clean');
-  assert.ok(snapshot.issues.some((entry) => entry.includes('no non-empty string title')));
+  assert.ok(snapshot.issues.some((entry) => entry.message.includes('no non-empty string title')));
 }
 
 function testZeroRefs(): void {
@@ -198,13 +212,13 @@ function testZeroRefs(): void {
   assert.equal(snapshot.objective, null);
   assert.deepEqual(snapshot.timeline.map((entry) => entry.id), ['mission_solo']);
   assert.equal(snapshot.pulse.needsChris.value, false);
-  assert.ok(!snapshot.issues.some((entry) => entry.includes('dangling')), 'zero refs dangle nothing');
+  assert.ok(!snapshot.issues.some((entry) => entry.message.includes('dangling')), 'zero refs dangle nothing');
 }
 
 function testReadProblemsSurface(): void {
-  const facts = makeFacts(linked('mission_a', fullStores()), { readProblems: ['store file missing: okrs.jsonl'] });
+  const facts = makeFacts(linked('mission_a', fullStores()), { readProblems: [{ message: 'store file missing: okrs.jsonl', sourceRefs: [{ store: 'okrs', path: '/fake/okrs.jsonl' }] }] });
   const snapshot = deriveSnapshot(facts);
-  assert.ok(snapshot.issues.includes('store file missing: okrs.jsonl'), 'read problems render as visible issues');
+  assert.ok(snapshot.issues.some((entry) => entry.message.includes('store file missing: okrs.jsonl')), 'read problems render as visible issues');
   assert.equal(snapshot.pulse.health.value, 'attention');
 }
 
@@ -220,6 +234,7 @@ function main(): void {
   testCommunicationStatesVerifiedRooms();
   testPresenceInferenceRemoved();
   testHealthProvenance();
+  testHealthCitesIssueSource();
   testInvalidHealth();
   testZeroRefs();
   testReadProblemsSurface();

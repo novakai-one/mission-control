@@ -124,8 +124,3 @@ export function agentEntry(agentId: string, archived = false, projectId?: string
     createdAt: '2026-07-21T00:00:00.000Z', archived, projectId,
   };
 }
-
-/** A registry entry with a typed mission binding (the only honest presence path, C2). */
-export function missionBoundEntry(agentId: string, missionId: string): Record<string, unknown> {
-  return { ...agentEntry(agentId), missionId };
-}
