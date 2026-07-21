@@ -20,8 +20,8 @@ tooling for measuring build quality — use it to assess builds.
 ## The `.novakai/` stores
 
 Persistent working state lives in `.novakai/stores/` (system of record;
-novakai-docs is a read-only viewer pointed at this one directory). Six
-operating stores per DEC-2026-07-20-003, plus projects:
+novakai-docs is a read-only viewer pointed at this one directory). The
+recognized stores are:
 
 - `.novakai/stores/decisions.jsonl` — `kind:"decision"`. Mandates and direction set
   by Chris. Referenced by id from missions, requests, and AGENTS.md.
@@ -43,6 +43,9 @@ operating stores per DEC-2026-07-20-003, plus projects:
 - `.novakai/stores/projects.jsonl` — `kind:"project"`. Known company projects, with
   status, current focus, and absolute path. Hierarchy:
   OKR → Project → Mission → Task.
+- `.novakai/stores/issues.jsonl` — `kind:"issue"`. Observed product, process,
+  or infrastructure problems that require follow-up outside the current
+  mission.
 
 Ref integrity rules (learned 2026-07-20, log_2026-07-20-017): an id once
 referenced never disappears (file a tombstone instead of deleting); project
@@ -54,7 +57,19 @@ Block shape (all stores):
 {"id":"<kind>_<slug>","kind":"<kind>","ts":"<ISO-8601 with offset>", ...}
 ```
 
-Refs are typed: `{"kind":"task"|"mission"|"project"|"doc"|"decision"|"log"|"exp","value":"...","label":"..."}`.
+ID exceptions are canonical: decisions use `DEC-YYYY-MM-DD-NNN`; objectives
+use `okr_<slug>`; projects use `proj_<slug>`. Mission and task tombstones may
+use `status:"refiled"` with scalar `refiledTo`.
+
+Refs are typed. Allowed kinds are `task`, `mission`, `project`, `doc`,
+`decision`, `log`, `exp`, `objective`, `request`, `issue`, `session`, and
+`learning`.
+
+For append-only writes, use `scripts/nvk-store.mjs append`; run
+`npm run stores:audit` to inspect existing drift and `npm run stores:gate` to
+detect new drift or disappearing inventoried IDs. The current writer does not
+yet enforce direct file writes or in-place state transitions; that residual
+gap is tracked in `issue_store-writer-residual-gap`.
 
 Related but separate: `.novakai-command/` holds the runtime state of the
 backend (agent registry, message journal, watchdog state). Do not hand-edit
@@ -101,39 +116,23 @@ agents and for Chris.
 - `CONTEXT.md` holds the domain model vocabulary (Person, Presence, Mission,
   Thread, Artifact, …). Use those terms in code and docs.
 
-## Taking over as chief (next Kimi, start here)
+## Workforce operations
 
-You are the COO. You lead the agent team; Chris sets direction. Do these in
-order:
+Canonical workforce procedures start at `docs/operations/START-HERE.md`.
+Read only the route for your current role; do not load the whole folder.
 
-1. **Read this file** — the store layout and conventions below are the law.
-2. **Read the captains log tail** (`.novakai/stores/captains-log.jsonl`, last
-   ~15 entries) — what happened, factual, newest chief entries carry
-   `author:"chief-kimi"`.
-3. **Check the inbox** (`.novakai/stores/requests.jsonl`) — anything
-   `pending` is waiting on Chris; surface it.
-4. **Read the open missions** (`.novakai/stores/missions.jsonl`) — what's in
-   flight, who owns it, what stage.
-5. **Read the learnings** (`.novakai/stores/learnings.jsonl`) — banked
-   lessons, each with evidence. Apply them before making new mistakes.
-6. **Read the chief playbook**
-   (`docs/plans/2026-07-20-chief-delegation-method.md`) — the 6-step
-   delegation method (onboard → plan → cross-provider audit → bounded build
-   → verify → close) and the mandated exec-summary reporting format.
-7. **Check the fleet** — `node scripts/nvk-status.mjs`; backend on :3031.
-   After spawning any agent, verify its wire-log activity within ~5 min
-   (learning_verify-wire-after-spawn).
-8. **Know your authority** — `DEC-2026-07-20-004` in
-   `.novakai/stores/decisions.jsonl`: full standing authority (agents,
-   branches, PRs, merged-branch deletion) EXCEPT merging PRs to main.
-   Chris reviews every PR personally.
-9. **Reviewing an agent run?** Use
-   `.novakai/docs/operational-review/METHOD.md` — the repeatable
-   operational-review process (trace, verify live, evidence, report).
-10. **Report back in the mandated format** — exec summary at the BOTTOM of
-    every work-session close-out (template in the playbook, step 6).
+- `AGENTS.md` owns repository laws, authority pointers, tone, and routing.
+- `docs/operations/` owns Chief, Manager, scaling, mission-packet, and
+  process-review procedures.
+- `.novakai/stores/` owns live operating state.
+- `.novakai/docs/operational-review/METHOD.md`, when present locally, owns
+  deep trace/report artifact production; it is not the general onboarding path.
 
-Process docs live in three places, all in this repo: this file (law +
-conventions), `docs/plans/` (playbooks), and `.novakai/docs/` (review
-method + reports). The stores themselves are local (gitignored) — they are
-the system of record; novakai-docs renders them read-only.
+When Chris gives natural or overloaded mission direction, explicitly invoke
+`$compile-mission-brief`. Preserve the raw prompt and compiled Mission Contract
+using `docs/operations/MISSION-PACKET.md`. Do not rely on implicit skill
+selection, and do not pass the raw brain-dump downstream as a second brief.
+
+The operations manual is in trial until reviewed live missions show that the
+instruction chain holds. Process Reviewers propose changes; Chris decides what
+becomes standard.

@@ -1,8 +1,14 @@
 # Chief Delegation Method (EXE solo plan)
 
-Source: Chris, 2026-07-20. The chief acts as Chris would: leads, delegates,
-never writes the plan or the code itself. This is the process every mission
-follows while we learn what works. Documented so we can review and improve it.
+> **Status: historical evidence — superseded for new missions.** This file
+> records the method used on 2026-07-20 and remains at its original path
+> because operational reviews cite it. Current workforce procedures start at
+> [`docs/operations/START-HERE.md`](../operations/START-HERE.md). Do not combine
+> both versions into a larger prompt.
+
+Source: Chris, 2026-07-20. This records the process used in that operating era
+so later reviews can reconstruct and improve it. It is evidence, not the
+current instruction set.
 
 ## The six steps
 
