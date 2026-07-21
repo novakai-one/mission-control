@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,6 +125,34 @@ function run(args, stdin) {
   const occurrences = readFileSync(path.join(dir, 'tasks.jsonl'), 'utf8')
     .split('\n').filter((line) => line.includes('task_race-winner'));
   assert.equal(occurrences.length, 1, 'exactly one line appended');
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// --- F1 regression: enrollment containment ----------------------------------
+
+{
+  // an append into a foreign/temp dir must NEVER touch the repo baseline —
+  // the exact leak class this validator exists to stop (found by Manager verify)
+  const repoBaseline = path.join(HERE, '..', '..', 'stores-baseline.json');
+  const baselineBefore = readFileSync(repoBaseline);
+  const dir = freshDir();
+  const ok = run(['append', '--dir', dir, '--store', 'tasks.jsonl', '--line',
+    JSON.stringify({ id: 'task_foreign-no-enroll', kind: 'task', ts: TS, title: 'F' })]);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.ok(readFileSync(repoBaseline).equals(baselineBefore),
+    'foreign-dir append polluted the repo baseline');
+  rmSync(dir, { recursive: true, force: true });
+}
+{
+  // an explicit --baseline enrolls into exactly that file
+  const dir = freshDir();
+  const explicitBaseline = path.join(dir, 'explicit-baseline.json');
+  writeFileSync(explicitBaseline, JSON.stringify({ version: 1, fingerprints: [], ids: [] }) + '\n');
+  const ok = run(['append', '--dir', dir, '--store', 'tasks.jsonl',
+    '--baseline', explicitBaseline, '--line',
+    JSON.stringify({ id: 'task_explicit-enroll', kind: 'task', ts: TS, title: 'E' })]);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.ok(JSON.parse(readFileSync(explicitBaseline, 'utf8')).ids.includes('task_explicit-enroll'));
   rmSync(dir, { recursive: true, force: true });
 }
 

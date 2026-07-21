@@ -6,7 +6,7 @@
 // Audit output goes to stdout ONLY — no output-file option exists, so no audit
 // artifact can ever resolve into the store directory (SC3 by construction).
 import { randomUUID } from 'node:crypto';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditDir, appendLine, StoreValidationError, StoreRefusalError } from './store/store.mjs';
@@ -20,6 +20,7 @@ function parseArgs(argv) {
     if (rest[i] === '--dir') options.dir = rest[++i];
     else if (rest[i] === '--store') options.store = rest[++i];
     else if (rest[i] === '--line') options.line = rest[++i];
+    else if (rest[i] === '--baseline') options.baseline = rest[++i];
     else if (rest[i] === '--jsonl') options.jsonl = true;
     else {
       console.error(`unknown argument: ${rest[i]}`);
@@ -27,6 +28,24 @@ function parseArgs(argv) {
     }
   }
   return options;
+}
+
+/**
+ * F1 containment: id enrollment targets the repo baseline ONLY when the append
+ * dir IS this repo's canonical .novakai/stores — an append into any other dir
+ * (temp fixtures, foreign checkouts) must never touch it. An explicit
+ * --baseline always wins.
+ */
+function resolveEnrollmentBaseline(options) {
+  if (options.baseline) return options.baseline;
+  const repoBaseline = path.join(ROOT, 'stores-baseline.json');
+  if (!existsSync(repoBaseline)) return undefined;
+  try {
+    const canonical = realpathSync(path.join(ROOT, '.novakai', 'stores'));
+    return realpathSync(options.dir) === canonical ? repoBaseline : undefined;
+  } catch {
+    return undefined; // canonical dir absent (worktrees) — never enroll by default
+  }
 }
 
 async function readStdinRaw() {
@@ -109,10 +128,9 @@ async function main() {
       process.exit(2);
     }
     const rawLine = options.line ?? await readStdinRaw();
-    const baselinePath = path.join(ROOT, 'stores-baseline.json');
     try {
       const result = appendLine(options.dir, options.store, rawLine, {
-        baselinePath: existsSync(baselinePath) ? baselinePath : undefined,
+        baselinePath: resolveEnrollmentBaseline(options),
       });
       console.log(JSON.stringify({ appended: result.id, store: result.storeFile, bytes: result.bytesAppended }));
       process.exit(0);
@@ -130,7 +148,7 @@ async function main() {
       throw error;
     }
   }
-  console.error('usage: nvk-store.mjs audit --dir <storeDir> [--jsonl] | append --dir <storeDir> --store <file> [--line <raw>]');
+  console.error('usage: nvk-store.mjs audit --dir <storeDir> [--jsonl] | append --dir <storeDir> --store <file> [--line <raw>] [--baseline <file>]');
   process.exit(2);
 }
 
