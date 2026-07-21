@@ -317,3 +317,47 @@ console.log('validate cycle A tests passed');
 }
 
 console.log('validate cycle B tests passed');
+
+// =============================================================================
+// Cycle C — fixture sets: known-valid audits clean, known-drift reproduces census
+// =============================================================================
+
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+
+function loadFixtureDir(name) {
+  const dir = path.join(FIXTURES, name);
+  const files = {};
+  for (const file of readdirSync(dir).filter((entry) => entry.endsWith('.jsonl'))) {
+    files[file] = readFileSync(path.join(dir, file), 'utf8');
+  }
+  return parseSnapshot(files);
+}
+
+{
+  // known-valid: a coherent snapshot covering all 10 kinds, a flat kr, and a
+  // tombstone — must audit completely clean under the ruled schema.
+  const audit = auditSnapshot(loadFixtureDir('known-valid'));
+  assert.deepEqual(audit.findings, [], `known-valid must be clean, got: ${JSON.stringify(audit.findings, null, 2)}`);
+  const kinds = new Set();
+  for (const { records } of Object.values(loadFixtureDir('known-valid').files)) {
+    for (const record of records) kinds.add(record.block.kind);
+  }
+  for (const kind of ['decision', 'request', 'mission', 'task', 'log', 'learning', 'objective', 'kr', 'project', 'issue']) {
+    assert.ok(kinds.has(kind), `known-valid missing kind ${kind}`);
+  }
+}
+{
+  // known-drift: verbatim live census records — the audit must reproduce the
+  // census's violation classes (acceptance fixture set per contract SHOULD).
+  const audit = auditSnapshot(loadFixtureDir('known-drift'));
+  const driftCodes = new Set(audit.findings.map((finding) => finding.code));
+  for (const code of ['CORE-MISSING', 'REF-SHAPE', 'DUP-ID', 'REF-AMBIGUOUS', 'REF-DANGLING', 'RELATION-MISSING']) {
+    assert.ok(driftCodes.has(code), `known-drift must reproduce ${code}`);
+  }
+}
+
+console.log('validate cycle C (fixtures) tests passed');
