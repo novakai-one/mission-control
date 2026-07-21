@@ -4,7 +4,9 @@
 // panel; everything shared stays on MissionControl.
 import React, { useState } from 'react';
 import type { CanonicalEvent } from '../../../../../shared/provider/schema.js';
+import type { ThreadRecord } from '../../../../../shared/project/schema.js';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
+import { MISSION_ROOM_CONVERSATION_ID } from '../../../../lib/missionRoom/index.js';
 import type {
   Conversation,
   ConversationId,
@@ -12,6 +14,7 @@ import type {
   TunnelRoom,
 } from '../../../../lib/tunnelModel/index.js';
 import { PanelGlyph } from '../../../ui/index.js';
+import type { MissionConfidence } from '../index.js';
 import type { MissionHealthMeasure } from '../model.js';
 import { AgentRow, DirectMessageRow } from './agentRow.js';
 import './index.css';
@@ -165,12 +168,12 @@ export function MissionRail(props: MissionRailProps) {
           <button
             type="button"
             key={conversation.id}
-            className={conversation.id === props.selectedId ? 'mc-room mc-room-active' : 'mc-room'}
+            className={`${conversation.id === MISSION_ROOM_CONVERSATION_ID ? 'mc-room-pinned ' : ''}${conversation.id === props.selectedId ? 'mc-room mc-room-active' : 'mc-room'}`}
             onClick={() => props.onSelectConversation(conversation)}
           >
-            <span>#</span>
+            <span>{conversation.id === MISSION_ROOM_CONVERSATION_ID ? '◆' : '#'}</span>
             <strong>{conversation.title}</strong>
-            <small>{conversation.lastMessageAt ? 'Recent activity' : 'No messages yet'}</small>
+            <small>{conversation.id === MISSION_ROOM_CONVERSATION_ID ? 'Mission Room · snapshot' : conversation.lastMessageAt ? 'Recent activity' : 'No messages yet'}</small>
           </button>
         ))}
       </div>
@@ -191,6 +194,26 @@ export function MissionRail(props: MissionRailProps) {
         })}
       </div>
     </aside>
+  );
+}
+
+/** Live-mode hero (non-snapshot): thread kicker, title, facts, confidence. */
+export function MissionLiveHero(props: { thread: ThreadRecord | null; title: string; facts: string; confidence?: MissionConfidence | null }) {
+  return (
+    <header className="mc-mission-hero">
+      <div className="mc-mission-outcome">
+        <span className="mc-kicker">{props.thread ? 'Active mission' : 'Mission control'}</span>
+        <h1>{props.title}</h1>
+        {props.facts && <p>{props.facts}</p>}
+      </div>
+      {props.confidence && (
+        <div className="mc-confidence">
+          <strong>{props.confidence.score}</strong>
+          <span>{props.confidence.label}</span>
+          <small>{props.confidence.evidence}</small>
+        </div>
+      )}
+    </header>
   );
 }
 

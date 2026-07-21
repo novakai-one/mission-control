@@ -234,6 +234,11 @@
   color: var(--st-ink, #ececee);
 }
 
+/* The pinned Mission Room entry reads as a snapshot surface, not a chat room. */
+.mc-room-pinned > span {
+  color: var(--st-gold, #d0a14b);
+}
+
 .mc-room > span {
   grid-row: 1 / 3;
   color: var(--st-faint, #8b8b94);

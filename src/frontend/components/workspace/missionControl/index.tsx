@@ -27,15 +27,18 @@ import {
   useTunnelRooms,
   type Conversation,
   type ConversationId,
+  type TunnelEnvelope,
   type TunnelRoom,
 } from '../../../lib/tunnelModel/index.js';
 import { MessengerComposer, Transcript } from '../../studio/chat/tunnel/transcript/index.js';
+import { MISSION_ROOM_CONVERSATION_ID, MISSION_ROOM_V1_TARGET, useMissionSnapshot } from '../../../lib/missionRoom/index.js';
+import { MissionRoom, MissionRoomHero } from './room/index.js';
 import {
   attentionApproval,
   liveMissionAgents,
   missionHealth,
 } from './model.js';
-import { MissionEvidence, MissionHealthBar, MissionRail, MissionStageStrip } from './panels/index.js';
+import { MissionEvidence, MissionHealthBar, MissionLiveHero, MissionRail, MissionStageStrip } from './panels/index.js';
 import './index.css';
 
 export interface MissionConfidence {
@@ -63,6 +66,9 @@ const RIGHT_OPEN_KEY = 'novakai.mission.rightRailOpen';
 const LEFT_WIDTH_KEY = 'novakai.mission.leftRailWidth';
 const RIGHT_WIDTH_KEY = 'novakai.mission.rightRailWidth';
 
+/** Pinned read-only Mission Room entry, always first in the mission rooms list. */
+const MISSION_ROOM_ENTRY: Conversation = { id: MISSION_ROOM_CONVERSATION_ID, kind: 'room', title: 'Mission Room — Store Validator', members: [] };
+
 function restoredBoolean(storageKey: string, fallback: boolean): boolean {
   const stored = localStorage.getItem(storageKey);
   return stored === null ? fallback : stored !== 'false';
@@ -75,6 +81,20 @@ function restoredWidth(storageKey: string, fallback: number, minimum: number, ma
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+function liveMissionFacts(feed: TunnelEnvelope[], selected: Conversation | null, squad: AgentInfo[], running: number): string {
+  return [
+    selected ? `${messagesFor(feed, selected.id).length} messages` : null,
+    squad.length > 0 ? `${running} of ${squad.length} agents live` : null,
+  ].filter(Boolean).join(' · ');
+}
+
+/** Lane to select on first render: the remembered one when it still exists. */
+function restoredLane(conversations: Conversation[]): ConversationId | null {
+  const remembered = savedLane();
+  if (remembered === MISSION_ROOM_CONVERSATION_ID) return remembered;
+  return remembered && conversations.some((lane) => lane.id === remembered) ? remembered : null;
 }
 
 export function MissionControl(props: MissionControlProps) {
@@ -92,9 +112,13 @@ export function MissionControl(props: MissionControlProps) {
     () => buildConversations(feed, rooms, roster),
     [feed, rooms, roster],
   );
-  const missionRooms = conversations.filter((conversation) => conversation.kind !== 'dm');
+  const missionRooms = [MISSION_ROOM_ENTRY, ...conversations.filter((conversation) => conversation.kind !== 'dm')];
   const directMessages = conversations.filter((conversation) => conversation.kind === 'dm');
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
+  // S2 hard boundary: while the pinned room is selected the whole mission
+  // surface renders from the snapshot — no live squad, transcript, composer.
+  const snapshotMode = selectedId === MISSION_ROOM_CONVERSATION_ID;
+  const missionSnapshot = useMissionSnapshot(snapshotMode ? MISSION_ROOM_V1_TARGET : null);
   const liveNames = roster.map((entry) => entry.name);
   const targets = useMemo(
     () => buildTargets(props.agents, props.project?.threads ?? []),
@@ -103,25 +127,20 @@ export function MissionControl(props: MissionControlProps) {
   const cursors = useReadCursors();
   const messageAttention = useAttention();
   const question = useMemo(() => latestChrisQuestion(feed), [feed]);
-  const squad = liveMissionAgents(props.agents, props.project?.id, props.thread?.id);
+  const squad = snapshotMode ? [] : liveMissionAgents(props.agents, props.project?.id, props.thread?.id);
   const approval = attentionApproval(props.projection, props.attention);
   const health = missionHealth(props.projection, squad, props.usage ?? null);
   const running = squad.filter((agent) => agent.status === 'running').length;
   const title = props.thread?.title ?? props.project?.name ?? 'No mission selected';
-  const missionFacts = [
-    selected ? `${messagesFor(feed, selected.id).length} messages` : null,
-    squad.length > 0 ? `${running} of ${squad.length} agents live` : null,
-  ].filter(Boolean).join(' · ');
+  const missionFacts = liveMissionFacts(feed, selected, squad, running);
 
   useEffect(() => {
     if (selectedId || conversations.length === 0) return;
-    const remembered = savedLane();
-    const restored = remembered && conversations.find((lane) => lane.id === remembered);
-    setSelectedId(restored ? restored.id : conversations[0].id);
+    setSelectedId(restoredLane(conversations) ?? conversations[0].id);
   }, [selectedId, conversations]);
 
   useEffect(() => {
-    if (selectedId) loadConversation(selectedId);
+    if (selectedId && selectedId !== MISSION_ROOM_CONVERSATION_ID) loadConversation(selectedId);
   }, [selectedId, loadConversation]);
 
   useEffect(() => {
@@ -161,22 +180,16 @@ export function MissionControl(props: MissionControlProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 'to': recipient, delivery: 'normal', body }),
     });
-    if (!response.ok) {
-      const failure = await response.json().catch(() => null) as { error?: string } | null;
-      throw new Error(failure?.error ?? `HTTP ${response.status}`);
-    }
+    if (response.ok) return;
+    const failure = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(failure?.error ?? `HTTP ${response.status}`);
   }
 
-  function toggleLeft(): void {
-    setLeftOpen((open) => {
-      localStorage.setItem(LEFT_OPEN_KEY, String(!open));
-      return !open;
-    });
-  }
-
-  function toggleRight(): void {
-    setRightOpen((open) => {
-      localStorage.setItem(RIGHT_OPEN_KEY, String(!open));
+  function toggleRail(side: 'left' | 'right'): void {
+    const setOpen = side === 'left' ? setLeftOpen : setRightOpen;
+    const storageKey = side === 'left' ? LEFT_OPEN_KEY : RIGHT_OPEN_KEY;
+    setOpen((open) => {
+      localStorage.setItem(storageKey, String(!open));
       return !open;
     });
   }
@@ -206,9 +219,26 @@ export function MissionControl(props: MissionControlProps) {
     setDraggingRail(null);
   }
 
+  function railHandleProps(side: 'left' | 'right') {
+    return {
+      'data-dragging': draggingRail === side ? '' : undefined,
+      'role': 'separator' as const,
+      'aria-label': side === 'left' ? 'Resize mission rail' : 'Resize live squad rail',
+      'aria-orientation': 'vertical' as const,
+      'onPointerDown': (press: React.PointerEvent<HTMLDivElement>) => {
+        press.preventDefault();
+        press.currentTarget.setPointerCapture(press.pointerId);
+        setDraggingRail(side);
+      },
+      'onPointerMove': (move: React.PointerEvent<HTMLDivElement>) => resizeRail(side, move),
+      'onPointerUp': (release: React.PointerEvent<HTMLDivElement>) => finishResize(side, release),
+      'onPointerCancel': (release: React.PointerEvent<HTMLDivElement>) => finishResize(side, release),
+    };
+  }
+
   return (
     <section
-      className={`mc-mission${leftOpen ? '' : ' mc-left-closed'}${rightOpen ? '' : ' mc-right-closed'}`}
+      className={`mc-mission${leftOpen ? '' : ' mc-left-closed'}${rightOpen && !snapshotMode ? '' : ' mc-right-closed'}${snapshotMode ? ' mc-snapshot' : ''}`}
       aria-label="Mission control"
       // eslint-disable-next-line no-restricted-syntax -- pointer-driven rail widths are runtime CSS variables.
       style={{
@@ -223,104 +253,79 @@ export function MissionControl(props: MissionControlProps) {
         missionRooms={missionRooms}
         directMessages={directMessages}
         selectedId={selectedId}
-        onToggle={toggleLeft}
+        onToggle={() => toggleRail('left')}
         onSelectConversation={selectConversation}
         onSelectPerson={selectPerson}
         onRoomCreated={handleRoomCreated}
       />
 
       {leftOpen && (
-        <div
-          className="mc-resize-handle mc-resize-left"
-          data-dragging={draggingRail === 'left' ? '' : undefined}
-          role="separator"
-          aria-label="Resize mission rail"
-          aria-orientation="vertical"
-          onPointerDown={(press) => {
-            press.preventDefault();
-            press.currentTarget.setPointerCapture(press.pointerId);
-            setDraggingRail('left');
-          }}
-          onPointerMove={(move) => resizeRail('left', move)}
-          onPointerUp={(release) => finishResize('left', release)}
-          onPointerCancel={(release) => finishResize('left', release)}
-        />
+        <div className="mc-resize-handle mc-resize-left" {...railHandleProps('left')} />
       )}
 
       <main className="mc-mission-main">
-        <header className="mc-mission-hero">
-          <div className="mc-mission-outcome">
-            <span className="mc-kicker">{props.thread ? 'Active mission' : 'Mission control'}</span>
-            <h1>{title}</h1>
-            {missionFacts && <p>{missionFacts}</p>}
-          </div>
-          {props.confidence && (
-            <div className="mc-confidence">
-              <strong>{props.confidence.score}</strong>
-              <span>{props.confidence.label}</span>
-              <small>{props.confidence.evidence}</small>
-            </div>
-          )}
-        </header>
+        {snapshotMode ? (
+          <>
+            <MissionRoomHero snapshot={missionSnapshot.snapshot} />
+            <MissionRoom snapshot={missionSnapshot.snapshot} error={missionSnapshot.error} />
+          </>
+        ) : (
+          <>
+            <MissionLiveHero
+              thread={props.thread}
+              title={title}
+              facts={missionFacts}
+              confidence={props.confidence ?? null}
+            />
 
-        <MissionStageStrip />
+            <MissionStageStrip />
 
-        <section className="mc-panel mc-activity">
-          <header>
-            <div>
-              <span className="mc-kicker">Shared conversation</span>
-              <h2>{selected?.title ?? 'Select a conversation'}</h2>
-            </div>
-            {running > 0 && <span className="mc-live"><i /> Live</span>}
-          </header>
-          {selected ? (
-            <>
-              <Transcript
-                conversation={selected}
-                messages={messagesFor(feed, selected.id)}
-                liveNames={liveNames}
-                targets={targets}
-                onResolve={(itemId) => setDismissed((current) => new Set(current).add(itemId))}
-                onSeen={(createdAt) => advanceCursor(selected.id, createdAt)}
-              />
-              <MessengerComposer conversation={selected} onSend={send} />
-            </>
-          ) : (
-            <p className="mc-empty">Choose a mission room or direct message.</p>
-          )}
-        </section>
+            <section className="mc-panel mc-activity">
+              <header>
+                <div>
+                  <span className="mc-kicker">Shared conversation</span>
+                  <h2>{selected?.title ?? 'Select a conversation'}</h2>
+                </div>
+                {running > 0 && <span className="mc-live"><i /> Live</span>}
+              </header>
+              {selected ? (
+                <>
+                  <Transcript
+                    conversation={selected}
+                    messages={messagesFor(feed, selected.id)}
+                    liveNames={liveNames}
+                    targets={targets}
+                    onResolve={(itemId) => setDismissed((current) => new Set(current).add(itemId))}
+                    onSeen={(createdAt) => advanceCursor(selected.id, createdAt)}
+                  />
+                  <MessengerComposer conversation={selected} onSend={send} />
+                </>
+              ) : (
+                <p className="mc-empty">Choose a mission room or direct message.</p>
+              )}
+            </section>
 
-        <MissionHealthBar health={health} />
+            <MissionHealthBar health={health} />
+          </>
+        )}
       </main>
 
-      {rightOpen && (
-        <div
-          className="mc-resize-handle mc-resize-right"
-          data-dragging={draggingRail === 'right' ? '' : undefined}
-          role="separator"
-          aria-label="Resize live squad rail"
-          aria-orientation="vertical"
-          onPointerDown={(press) => {
-            press.preventDefault();
-            press.currentTarget.setPointerCapture(press.pointerId);
-            setDraggingRail('right');
-          }}
-          onPointerMove={(move) => resizeRail('right', move)}
-          onPointerUp={(release) => finishResize('right', release)}
-          onPointerCancel={(release) => finishResize('right', release)}
-        />
+      {rightOpen && !snapshotMode && (
+        <div className="mc-resize-handle mc-resize-right" {...railHandleProps('right')} />
       )}
 
-      <MissionEvidence
-        open={rightOpen}
-        squad={squad}
-        running={running}
-        selectedAgentId={props.selectedAgentId}
-        approval={approval}
-        onToggle={toggleRight}
-        onSelectPerson={selectPerson}
-        onReviewAttention={props.onReviewAttention}
-      />
+      {!snapshotMode && (
+        <MissionEvidence
+          open={rightOpen}
+          squad={squad}
+          running={running}
+          selectedAgentId={props.selectedAgentId}
+          approval={approval}
+          onToggle={() => toggleRail('right')}
+          onSelectPerson={selectPerson}
+          onReviewAttention={props.onReviewAttention}
+        />
+      )}
     </section>
   );
 }
