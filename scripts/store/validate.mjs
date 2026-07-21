@@ -234,3 +234,94 @@ export function validateBlock(block, { storeFile, index = new Map() }) {
 
   return violations;
 }
+
+/**
+ * Pure write seam: validate one raw JSON line as a candidate append.
+ * M1 candidate isolation — only the candidate's own violations, an id collision
+ * with ANY existing id, and candidate refs into missing/ambiguous targets block;
+ * pre-existing drift elsewhere in the snapshot never does.
+ * @returns {{violations: Violation[], block?: object}}
+ */
+export function validateCandidate(rawLine, { storeFile, snapshot }) {
+  if (/[\r\n]/.test(rawLine)) {
+    return {
+      violations: [{
+        code: 'LINE-BOUNDARY',
+        message: 'a candidate must be exactly one line — embedded newlines are rejected',
+        storeFile,
+      }],
+    };
+  }
+  let block;
+  try {
+    block = JSON.parse(rawLine);
+  } catch (error) {
+    return { violations: [{ code: 'PARSE', message: `invalid JSON: ${error.message}`, storeFile }] };
+  }
+  if (block === null || typeof block !== 'object' || Array.isArray(block)) {
+    return { violations: [{ code: 'PARSE', message: 'candidate is not a single JSON object', storeFile }] };
+  }
+  const index = buildIndex(snapshot);
+  const violations = validateBlock(block, { storeFile, index });
+  if (typeof block.id === 'string' && index.has(block.id)) {
+    violations.push({
+      code: 'DUP-ID',
+      message: `id "${block.id}" already exists in ${index.get(block.id).map((occurrence) => occurrence.storeFile).join(', ')}`,
+      storeFile,
+      recordId: block.id,
+    });
+  }
+  return { violations, block };
+}
+
+const SHAPE_ONLY_STATUS_KINDS = Object.freeze(
+  Object.entries(KIND_RULES).filter(([, rules]) => rules.statusSet === null).map(([kind]) => kind),
+);
+
+/**
+ * Audit a full snapshot: every parse-level violation plus every per-record
+ * violation, each finding carrying store / record id / line. Duplicate ids are
+ * reported on every occurrence after the first. Status census for shape-only
+ * kinds is info (Chief ruling 5), never a violation.
+ * @returns {{findings: Violation[], countsByStore: object, countsByCode: object, statusCensus: object}}
+ */
+export function auditSnapshot(snapshot) {
+  const findings = [];
+  const statusCensus = {};
+  const index = buildIndex(snapshot);
+  for (const [storeFile, { records, violations }] of Object.entries(snapshot.files)) {
+    findings.push(...violations);
+    for (const record of records) {
+      const recordFindings = validateBlock(record.block, { storeFile, index })
+        .map((violation) => ({ ...violation, line: record.line }));
+      findings.push(...recordFindings);
+      const id = record.block.id;
+      if (typeof id === 'string' && index.get(id)?.[0] !== undefined) {
+        const occurrences = index.get(id);
+        const isFirstOccurrence = occurrences[0].storeFile === storeFile && occurrences[0].line === record.line;
+        if (occurrences.length > 1 && !isFirstOccurrence) {
+          findings.push({
+            code: 'DUP-ID',
+            message: `id "${id}" occurs ${occurrences.length} times (first at ${occurrences[0].storeFile}:${occurrences[0].line})`,
+            storeFile,
+            recordId: id,
+            line: record.line,
+          });
+        }
+      }
+      const kind = record.block.kind;
+      if (SHAPE_ONLY_STATUS_KINDS.includes(kind)) {
+        statusCensus[kind] = statusCensus[kind] ?? {};
+        const status = typeof record.block.status === 'string' ? record.block.status : '(none)';
+        statusCensus[kind][status] = (statusCensus[kind][status] ?? 0) + 1;
+      }
+    }
+  }
+  const countsByStore = {};
+  const countsByCode = {};
+  for (const finding of findings) {
+    countsByStore[finding.storeFile] = (countsByStore[finding.storeFile] ?? 0) + 1;
+    countsByCode[finding.code] = (countsByCode[finding.code] ?? 0) + 1;
+  }
+  return { findings, countsByStore, countsByCode, statusCensus };
+}

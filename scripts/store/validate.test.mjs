@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseSnapshot, buildIndex, validateBlock } from './validate.mjs';
+import { parseSnapshot, buildIndex, validateBlock, validateCandidate, auditSnapshot } from './validate.mjs';
 
 // --- helpers -----------------------------------------------------------------
 
@@ -161,3 +161,159 @@ function validateIn(block, extraBlocks = []) {
 }
 
 console.log('validate cycle A tests passed');
+
+// =============================================================================
+// Cycle B — index/duplicates, refs, relations, candidate seam, audit
+// =============================================================================
+
+// --- index keeps ALL occurrences ---------------------------------------------
+
+{
+  const duplicate = { ...VALID.log, id: 'log_2026-07-21-900' }; // same id as VALID.log
+  const snapshot = snapshotOf([...Object.values(VALID), duplicate]);
+  const index = buildIndex(snapshot);
+  assert.equal(index.get('log_2026-07-21-900').length, 2);
+}
+
+// --- generic refs ------------------------------------------------------------
+
+{
+  // valid resolvable ref passes; doc/exp are declared-unchecked and pass unresolved
+  const ok = validateIn({
+    ...VALID.task, id: 'task_refs-a',
+    refs: [
+      { kind: 'mission', value: 'mission_probe', label: 'parent' },
+      { kind: 'doc', value: 'docs/nowhere.md' },
+      { kind: 'exp', value: 'EXP-2026-01-01-ghost' },
+    ],
+  });
+  assert.deepEqual(ok, []);
+}
+{
+  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_refs-b', refs: 'not-an-array' })), ['REF-SHAPE']);
+  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_refs-c', refs: [{ kind: 'wombat', value: 'x' }] })), ['REF-SHAPE']);
+  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_refs-d', refs: [{ kind: 'task', value: '' }] })), ['REF-SHAPE']);
+  // full proj_* mandated for project refs — a resolvable non-proj value is shape-invalid
+  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_refs-e', refs: [{ kind: 'project', value: 'novakai-command' }] })), ['REF-SHAPE']);
+  // dangling + wrong-kind
+  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_refs-f', refs: [{ kind: 'mission', value: 'mission_ghost' }] })), ['REF-DANGLING']);
+  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_refs-g', refs: [{ kind: 'task', value: 'mission_probe' }] })), ['REF-WRONG-KIND']);
+}
+{
+  // ref to a DUPLICATED id must reject as ambiguous — the index never swallows occurrences
+  const duplicate = { ...VALID.mission, id: 'mission_probe' };
+  const violations = validateIn(
+    { ...VALID.task, id: 'task_refs-h', refs: [{ kind: 'mission', value: 'mission_probe' }] },
+    [duplicate],
+  );
+  assert.deepEqual(codes(violations), ['REF-AMBIGUOUS']);
+}
+
+// --- learning evidence -------------------------------------------------------
+
+{
+  assert.deepEqual(codes(validateIn({ ...VALID.learning, id: 'learning_ev-a', evidence: [] })), ['RELATION-MISSING']);
+  const { evidence, ...rest } = { ...VALID.learning, id: 'learning_ev-b' };
+  assert.deepEqual(codes(validateIn(rest)), ['RELATION-MISSING']);
+  // doc-only evidence: shape-fine but no log|mission anchor → RELATION-MISSING
+  assert.deepEqual(
+    codes(validateIn({ ...VALID.learning, id: 'learning_ev-c', evidence: [{ kind: 'doc', value: 'docs/x.md' }] })),
+    ['RELATION-MISSING'],
+  );
+  // doc alongside a log anchor is fine (live learnings do this)
+  assert.deepEqual(
+    validateIn({
+      ...VALID.learning, id: 'learning_ev-d',
+      evidence: [{ kind: 'log', value: 'log_2026-07-21-900' }, { kind: 'doc', value: 'docs/x.md' }],
+    }),
+    [],
+  );
+  assert.deepEqual(
+    codes(validateIn({ ...VALID.learning, id: 'learning_ev-e', evidence: [{ kind: 'log', value: 'log_ghost' }] })),
+    ['REF-DANGLING'],
+  );
+}
+
+// --- kr.objective + answered request → decision ------------------------------
+
+{
+  assert.deepEqual(codes(validateIn({ ...VALID.kr, id: 'kr_rel_a', objective: 'okr_ghost' })), ['REF-DANGLING']);
+  assert.deepEqual(codes(validateIn({ ...VALID.kr, id: 'kr_rel_b', objective: 'mission_probe' })), ['REF-WRONG-KIND']);
+  const { objective, ...krRest } = { ...VALID.kr, id: 'kr_rel_c' };
+  assert.deepEqual(codes(validateIn(krRest)), ['FIELD-MISSING']);
+  // answered without decision → RELATION-MISSING; with dangling decision → REF-DANGLING
+  assert.deepEqual(
+    codes(validateIn({ ...VALID.request, id: 'request_rel-a', status: 'answered' })),
+    ['RELATION-MISSING'],
+  );
+  assert.deepEqual(
+    codes(validateIn({ ...VALID.request, id: 'request_rel-b', status: 'answered', decision: 'DEC-2026-07-21-999' })),
+    ['REF-DANGLING'],
+  );
+}
+
+// --- nested KRs --------------------------------------------------------------
+
+{
+  const nested = { ...VALID.objective, id: 'okr_nested', krs: [{ kind: 'kr', id: 'kr_nested_1' }] };
+  assert.deepEqual(codes(validateIn(nested)), ['KR-SHAPE']);
+}
+
+// --- validateCandidate (pure write seam) -------------------------------------
+
+{
+  const snapshot = snapshotOf(Object.values(VALID));
+  const raw = JSON.stringify({ ...VALID.task, id: 'task_cand-a' });
+  const result = validateCandidate(raw, { storeFile: 'tasks.jsonl', snapshot });
+  assert.deepEqual(result.violations, []);
+  assert.equal(result.block.id, 'task_cand-a');
+}
+{
+  const snapshot = snapshotOf(Object.values(VALID));
+  // embedded newline → LINE-BOUNDARY at the seam
+  const twoLines = JSON.stringify({ ...VALID.task, id: 'task_cand-b' }) + '\n' + JSON.stringify({ ...VALID.task, id: 'task_cand-c' });
+  assert.deepEqual(codes(validateCandidate(twoLines, { storeFile: 'tasks.jsonl', snapshot }).violations), ['LINE-BOUNDARY']);
+  // non-object / broken JSON → PARSE at the seam
+  assert.deepEqual(codes(validateCandidate('{broken', { storeFile: 'tasks.jsonl', snapshot }).violations), ['PARSE']);
+  assert.deepEqual(codes(validateCandidate('[1,2]', { storeFile: 'tasks.jsonl', snapshot }).violations), ['PARSE']);
+  // duplicate id vs ANY existing id → DUP-ID
+  const dupRaw = JSON.stringify({ ...VALID.task, id: 'task_probe' });
+  assert.deepEqual(codes(validateCandidate(dupRaw, { storeFile: 'tasks.jsonl', snapshot }).violations), ['DUP-ID']);
+}
+{
+  // M1 candidate isolation: existing drift does NOT block an unrelated clean candidate
+  const drifted = { id: 'task_drift', kind: 'task', title: 'no ts' }; // CORE-MISSING drift in store
+  const snapshot = snapshotOf([...Object.values(VALID), drifted]);
+  const clean = JSON.stringify({ ...VALID.issue, id: 'issue_cand-clean' });
+  assert.deepEqual(validateCandidate(clean, { storeFile: 'issues.jsonl', snapshot }).violations, []);
+  // ...but a candidate REF into duplicated ids still blocks (tested above via REF-AMBIGUOUS)
+}
+
+// --- auditSnapshot -----------------------------------------------------------
+
+{
+  const duplicate = { ...VALID.log, id: 'log_2026-07-21-900' };
+  const drifted = { id: 'task_drift', kind: 'task', title: 'no ts' };
+  const snapshot = snapshotOf([...Object.values(VALID), duplicate, drifted]);
+  const audit = auditSnapshot(snapshot);
+  const auditCodes = audit.findings.map((finding) => finding.code);
+  assert.ok(auditCodes.includes('DUP-ID'), 'duplicate id reported');
+  assert.ok(auditCodes.includes('CORE-MISSING'), 'drifted record reported');
+  // findings carry store + record id (or line) for per-record reporting
+  const dupFinding = audit.findings.find((finding) => finding.code === 'DUP-ID');
+  assert.equal(dupFinding.storeFile, 'captains-log.jsonl');
+  assert.equal(dupFinding.recordId, 'log_2026-07-21-900');
+  assert.ok(dupFinding.line > 0);
+  // counts aggregate per store and per code
+  assert.ok(audit.countsByCode['DUP-ID'] >= 1);
+  assert.ok(audit.countsByStore['tasks.jsonl'] >= 1);
+  // Q5 ruling: status census for shape-only kinds reported as info, not violations
+  assert.equal(audit.statusCensus.mission.undefined ?? audit.statusCensus.mission['(none)'], 1);
+}
+{
+  // clean snapshot audits clean
+  const audit = auditSnapshot(snapshotOf(Object.values(VALID)));
+  assert.deepEqual(audit.findings, []);
+}
+
+console.log('validate cycle B tests passed');
