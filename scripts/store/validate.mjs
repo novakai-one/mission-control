@@ -274,6 +274,32 @@ export function validateCandidate(rawLine, { storeFile, snapshot }) {
   return { violations, block };
 }
 
+/**
+ * M6 seed: pure validation of a proposed in-place replacement (state
+ * transition). No shell in this mission performs replacements — this exists so
+ * a future replacement writer can enforce legality without inventing rules.
+ * @returns {Violation[]}
+ */
+export function validateTransition(currentBlock, candidateBlock) {
+  const violations = [];
+  const storeFile = '(transition)';
+  const addViolation = (code, message) => violations.push({ code, message, storeFile, recordId: currentBlock.id });
+  if (candidateBlock.id !== currentBlock.id) addViolation('TRANSITION-INVALID', 'a transition may never change "id"');
+  if (candidateBlock.kind !== currentBlock.kind) addViolation('TRANSITION-INVALID', 'a transition may never change "kind"');
+  const rules = KIND_RULES[currentBlock.kind];
+  if (rules?.statusSet && candidateBlock.status !== undefined
+    && candidateBlock.status !== TOMBSTONE_STATUS
+    && !rules.statusSet.includes(candidateBlock.status)) {
+    addViolation('STATUS-UNKNOWN', `status "${candidateBlock.status}" not in the documented set for kind "${currentBlock.kind}"`);
+  }
+  if (typeof candidateBlock.updated !== 'string' || !TS_PATTERN.test(candidateBlock.updated)) {
+    addViolation('TRANSITION-INVALID', '"updated" must be present (ISO-8601 with offset) on a transition (AGENTS.md: keep updated current)');
+  } else if (typeof currentBlock.updated === 'string' && candidateBlock.updated < currentBlock.updated) {
+    addViolation('TRANSITION-INVALID', `"updated" may not move backwards (${candidateBlock.updated} < ${currentBlock.updated})`);
+  }
+  return violations;
+}
+
 const SHAPE_ONLY_STATUS_KINDS = Object.freeze(
   Object.entries(KIND_RULES).filter(([, rules]) => rules.statusSet === null).map(([kind]) => kind),
 );

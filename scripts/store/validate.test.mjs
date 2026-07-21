@@ -354,10 +354,40 @@ function loadFixtureDir(name) {
   // known-drift: verbatim live census records — the audit must reproduce the
   // census's violation classes (acceptance fixture set per contract SHOULD).
   const audit = auditSnapshot(loadFixtureDir('known-drift'));
+  // Ruling 6 legitimized production's session/objective/request/issue refs, so
+  // REF-SHAPE (like ID-FORMAT) is no longer a live drift class — seam rejection
+  // of malformed refs stays covered by the write-seam tests.
   const driftCodes = new Set(audit.findings.map((finding) => finding.code));
-  for (const code of ['CORE-MISSING', 'REF-SHAPE', 'DUP-ID', 'REF-AMBIGUOUS', 'REF-DANGLING', 'RELATION-MISSING']) {
+  for (const code of ['CORE-MISSING', 'DUP-ID', 'REF-AMBIGUOUS', 'REF-DANGLING', 'RELATION-MISSING']) {
     assert.ok(driftCodes.has(code), `known-drift must reproduce ${code}`);
   }
 }
 
 console.log('validate cycle C (fixtures) tests passed');
+
+// =============================================================================
+// Cycle D — validateTransition (M6: pure seed for future replacement writers;
+// no file-rewriting shell exists in this mission)
+// =============================================================================
+
+import { validateTransition } from './validate.mjs';
+
+{
+  const current = { ...VALID.task, id: 'task_tr', status: 'todo', updated: '2026-07-21T10:00:00+10:00' };
+  const done = { ...current, status: 'done', updated: '2026-07-21T14:00:00+10:00' };
+  assert.deepEqual(validateTransition(current, done), []);
+  // tombstoning an existing record is a legal transition
+  const tombstone = { id: 'task_tr', kind: 'task', ts: TS, status: 'refiled', refiledTo: 'mission_probe', updated: '2026-07-21T14:00:00+10:00' };
+  assert.deepEqual(validateTransition(current, tombstone), []);
+  // id or kind may never change
+  assert.deepEqual(codes(validateTransition(current, { ...done, id: 'task_other' })), ['TRANSITION-INVALID']);
+  assert.deepEqual(codes(validateTransition(current, { ...done, kind: 'mission' })), ['TRANSITION-INVALID']);
+  // status outside the kind's set rejects
+  assert.deepEqual(codes(validateTransition(current, { ...done, status: 'doing' })), ['STATUS-UNKNOWN']);
+  // updated must be present and must not move backwards
+  const { updated, ...noUpdated } = done;
+  assert.deepEqual(codes(validateTransition(current, noUpdated)), ['TRANSITION-INVALID']);
+  assert.deepEqual(codes(validateTransition(current, { ...done, updated: '2026-07-21T09:00:00+10:00' })), ['TRANSITION-INVALID']);
+}
+
+console.log('validate cycle D (transition) tests passed');

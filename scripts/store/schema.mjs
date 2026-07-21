@@ -16,10 +16,11 @@ export const STORE_KINDS = Object.freeze({
   'issues.jsonl': Object.freeze(['issue']),
 });
 
-export const REF_KINDS = Object.freeze(['task', 'mission', 'project', 'doc', 'decision', 'log', 'exp']);
+// Ruling 6 (Chief, 2026-07-21): REF_KINDS = task|mission|project|doc|decision|log|exp|objective|request|issue|session
+export const REF_KINDS = Object.freeze(['task', 'mission', 'project', 'doc', 'decision', 'log', 'exp', 'objective', 'request', 'issue', 'session']);
 
-/** Ref kinds whose targets live in these stores; doc/exp are declared-unchecked. */
-export const RESOLVABLE_REF_KINDS = Object.freeze(['task', 'mission', 'project', 'decision', 'log']);
+/** Ref kinds whose targets live in these stores; doc/exp/session are declared-unchecked. */
+export const RESOLVABLE_REF_KINDS = Object.freeze(['task', 'mission', 'project', 'decision', 'log', 'objective', 'request', 'issue']);
 
 const SLUG = '[A-Za-z0-9][A-Za-z0-9_.-]*';
 
