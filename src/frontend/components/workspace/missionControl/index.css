@@ -29,6 +29,16 @@
   grid-template-columns: 32px minmax(0, 1fr) 32px;
 }
 
+/* Snapshot mode (pinned Mission Room): the right rail is not rendered, so its
+ * grid column collapses to zero instead of the rail width / reopen strip. */
+.mc-mission.mc-snapshot {
+  grid-template-columns: var(--mc-left-width, 224px) minmax(0, 1fr) 0;
+}
+
+.mc-mission.mc-left-closed.mc-snapshot {
+  grid-template-columns: 32px minmax(0, 1fr) 0;
+}
+
 .mc-mission button {
   color: inherit;
   font: inherit;

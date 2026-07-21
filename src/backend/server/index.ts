@@ -20,6 +20,7 @@ import { CanvasHub } from './canvas/index.js';
 import { AnalyticsHub } from './analytics/index.js';
 import { DesignHub } from './design/index.js';
 import { MailboxRegistry, MessagingHub } from '../messaging/index.js';
+import { MissionViewHub } from '../missionView/index.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
@@ -76,6 +77,7 @@ export class ServerController {
   private readonly analyticsHub: AnalyticsHub;
   private readonly designHub: DesignHub;
   private readonly messagingHub: MessagingHub;
+  private readonly missionViewHub: MissionViewHub;
   private readonly mailboxRegistry: MailboxRegistry;
 
   constructor(
@@ -89,7 +91,7 @@ export class ServerController {
     this.agentsHub = this.buildAgentsHub(terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
-    this.messagingHub = this.buildMessagingHub();
+    this.messagingHub = this.buildMessagingHub(); this.missionViewHub = this.buildMissionViewHub();
     this.server = createServer(this.app);
     this.wsServer = new WebSocketServer({ server: this.server });
     this.createAppListener();
@@ -134,6 +136,21 @@ export class ServerController {
     );
     this.agentsHub.onLaunch((info) => messagingHub.handleAgentSpawned(info));
     return messagingHub;
+  }
+
+  /**
+   * Mission Room V1 (mission_mission-room-v1): read-only snapshot hub. Roots
+   * are resolved explicitly here — env overrides for the dev-lane worktree,
+   * repo-relative paths for the Live lane — never inside the module (S1).
+   */
+  private buildMissionViewHub(): MissionViewHub {
+    return new MissionViewHub({
+      storesDir: process.env.NVK_MISSION_STORES_DIR ?? path.resolve('.novakai/stores'),
+      workDir: process.env.NVK_MISSION_WORK_DIR ?? path.resolve('.novakai/work'),
+      journalPath: process.env.NVK_MISSION_JOURNAL ?? path.resolve('.novakai-command/messages.jsonl'),
+      registryPath: process.env.NVK_MISSION_REGISTRY ?? path.resolve('.novakai-command/agents.json'),
+      roomsPath: process.env.NVK_MISSION_ROOMS ?? path.resolve('.novakai-command/rooms.jsonl'),
+    });
   }
 
   private configureExpress(): void {
@@ -227,6 +244,7 @@ export class ServerController {
     this.analyticsHub.registerRoutes(this.app);
     this.designHub.registerRoutes(this.app);
     this.messagingHub.registerRoutes(this.app);
+    this.missionViewHub.registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {
       res.json(ConfigManager.load());
