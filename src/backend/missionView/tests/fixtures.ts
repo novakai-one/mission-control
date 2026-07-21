@@ -29,6 +29,7 @@ export function makeRig(): Rig {
     workDir: path.join(root, 'work'),
     journalPath: path.join(root, 'journal', 'messages.jsonl'),
     registryPath: path.join(root, 'registry', 'agents.json'),
+    roomsPath: path.join(root, 'rooms', 'rooms.jsonl'),
   };
   mkdirSync(roots.storesDir, { recursive: true });
   mkdirSync(roots.workDir, { recursive: true });
@@ -103,6 +104,18 @@ export function envelopeLine(envelopeId: string, body: string, threadId?: string
     + `"createdAt":"2026-07-21T11:30:00+10:00","status":"delivered"${thread}}`;
 }
 
+/** Write the room store from raw JSONL lines. */
+export function writeRooms(env: Rig, lines: string[]): void {
+  mkdirSync(path.dirname(env.roots.roomsPath), { recursive: true });
+  writeFileSync(env.roots.roomsPath, lines.map((line) => `${line}\n`).join(''));
+}
+
+/** A room record line; optional typed refs appended verbatim (C1 resolution). */
+export function roomLine(roomId: string, name: string, extra = ''): string {
+  return `{"roomId":"${roomId}","name":"${name}","members":["agent-a"],`
+    + `"createdBy":"agent-a","createdAt":"2026-07-21T11:45:00.000Z","archived":false${extra}}`;
+}
+
 /** A minimal registry entry object (AgentInfo-shaped). */
 export function agentEntry(agentId: string, archived = false, projectId?: string): Record<string, unknown> {
   return {
@@ -110,4 +123,9 @@ export function agentEntry(agentId: string, archived = false, projectId?: string
     projectDir: '/tmp/proj', cwd: '/tmp/proj', status: 'running',
     createdAt: '2026-07-21T00:00:00.000Z', archived, projectId,
   };
+}
+
+/** A registry entry with a typed mission binding (the only honest presence path, C2). */
+export function missionBoundEntry(agentId: string, missionId: string): Record<string, unknown> {
+  return { ...agentEntry(agentId), missionId };
 }

@@ -27,7 +27,7 @@ import type { Rig } from './tests/fixtures.js';
 
 function testRootsRefused(): void {
   assert.throws(() => new MissionViewHub(undefined as unknown as MissionViewRoots), /explicit roots/);
-  const relative = { storesDir: 'rel', workDir: '/abs/work', journalPath: '/abs/j', registryPath: '/abs/r' };
+  const relative = { storesDir: 'rel', workDir: '/abs/work', journalPath: '/abs/j', registryPath: '/abs/r', roomsPath: '/abs/ro' };
   assert.throws(() => new MissionViewHub(relative), /absolute path/, 'no cwd-relative defaults inside the module (S1)');
   const missing = { storesDir: '/abs/s' } as MissionViewRoots;
   assert.throws(() => new MissionViewHub(missing), /absolute path/);

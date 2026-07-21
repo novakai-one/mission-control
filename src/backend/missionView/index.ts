@@ -15,7 +15,7 @@ import { resolveLinkage } from './linkage/index.js';
 import type { AmbiguousCandidate, MissionLinkage } from './linkage/index.js';
 import { deriveSnapshot } from './snapshot/index.js';
 import type { MissionFacts } from './snapshot/index.js';
-import { isSafeMissionId, readJournal, readPacket, readRegistry, readStores } from './sources/index.js';
+import { isSafeMissionId, readJournal, readPacket, readRegistry, readRooms, readStores } from './sources/index.js';
 import type { MissionViewRoots } from './sources/index.js';
 
 export type { MissionViewRoots } from './sources/index.js';
@@ -65,6 +65,7 @@ export class MissionViewHub {
   private collectFacts(missionId: string, linkage: MissionLinkage, storeProblems: string[]): MissionFacts {
     const journal = readJournal(this.roots.journalPath);
     const registry = readRegistry(this.roots.registryPath);
+    const rooms = readRooms(this.roots.roomsPath);
     const packet = readPacket(this.roots.workDir, missionId);
     return {
       missionId,
@@ -74,8 +75,10 @@ export class MissionViewHub {
       registry: registry.entries,
       registryPath: this.roots.registryPath,
       registryObservedAt: registry.observedAt,
+      rooms: rooms.rooms,
+      roomsPath: this.roots.roomsPath,
       packet: packet.files,
-      readProblems: [...storeProblems, ...journal.problems, ...registry.problems, ...packet.problems],
+      readProblems: [...storeProblems, ...journal.problems, ...registry.problems, ...rooms.problems, ...packet.problems],
       asOf: new Date().toISOString(),
     };
   }
@@ -112,7 +115,7 @@ export class MissionViewHub {
 /** Roots are mandatory and absolute — construction is refused otherwise (S1). */
 function assertRoots(roots: MissionViewRoots): MissionViewRoots {
   if (!roots) throw new Error('MissionViewHub requires explicit roots (S1)');
-  const required: Array<keyof MissionViewRoots> = ['storesDir', 'workDir', 'journalPath', 'registryPath'];
+  const required: Array<keyof MissionViewRoots> = ['storesDir', 'workDir', 'journalPath', 'registryPath', 'roomsPath'];
   for (const rootKey of required) {
     const value = roots[rootKey];
     if (typeof value !== 'string' || !path.isAbsolute(value)) {

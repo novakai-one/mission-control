@@ -3,16 +3,18 @@
 import assert from 'node:assert/strict';
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
-import { isSafeMissionId, readJournal, readPacket, readRegistry, readStores } from './index.js';
+import { isSafeMissionId, readJournal, readPacket, readRegistry, readRooms, readStores } from './index.js';
 import {
   agentEntry,
   envelopeLine,
   missionLine,
+  roomLine,
   taskLine,
   withRig,
   writeJournal,
   writePacketFile,
   writeRegistry,
+  writeRooms,
   writeStore,
 } from '../tests/fixtures.js';
 import type { Rig } from '../tests/fixtures.js';
@@ -95,6 +97,24 @@ function testPacket(env: Rig): void {
   assert.ok(isSafeMissionId('mission_a'));
 }
 
+function testRooms(env: Rig): void {
+  const missing = readRooms(env.roots.roomsPath);
+  assert.deepEqual(missing.rooms, []);
+  assert.ok(missing.problems[0].includes('rooms store missing'));
+  writeRooms(env, [
+    roomLine('room_a', 'alpha'),
+    roomLine('room_a', 'alpha amended'),
+    '{"roomId":"room_b","name":"bravo","members":[],"createdBy":"agent-a","createdAt":"2026-07-21T11:45:00.000Z","archived":true}',
+    roomLine('room_c', 'charlie'),
+    '{corrupt',
+  ]);
+  // room_b archived via an amended copy: last line wins, then archived filtered.
+  const result = readRooms(env.roots.roomsPath);
+  assert.equal(result.rooms.length, 2, 'folded by roomId (last wins), archived excluded');
+  assert.equal(result.rooms[0].block.name, 'alpha amended');
+  assert.ok(result.problems.some((problem) => problem.includes('corrupt line')), 'corrupt line is a visible problem');
+}
+
 async function main(): Promise<void> {
   await withRig(testStoresRead);
   await withRig(testBracketRetry);
@@ -102,6 +122,7 @@ async function main(): Promise<void> {
   await withRig(testJournal);
   await withRig(testEmptyJournal);
   await withRig(testRegistry);
+  await withRig(testRooms);
   await withRig(testPacket);
   console.log('PASS');
 }

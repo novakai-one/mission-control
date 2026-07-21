@@ -17,6 +17,7 @@ export interface MissionViewRoots {
   workDir: string;
   journalPath: string;
   registryPath: string;
+  roomsPath: string;
 }
 
 /** The six .novakai stores the snapshot joins over. */
@@ -36,8 +37,16 @@ export interface StoresRead {
   problems: string[];
 }
 
-/** A registry entry — AgentInfo plus the registry-only archived flag. */
-export type RegistryEntry = AgentInfo & { archived?: boolean };
+/** A registry entry — AgentInfo plus registry-only flags and a future typed mission binding. */
+export type RegistryEntry = AgentInfo & { archived?: boolean; missionId?: string };
+
+/** One parsed room record with its provenance; folded by roomId, last line wins. */
+export interface RoomRecord {
+  roomId: string;
+  path: string;
+  line: number;
+  block: Record<string, unknown>;
+}
 
 /** Result of reading the live agent registry. */
 export interface RegistryRead {
@@ -148,6 +157,28 @@ function parseStoreLine(entry: string): Record<string, unknown> | null {
 export function readJournal(journalPath: string): { envelopes: MessageEnvelope[]; problems: string[] } {
   if (!existsSync(journalPath)) return { envelopes: [], problems: [`journal missing: ${journalPath}`] };
   return { envelopes: new MessageStore(journalPath).history(), problems: [] };
+}
+
+/**
+ * Read-only room store read (C1): JSONL, corrupt lines tolerated, folded by
+ * roomId with last line winning — room amendments append copies, exactly like
+ * journal status transitions. Archived rooms are excluded from the fold.
+ */
+export function readRooms(roomsPath: string): { rooms: RoomRecord[]; problems: string[] } {
+  if (!existsSync(roomsPath)) return { rooms: [], problems: [`rooms store missing: ${roomsPath}`] };
+  const problems: string[] = [];
+  const folded = new Map<string, RoomRecord>();
+  readFileSync(roomsPath, 'utf8').split('\n').forEach((entry, index) => {
+    if (entry.trim() === '') return;
+    const parsed = parseStoreLine(entry);
+    if (parsed === null || typeof parsed.roomId !== 'string') {
+      problems.push(`corrupt line skipped: rooms.jsonl:${index + 1}`);
+      return;
+    }
+    folded.set(parsed.roomId as string, { roomId: parsed.roomId as string, path: roomsPath, line: index + 1, block: parsed });
+  });
+  const rooms = [...folded.values()].filter((room) => room.block.archived !== true);
+  return { rooms, problems };
 }
 
 /** Live registry read: archived entries filtered, observedAt = file mtime (L2). */

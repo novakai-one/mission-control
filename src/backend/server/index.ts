@@ -149,6 +149,7 @@ export class ServerController {
       workDir: process.env.NVK_MISSION_WORK_DIR ?? path.resolve('.novakai/work'),
       journalPath: process.env.NVK_MISSION_JOURNAL ?? path.resolve('.novakai-command/messages.jsonl'),
       registryPath: process.env.NVK_MISSION_REGISTRY ?? path.resolve('.novakai-command/agents.json'),
+      roomsPath: process.env.NVK_MISSION_ROOMS ?? path.resolve('.novakai-command/rooms.jsonl'),
     });
   }
 

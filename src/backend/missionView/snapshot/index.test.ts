@@ -5,10 +5,10 @@ import { deriveSnapshot } from './index.js';
 import type { MissionFacts } from './index.js';
 import { resolveLinkage } from '../linkage/index.js';
 import type { MissionLinkage } from '../linkage/index.js';
-import type { PacketFile, RawRecord, RegistryEntry, StoreName } from '../sources/index.js';
+import type { PacketFile, RawRecord, RegistryEntry, RoomRecord, StoreName } from '../sources/index.js';
 import type { MessageEnvelope } from '../../messaging/types.js';
 import type { MissionSnapshot } from '../../../shared/missionView/schema.js';
-import { agentEntry, envelopeLine, issueLine, logLine, missionLine, okrLine, requestLine, taskLine } from '../tests/fixtures.js';
+import { agentEntry, envelopeLine, issueLine, logLine, missionBoundEntry, missionLine, okrLine, requestLine, roomLine, taskLine } from '../tests/fixtures.js';
 
 const MISSION_REFS = ',"refs":[{"kind":"project","value":"proj_a"},'
   + '{"kind":"exp","value":"EXP-1"},'
@@ -39,6 +39,8 @@ function makeFacts(linkage: MissionLinkage, overrides: Partial<MissionFacts> = {
     registry: [],
     registryPath: '/fake/agents.json',
     registryObservedAt: null,
+    rooms: [],
+    roomsPath: '/fake/rooms.jsonl',
     packet: [],
     readProblems: [],
     asOf: '2026-07-21T13:00:00.000Z',
@@ -52,6 +54,10 @@ function envelope(envelopeId: string, body: string): MessageEnvelope {
 
 function packetFile(name: string): PacketFile {
   return { name, path: `/fake/work/mission_a/${name}`, observedModifiedAt: '2026-07-21T12:05:00.000Z' };
+}
+
+function roomRecord(roomId: string, line: number, json: string): RoomRecord {
+  return { roomId, path: '/fake/rooms.jsonl', line, block: JSON.parse(json) as Record<string, unknown> };
 }
 
 function fullStores(): Record<StoreName, RawRecord[]> {
@@ -114,8 +120,58 @@ function testAttention(snapshot: MissionSnapshot): void {
 function testCommunication(snapshot: MissionSnapshot): void {
   const item = snapshot.attention.find((entry) => entry.id === 'attention:no-thread-ref');
   assert.equal(item?.label, 'no explicit thread/room ref exists for this mission', 'the primary gap (M3)');
+  assert.ok(item?.detail.includes('0 room record(s) read from /fake/rooms.jsonl'), 'the room store was actually read and states what was verified (C1)');
   assert.ok(item?.detail.includes('2 journal envelope(s)'), 'mention count is diagnostic detail only');
   assert.ok(!snapshot.timeline.some((entry) => entry.summary.includes('in body')), 'never promoted into the timeline');
+}
+
+// C1: a room WITH an explicit typed mission ref resolves into the timeline;
+// rooms without one stay out, and the communication gap item disappears.
+function testRoomsResolve(): void {
+  const linkedRoom = roomRecord('room_x', 4, roomLine('room_x', 'mission room', ',"refs":[{"kind":"mission","value":"mission_a"}]'));
+  const plainRoom = roomRecord('room_y', 5, roomLine('room_y', 'other room'));
+  const snapshot = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), { rooms: [linkedRoom, plainRoom] }));
+  const resolved = snapshot.timeline.find((entry) => entry.id === 'room_x');
+  assert.equal(resolved?.kind, 'room', 'explicit mission ref on the room record resolves (C1)');
+  assert.deepEqual(resolved?.refPath, ['mission_a', 'room_x']);
+  assert.ok(!snapshot.timeline.some((entry) => entry.id === 'room_y'), 'a room without a mission ref stays out');
+  assert.ok(!snapshot.attention.some((entry) => entry.id === 'attention:no-thread-ref'), 'linked room → communication is linked, not a gap');
+}
+
+// C1: with rooms read but none linked, the item states exactly what was verified.
+function testCommunicationStatesVerifiedRooms(): void {
+  const rooms = [roomRecord('room_y', 5, roomLine('room_y', 'other')), roomRecord('room_z', 6, roomLine('room_z', 'third'))];
+  const snapshot = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), { rooms }));
+  const item = snapshot.attention.find((entry) => entry.id === 'attention:no-thread-ref');
+  assert.ok(item?.detail.includes('2 room record(s) read from /fake/rooms.jsonl, none carrying an explicit ref'), 'verified fact, never an unread claim');
+  assert.ok(item?.sourceRefs.some((sourceRef) => sourceRef.store === 'rooms'), 'the room store is cited');
+}
+
+// C2: threadId equals the mission id — still NOT a binding (Thread namespace);
+// availability is never current work. Only a typed missionId binds.
+function testPresenceInferenceRemoved(): void {
+  const threadTwin = { ...agentEntry('agent_thread'), threadId: 'mission_a' } as unknown as RegistryEntry;
+  const inferred = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), { registry: [threadTwin] }));
+  assert.deepEqual(inferred.presences, [], 'threadId matching the mission id is NOT a mission binding (C2)');
+  assert.deepEqual(inferred.currentActivity, [], 'availability never becomes current work (C2)');
+  const typed = missionBoundEntry('agent_bound', 'mission_a') as unknown as RegistryEntry;
+  const bound = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), { registry: [typed] }));
+  assert.equal(bound.presences.length, 1, 'a typed missionId field IS an explicit mission binding');
+  assert.deepEqual(bound.currentActivity, [], 'even a bound presence makes no current-work claim');
+  assert.ok(bound.attention.some((entry) => entry.id === 'attention:no-current-activity'), 'the activity gap stays visible');
+}
+
+// C3: health derives from attention + issues, so it cites beyond the mission row.
+function testHealthProvenance(): void {
+  const snapshot = deriveSnapshot(fullFacts());
+  assert.equal(snapshot.pulse.health.value, 'attention');
+  const cited = new Set(snapshot.pulse.health.sourceRefs.map((sourceRef) => sourceRef.store));
+  assert.ok(cited.has('missions'), 'the mission row is cited');
+  assert.ok(cited.size > 1, 'health cites its actual contributing inputs, not the mission row alone (C3)');
+  assert.ok(
+    cited.has('registry') || cited.has('journal') || cited.has('packet') || cited.has('rooms'),
+    'at least one contributing source beyond the stores is cited',
+  );
 }
 
 function testTimeline(snapshot: MissionSnapshot): void {
@@ -160,6 +216,10 @@ function main(): void {
   testAttention(snapshot);
   testCommunication(snapshot);
   testTimeline(snapshot);
+  testRoomsResolve();
+  testCommunicationStatesVerifiedRooms();
+  testPresenceInferenceRemoved();
+  testHealthProvenance();
   testInvalidHealth();
   testZeroRefs();
   testReadProblemsSurface();

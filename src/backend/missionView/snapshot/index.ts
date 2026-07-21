@@ -1,7 +1,6 @@
 // Mission Room V1 — pure snapshot derivation (plan Delta v2 S3/S4, M3/M4/M6, L2).
 // MissionFacts in → MissionSnapshot out; no I/O. Every displayed fact carries
-// provenance; every ambiguous fact is a labeled attention item with the
-// sourceRefs that prove the gap — never invented linkage (Chief Ruling #1).
+// provenance; every ambiguous fact is a labeled attention item (Chief Ruling #1).
 import type {
   AttentionItem,
   ArtifactView,
@@ -16,7 +15,7 @@ import type {
 } from '../../../shared/missionView/schema.js';
 import type { MessageEnvelope } from '../../messaging/types.js';
 import type { MissionLinkage, RefValue } from '../linkage/index.js';
-import type { PacketFile, RawRecord, RegistryEntry } from '../sources/index.js';
+import type { PacketFile, RawRecord, RegistryEntry, RoomRecord } from '../sources/index.js';
 
 /** Everything deriveSnapshot needs: linkage output plus the other source reads. */
 export interface MissionFacts {
@@ -27,6 +26,8 @@ export interface MissionFacts {
   registry: RegistryEntry[];
   registryPath: string;
   registryObservedAt: string | null;
+  rooms: RoomRecord[];
+  roomsPath: string;
   packet: PacketFile[];
   readProblems: string[];
   asOf: string;
@@ -36,7 +37,8 @@ const CLOSED_STATUSES = new Set(['done', 'closed', 'refiled']);
 
 /** The deep derive: one mission, joined read-only, uncertainty preserved. */
 export function deriveSnapshot(facts: MissionFacts): MissionSnapshot {
-  const attention = buildAttention(facts);
+  const rooms = linkedRooms(facts);
+  const attention = buildAttention(facts, rooms);
   const issues = [...facts.linkage.problems, ...facts.readProblems];
   return {
     mission: buildMission(facts.linkage.mission),
@@ -44,8 +46,8 @@ export function deriveSnapshot(facts: MissionFacts): MissionSnapshot {
     objective: buildObjective(facts.linkage),
     assignments: buildAssignments(facts.linkage.mission),
     presences: buildPresences(facts),
-    currentActivity: buildActivity(facts),
-    timeline: buildTimeline(facts.linkage),
+    currentActivity: buildActivity(),
+    timeline: buildTimeline(facts, rooms),
     artifacts: buildArtifacts(facts),
     attention,
     asOf: facts.asOf,
@@ -74,7 +76,7 @@ function buildPulse(facts: MissionFacts, attention: AttentionItem[], issues: str
   return {
     outcome: { value: stringOrNull(block.outcome) ?? stringOrNull(block.title), sourceRefs: source },
     phase: { value: stringOrNull(block.stage) ?? stringOrNull(block.status), sourceRefs: source },
-    health: { value: healthOf(facts, attention, issues), sourceRefs: source },
+    health: { value: healthOf(facts, attention, issues), sourceRefs: healthRefs(facts, attention, issues) },
     lastUpdate: { value: stringOrNull(block.updated), sourceRefs: source },
     nextCheckpoint: { value: closed ? null : stringOrNull(block.stage) ?? stringOrNull(block.status), sourceRefs: source },
     needsChris: needsChrisOf(facts),
@@ -85,6 +87,20 @@ function buildPulse(facts: MissionFacts, attention: AttentionItem[], issues: str
 function healthOf(facts: MissionFacts, attention: AttentionItem[], issues: string[]): 'on-track' | 'attention' | 'unknown' {
   if (!facts.linkage.missionValid) return 'unknown';
   return attention.length > 0 || issues.length > 0 ? 'attention' : 'on-track';
+}
+
+/** C3: health cites the mission row PLUS the refs of every contributing attention item (deduped). */
+function healthRefs(facts: MissionFacts, attention: AttentionItem[], issues: string[]): SourceRef[] {
+  const missionRef = refOf(facts.linkage.mission);
+  if (attention.length === 0 && issues.length === 0) return [missionRef];
+  const seen = new Set<string>();
+  const refs: SourceRef[] = [];
+  for (const sourceRef of [missionRef, ...attention.flatMap((item) => item.sourceRefs)]) {
+    const refKey = `${sourceRef.store}|${sourceRef.recordId ?? ''}|${sourceRef.path ?? ''}|${sourceRef.line ?? ''}`;
+    if (seen.has(refKey)) continue;
+    seen.add(refKey); refs.push(sourceRef);
+  }
+  return refs;
 }
 
 function needsChrisOf(facts: MissionFacts): Sourced<boolean> {
@@ -111,10 +127,14 @@ function buildAssignments(record: RawRecord): MissionAssignmentView[] {
   }));
 }
 
-/** Mission-explicit bound presences only (S4): a registry threadId equal to the mission id. */
+/**
+ * Mission-explicit bound presences only (S4/C2): a TYPED mission binding —
+ * `entry.missionId === missionId`. A registry `threadId` names a Thread, not
+ * a Mission, so threadId equality is never a binding.
+ */
 function buildPresences(facts: MissionFacts): PresenceView[] {
   return facts.registry
-    .filter((entry) => entry.threadId === facts.missionId)
+    .filter((entry) => entry.missionId === facts.missionId)
     .map((entry) => presenceView(entry, facts));
 }
 
@@ -131,22 +151,28 @@ function presenceView(entry: RegistryEntry, facts: MissionFacts): PresenceView {
   };
 }
 
-/** Explicit current work: running mission-explicit presences, nothing else (S3). */
-function buildActivity(facts: MissionFacts): CurrentActivityView[] {
-  return buildPresences(facts)
-    .filter((presence) => presence.status === 'running')
-    .map((presence) => ({
-      personId: presence.agentId,
-      summary: `${presence.title} running (session ${presence.sessionId ?? 'unknown'}; availability is not current work)`,
-      active: true,
-      sourceRefs: presence.sourceRefs,
-    }));
+/** Explicit current work (S3/C2): availability is never converted into work — empty until an explicit current-work source exists. */
+function buildActivity(): CurrentActivityView[] {
+  return [];
 }
 
-/** Chronological — never causal — timeline: mission + every linked record (M4). */
-function buildTimeline(linkage: MissionLinkage): TimelineEntry[] {
-  const entries = [missionEntry(linkage.mission), ...linkage.linked.map(linkedEntry)];
-  return entries.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+/** Chronological — never causal — timeline: mission + linked records + linked rooms (M4/C1). */
+function buildTimeline(facts: MissionFacts, rooms: RoomRecord[]): TimelineEntry[] {
+  const linked = [missionEntry(facts.linkage.mission), ...facts.linkage.linked.map(linkedEntry)];
+  return [...linked, ...rooms.map((room) => roomEntry(room, facts.missionId))]
+    .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
+/** A room carrying an explicit typed mission ref joins the timeline as the linked lane (C1). */
+function roomEntry(room: RoomRecord, missionId: string): TimelineEntry {
+  return {
+    id: room.roomId,
+    kind: 'room',
+    summary: `Room '${stringOrNull(room.block.name) ?? room.roomId}'`,
+    timestamp: stringOrNull(room.block.createdAt) ?? '',
+    refPath: [missionId, room.roomId],
+    sourceRefs: [{ store: 'rooms', recordId: room.roomId, path: room.path, line: room.line }],
+  };
 }
 
 function missionEntry(record: RawRecord): TimelineEntry {
@@ -194,14 +220,14 @@ function artifactView(entry: RefValue, facts: MissionFacts): ArtifactView {
 }
 
 /** The trust feature: every gap, labeled, with the refs that prove it. */
-function buildAttention(facts: MissionFacts): AttentionItem[] {
+function buildAttention(facts: MissionFacts, rooms: RoomRecord[]): AttentionItem[] {
   return [
     ...assignmentAttention(facts),
     ...presenceAttention(facts),
     ...activityAttention(facts),
     ...unresolvableAttention(facts),
     ...evidenceAttention(facts),
-    communicationAttention(facts),
+    ...communicationAttention(facts, rooms),
   ];
 }
 
@@ -228,11 +254,11 @@ function presenceAttention(facts: MissionFacts): AttentionItem[] {
   return items.concat(projectOnlyAttention(facts));
 }
 
-/** Project-only registry entries are candidates, never presences (S4). */
+/** Project-only registry entries are candidates, never presences (S4/C2). */
 function projectOnlyAttention(facts: MissionFacts): AttentionItem[] {
   const projects = new Set(facts.linkage.forwardRefs.filter((entry) => entry.kind === 'project').map((entry) => entry.value));
   return facts.registry
-    .filter((entry) => entry.projectId !== undefined && projects.has(entry.projectId) && entry.threadId !== facts.missionId)
+    .filter((entry) => entry.projectId !== undefined && projects.has(entry.projectId) && entry.missionId !== facts.missionId)
     .map((entry) => ({
       id: `attention:presence-candidate:${entry.agentId}`,
       label: 'unlinked presence candidates',
@@ -242,11 +268,10 @@ function projectOnlyAttention(facts: MissionFacts): AttentionItem[] {
 }
 
 function activityAttention(facts: MissionFacts): AttentionItem[] {
-  if (buildActivity(facts).length > 0) return [];
   return [{
     id: 'attention:no-current-activity',
     label: 'no explicitly linked current activity',
-    detail: 'No mission-explicit bound presence exists, so no current activity can be honestly attributed (S3).',
+    detail: 'No source records current work for this mission, and registry availability is never converted into work (S3) — so nothing can be honestly attributed.',
     sourceRefs: [{ store: 'registry', path: facts.registryPath }],
   }];
 }
@@ -275,19 +300,37 @@ function evidenceAttention(facts: MissionFacts): AttentionItem[] {
 }
 
 /**
- * M3: the primary gap is the missing ref — the body-mention count is diagnostic
- * detail only, folded by id via history(), labeled unlinked candidates, and
- * never promoted into the timeline.
+ * M3/C1: the primary gap is the missing ref. Both stores are actually read and
+ * the item states only what was verified; body-text mentions stay diagnostic
+ * detail only. A room WITH an explicit typed mission ref joins the timeline
+ * instead — communication is linked, not a gap.
  */
-function communicationAttention(facts: MissionFacts): AttentionItem {
+function communicationAttention(facts: MissionFacts, rooms: RoomRecord[]): AttentionItem[] {
+  if (rooms.length > 0) return [];
   const mentions = facts.journal.filter((envelope) => envelope.body.includes(facts.missionId)).length;
   const bound = facts.journal.filter((envelope) => envelope.threadId === facts.missionId).length;
-  return {
+  return [{
     id: 'attention:no-thread-ref',
     label: bound === 0 ? 'no explicit thread/room ref exists for this mission' : 'journal thread refs are unlinked candidates',
-    detail: `${mentions} journal envelope(s) mention the mission in body text (unlinked candidates, folded by id — text matching is not linkage); ${bound} carry a threadId equal to the mission id; no room records exist. Journal queried at ${facts.journalPath}.`,
-    sourceRefs: [{ store: 'journal', path: facts.journalPath }],
-  };
+    detail: `${facts.rooms.length} room record(s) read from ${facts.roomsPath}, none carrying an explicit ref to this mission; `
+      + `${mentions} journal envelope(s) mention the mission in body text (unlinked candidates, folded by id — text matching is not linkage); `
+      + `${bound} carry a threadId equal to the mission id. Journal queried at ${facts.journalPath}.`,
+    sourceRefs: [{ store: 'rooms', path: facts.roomsPath }, { store: 'journal', path: facts.journalPath }],
+  }];
+}
+
+/** Rooms carrying an explicit typed mission ref (kind 'mission', value = id) — C1 resolution. */
+function linkedRooms(facts: MissionFacts): RoomRecord[] {
+  return facts.rooms.filter((room) => {
+    const rawRefs = room.block.refs;
+    return Array.isArray(rawRefs) && rawRefs.some((entry) => isMissionRef(entry, facts.missionId));
+  });
+}
+
+function isMissionRef(value: unknown, missionId: string): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  const entry = value as { kind?: unknown; value?: unknown };
+  return entry.kind === 'mission' && entry.value === missionId;
 }
 
 function timelineKind(store: RawRecord['store']): TimelineEntry['kind'] {

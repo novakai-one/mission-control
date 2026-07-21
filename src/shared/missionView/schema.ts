@@ -75,7 +75,7 @@ export interface CurrentActivityView {
 /** One chronological timeline entry (M4: chronological, not causal). */
 export interface TimelineEntry {
   id: string;
-  kind: 'log' | 'task' | 'issue' | 'mission';
+  kind: 'log' | 'task' | 'issue' | 'mission' | 'room';
   summary: string;
   timestamp: string;
   /** Full linkage path that collected this record, e.g. [mission, task, issue] (M4). */
