@@ -1,11 +1,11 @@
 # Mission Packet
 
-**Status:** Trial — promote after reviewed live missions
+**Status:** Trial — two live mission packets completed
 **Owner:** Chief
 **Applies when:** Turning Chris's natural direction into one managed mission
 **Does not apply when:** A tiny direct task has no delegated team or durable artifacts
 **Updated:** 2026-07-21
-**Live verification:** Pending first trial run
+**Live verification:** `mission_desktop-live-lanes` and `mission_store-validator`
 
 The packet preserves the instruction chain without creating a second Mission
 Contract format. The `$compile-mission-brief` skill owns contract structure and

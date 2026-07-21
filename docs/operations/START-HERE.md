@@ -1,11 +1,11 @@
 # Novakai Agent Workforce — Start Here
 
-**Status:** Trial — promote after reviewed live missions
+**Status:** Trial — two live missions completed; repeat before scaling
 **Owner:** Chris
 **Applies when:** Operating Novakai's Chief → Manager → Worker workforce
 **Does not apply when:** Using the app as a product or diagnosing its tooling
 **Updated:** 2026-07-21
-**Live verification:** Pending first trial run
+**Live verification:** PR #41 reviewed; PR #42 applied the first review finding
 
 This folder is the operating handbook for Novakai's agent workforce.
 
@@ -35,6 +35,10 @@ To start a Chief, copy the prompt in
 [`prompts/SPAWN-CHIEF.md`](prompts/SPAWN-CHIEF.md).
 
 That is the only document Chris needs for a normal start.
+
+To end a Chief session, use
+[`prompts/OFFBOARD-CHIEF.md`](prompts/OFFBOARD-CHIEF.md). Offboarding is a
+state-preservation step, not another mission.
 
 ### Chief
 
@@ -79,6 +83,10 @@ Read:
 2. The completed mission packet
 3. The session records for the Chief, Manager, and relevant Workers
 
+When Chris explicitly asks to trial the compact v2 format, also use
+[`trials/PROCESS-REVIEW-TEMPLATE-v2.md`](trials/PROCESS-REVIEW-TEMPLATE-v2.md).
+Otherwise follow the current Process Reviewer manual.
+
 ## The normal operating loop
 
 1. Chris spawns and onboards the Chief.
@@ -90,8 +98,10 @@ Read:
 6. The Manager runs the mission through Workers.
 7. The Manager verifies and reports to the Chief.
 8. The Chief independently accepts the work and reports to Chris.
-9. A Process Reviewer reviews how the chain operated.
-10. Chris decides which prompt or process improvements become standard.
+9. The Chief finishes the EXP AAR, records state, and offboards cleanly when
+   the Chief session is ending.
+10. A Process Reviewer reviews how the chain operated.
+11. Chris decides which prompt or process improvements become standard.
 
 ## Rules that apply to everyone
 
@@ -103,6 +113,8 @@ Read:
 - Name every important acceptance check. Never hide the bar inside prose.
 - A delivery receipt is not proof the agent understood or acted.
 - The person accepting work verifies it independently.
+- An observed failure reopens its named acceptance check until it is fixed or
+  explicitly shown to be outside the Mission Contract.
 - Preserve exact requirements across layers; do not casually paraphrase them.
 - After context compaction, re-read the Mission Contract and current plan.
 - Correct agents lightly and without blame. Confidence improves judgement.
@@ -117,6 +129,8 @@ Read:
 - [`MISSION-PACKET.md`](MISSION-PACKET.md) — preserve source, contract, plan, audit, and result
 - [`SCALING.md`](SCALING.md) — grow from one Manager to several safely
 - [`prompts/`](prompts/) — copy-ready stage prompts
+- [`trials/`](trials/) — explicitly invoked formats under live evaluation;
+  not canonical until Chris promotes them
 
 ## Canonical ownership
 

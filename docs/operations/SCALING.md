@@ -1,11 +1,11 @@
 # Scaling the Agent Workforce
 
-**Status:** Trial — promote after reviewed live missions
+**Status:** Trial — one-Manager chain exercised; multi-Manager run pending
 **Owner:** Chief
 **Applies when:** Growing from one Manager to multiple parallel Managers
 **Does not apply when:** One direct Worker is completing a small standalone task
 **Updated:** 2026-07-21
-**Live verification:** Pending first multi-Manager trial
+**Live verification:** Two one-Manager missions; fresh-Chief transfer not yet proven
 
 ## Current operating shape
 
@@ -46,8 +46,14 @@ The current chain should first demonstrate:
 - The Chief does not need to bypass the Manager.
 - Manager and Chief independently verify.
 - The Process Reviewer finds no severe role or verification failure.
+- A fresh Chief can apply the handbook's learned safeguard without relying on
+  conversational memory from the run that discovered it.
 
 This is evidence that the process can be copied.
+
+The same Chief applying a review finding on its next mission is useful
+`learning application` evidence. It is not yet proof that the handbook can
+transfer that learning to another Chief. Use a fresh Chief for that test.
 
 ## Initial limits
 

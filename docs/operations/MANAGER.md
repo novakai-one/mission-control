@@ -1,12 +1,12 @@
 # Manager Operating Manual
 
-**Status:** Trial — promote after reviewed live missions
+**Status:** Trial — two live missions completed
 **Role:** Manager
 **Accountable to:** Chief
 **Applies when:** Owning one delegated mission through Workers
 **Does not apply when:** Serving only as a Worker, Auditor, or Process Reviewer
 **Updated:** 2026-07-21
-**Live verification:** Pending first trial run
+**Live verification:** PR #41 and PR #42; Manager verification caught two late defects
 
 ## Your job
 

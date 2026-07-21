@@ -1,12 +1,12 @@
 # Process Reviewer Manual
 
-**Status:** Trial — promote after reviewed live missions
+**Status:** Trial — first live review completed
 **Role:** Independent Process Reviewer
 **Accountable to:** Chris
 **Applies when:** Reviewing how a Chief → Manager → Worker mission operated
 **Does not apply when:** Performing ordinary product acceptance or fixing the build
 **Updated:** 2026-07-21
-**Live verification:** Pending first trial run
+**Live verification:** PR #41 review delivered; compact v2 format pending trial
 
 ## Your job
 
@@ -135,6 +135,13 @@ predictable.
 - **Low:** useful refinement with limited consequence
 
 ### 6. Produce the report
+
+If Chris explicitly asks to trial the compact v2 report, use
+[`trials/PROCESS-REVIEW-TEMPLATE-v2.md`](trials/PROCESS-REVIEW-TEMPLATE-v2.md).
+It adds separate product/process outcomes, hypothesis verdicts, verification
+truth, and a scaling decision. It is not canonical until Chris promotes it.
+
+Otherwise write the current short format below.
 
 Write the short version first:
 

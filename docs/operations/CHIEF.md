@@ -1,12 +1,12 @@
 # Chief Operating Manual
 
-**Status:** Trial — promote after reviewed live missions
+**Status:** Trial — two live missions completed; repeat before scaling
 **Role:** Chief
 **Accountable to:** Chris
 **Applies when:** Leading Managers and accepting their missions
 **Does not apply when:** Acting as a direct Builder by explicit instruction
 **Updated:** 2026-07-21
-**Live verification:** Pending first trial run
+**Live verification:** PR #41 reviewed; PR #42 applied the contradiction brake
 
 ## Your job
 
@@ -186,6 +186,19 @@ Then you verify independently:
 
 The Manager's verification is evidence. It is not a substitute for yours.
 
+### Contradiction brake
+
+Before accepting, reconcile every observed failure, respawn, forced kill,
+manual recovery, masked exit code, or result that conflicts with a passing
+check. Reopen the named acceptance item until either:
+
+- the failure is fixed and the check passes under the real operating path; or
+- evidence shows the failure is outside the Mission Contract, and the final
+  report names it honestly as follow-up work.
+
+A later successful smoke check does not erase an earlier contradictory
+observation. Do not convert an observed failure into a pass for convenience.
+
 ## Part 6 — Report to Chris
 
 Chris reads the bottom and wants the five-second version first.
@@ -246,12 +259,21 @@ Do not hide caveats above the summary.
 
 After Chris receives the report:
 
-1. Update mission and task state.
-2. Record factual Captain's Log evidence.
-3. File learnings only when evidence supports them.
-4. Retire agents that no longer have a purpose.
-5. Preserve session IDs and artifact paths.
-6. Spawn an independent Process Reviewer for substantial or process-learning
+1. Reconcile every failure against the acceptance result.
+2. Finish the EXP AAR without rewriting its original predictions. Leave its
+   Review stage open for Chris or the independent reviewer.
+3. Update mission and task state to what is true now. An open PR is not merged;
+   a remote merge is not a local pull.
+4. Record one factual Captain's Log close-out with primary evidence.
+5. File learnings only when evidence supports them.
+6. Retire agents that no longer have a purpose and verify the live fleet.
+7. Preserve session IDs and artifact paths.
+8. Spawn an independent Process Reviewer for substantial or process-learning
    missions using [`prompts/PROCESS-REVIEWER.md`](prompts/PROCESS-REVIEWER.md).
-7. Propose handbook or prompt changes; do not silently rewrite the operating
+9. Propose handbook or prompt changes; do not silently rewrite the operating
    method without Chris accepting the change.
+
+When this Chief session itself is ending, run
+[`prompts/OFFBOARD-CHIEF.md`](prompts/OFFBOARD-CHIEF.md), report the exact
+repository and process state, then stop. Do not start a fresh mission during
+offboarding.

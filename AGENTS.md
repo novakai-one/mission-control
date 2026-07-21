@@ -20,8 +20,8 @@ tooling for measuring build quality — use it to assess builds.
 ## The `.novakai/` stores
 
 Persistent working state lives in `.novakai/stores/` (system of record;
-novakai-docs is a read-only viewer pointed at this one directory). Six
-operating stores per DEC-2026-07-20-003, plus projects:
+novakai-docs is a read-only viewer pointed at this one directory). The
+recognized stores are:
 
 - `.novakai/stores/decisions.jsonl` — `kind:"decision"`. Mandates and direction set
   by Chris. Referenced by id from missions, requests, and AGENTS.md.
@@ -43,6 +43,9 @@ operating stores per DEC-2026-07-20-003, plus projects:
 - `.novakai/stores/projects.jsonl` — `kind:"project"`. Known company projects, with
   status, current focus, and absolute path. Hierarchy:
   OKR → Project → Mission → Task.
+- `.novakai/stores/issues.jsonl` — `kind:"issue"`. Observed product, process,
+  or infrastructure problems that require follow-up outside the current
+  mission.
 
 Ref integrity rules (learned 2026-07-20, log_2026-07-20-017): an id once
 referenced never disappears (file a tombstone instead of deleting); project
@@ -54,7 +57,19 @@ Block shape (all stores):
 {"id":"<kind>_<slug>","kind":"<kind>","ts":"<ISO-8601 with offset>", ...}
 ```
 
-Refs are typed: `{"kind":"task"|"mission"|"project"|"doc"|"decision"|"log"|"exp","value":"...","label":"..."}`.
+ID exceptions are canonical: decisions use `DEC-YYYY-MM-DD-NNN`; objectives
+use `okr_<slug>`; projects use `proj_<slug>`. Mission and task tombstones may
+use `status:"refiled"` with scalar `refiledTo`.
+
+Refs are typed. Allowed kinds are `task`, `mission`, `project`, `doc`,
+`decision`, `log`, `exp`, `objective`, `request`, `issue`, `session`, and
+`learning`.
+
+For append-only writes, use `scripts/nvk-store.mjs append`; run
+`npm run stores:audit` to inspect existing drift and `npm run stores:gate` to
+detect new drift or disappearing inventoried IDs. The current writer does not
+yet enforce direct file writes or in-place state transitions; that residual
+gap is tracked in `issue_store-writer-residual-gap`.
 
 Related but separate: `.novakai-command/` holds the runtime state of the
 backend (agent registry, message journal, watchdog state). Do not hand-edit
