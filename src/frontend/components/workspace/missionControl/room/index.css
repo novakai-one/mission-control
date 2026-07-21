@@ -134,8 +134,52 @@
   color: var(--st-ink, #ececee);
 }
 
+/* Attention rows are near-monochrome: the section header count is the ONE
+ * amber signal (Chris's UI law — scarce amber), not a badge per row. */
 .mr-attention-row > strong {
-  color: var(--st-gold, #d0a14b);
+  color: var(--st-ink, #ececee);
+}
+
+.mr-group {
+  border-top: 1px solid var(--st-frame, #26262a);
+}
+
+.mr-group-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mr-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.mr-group-summary::before {
+  content: '▸';
+  color: var(--st-faintest, #626269);
+  font-size: 9px;
+}
+
+.mr-group[open] > .mr-group-summary::before {
+  content: '▾';
+}
+
+.mr-group-summary > strong {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--st-ink, #ececee);
+}
+
+.mr-group-hint {
+  color: var(--st-faintest, #626269);
+  font-size: 8.5px;
+}
+
+.mr-group[open] > .mr-group-summary .mr-group-hint {
+  display: none;
 }
 
 .mr-empty {
@@ -153,12 +197,20 @@
   font-size: 10px;
 }
 
+/* Trust issues: muted text with a small amber tick at most — not a full amber line. */
 .mr-issue {
   margin: 0;
   padding: 6px 0 0;
-  color: var(--st-gold, #d0a14b);
+  color: var(--st-muted, #a2a2aa);
   font-size: 10px;
   line-height: 1.5;
+}
+
+.mr-issue::before {
+  content: '▲';
+  margin-right: 6px;
+  color: var(--st-gold, #d0a14b);
+  font-size: 7px;
 }
 
 .mr-error {

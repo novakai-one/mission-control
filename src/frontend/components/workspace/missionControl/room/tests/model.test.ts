@@ -38,7 +38,9 @@ function unlinkedAttention(): MissionSnapshot['attention'] {
     attention('att-presence', 'No mission-explicit bound presences'),
     attention('att-activity', 'No explicitly linked current activity'),
     attention('att-comms', 'No explicit thread/room ref exists for this mission'),
-    attention('att-evidence', 'Unlinked evidence candidates in the mission packet'),
+    attention('att-ev-1', 'unlinked evidence candidates'),
+    attention('att-ev-2', 'unlinked evidence candidates'),
+    attention('att-ev-3', 'unlinked evidence candidates'),
   ];
 }
 
@@ -118,7 +120,8 @@ function pulseFact(model: ReturnType<typeof missionRoomViewModel>, label: string
 }
 
 function hasAttention(model: ReturnType<typeof missionRoomViewModel>, pattern: RegExp): boolean {
-  return model.attention.some((item) => pattern.test(item.label) || pattern.test(item.detail));
+  const everyItem = [...model.attention.items, ...model.attention.groups.flatMap((group) => group.items)];
+  return everyItem.some((item) => pattern.test(item.label) || pattern.test(item.detail));
 }
 
 // (a) S2 regression — the view-model takes ONLY the snapshot. A fabricated
@@ -180,10 +183,20 @@ assert.equal(
 );
 assert.ok(pulseFact(unlinked, 'Next checkpoint').sourceRefs.length > 0);
 
-// 6. What needs attention — the first-class attention list is always present.
-assert.ok(Array.isArray(unlinked.attention) && unlinked.attention.length === 5);
-assert.ok(Array.isArray(linked.attention));
-assert.ok(unlinked.attention.every((item) => item.label.length > 0 && item.sourceRefs.length > 0));
+// 6. What needs attention — distinct gaps stay individual rows; same-label
+// packet candidates group into ONE calm row (UI law: scarce amber); the count
+// stays the honest total.
+assert.equal(unlinked.attention.items.length, 4, 'distinct gap items stay individual');
+assert.equal(unlinked.attention.groups.length, 1, 'packet candidates collapse into one group');
+assert.equal(unlinked.attention.groups[0].items.length, 3, 'group preserves every per-file item');
+assert.ok(unlinked.attention.groups[0].label.includes('3 files'), 'group label carries the file count');
+assert.equal(unlinked.attention.count, 7, 'count is the honest underlying total');
+assert.ok(Array.isArray(linked.attention.items) && linked.attention.count === 0);
+assert.ok(
+  [...unlinked.attention.items, ...unlinked.attention.groups[0].items]
+    .every((item) => item.label.length > 0 && item.sourceRefs.length > 0),
+  'every attention item keeps its label and provenance',
+);
 
 // 7. Where plan, review, evidence, PR, and result live.
 assert.ok(

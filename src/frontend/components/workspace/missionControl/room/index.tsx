@@ -4,6 +4,7 @@
 import React from 'react';
 import type {
   ArtifactView,
+  AttentionItem,
   CurrentActivityView,
   MissionAssignmentView,
   MissionSnapshot,
@@ -164,22 +165,40 @@ function EvidenceSection({ model }: { model: MissionRoomViewModel }) {
   );
 }
 
+function AttentionRow({ item }: { item: AttentionItem }) {
+  return (
+    <div className="mr-row mr-attention-row">
+      <strong>{item.label}</strong>
+      <span>{item.detail}</span>
+      <small className="mr-source" title={sourceTag(item.sourceRefs)}>{sourceTag(item.sourceRefs)}</small>
+    </div>
+  );
+}
+
 function AttentionSection({ model }: { model: MissionRoomViewModel }) {
+  const { items, groups, count } = model.attention;
   return (
     <section className="mr-panel" aria-label="Attention">
       <header>
         <span className="mr-kicker">Attention</span>
-        <strong className="mr-count">{model.attention.length}</strong>
+        <strong className="mr-count">{count}</strong>
       </header>
-      {model.attention.length === 0
+      {count === 0
         ? <p className="mr-empty">Nothing needs attention — every displayed fact is explicitly sourced.</p>
-        : model.attention.map((item) => (
-          <div className="mr-row mr-attention-row" key={item.id}>
-            <strong>{item.label}</strong>
-            <span>{item.detail}</span>
-            <small className="mr-source" title={sourceTag(item.sourceRefs)}>{sourceTag(item.sourceRefs)}</small>
-          </div>
-        ))}
+        : (
+          <>
+            {items.map((item) => <AttentionRow key={item.id} item={item} />)}
+            {groups.map((group) => (
+              <details className="mr-group" key={group.id}>
+                <summary className="mr-group-summary">
+                  <strong>{group.label}</strong>
+                  <span className="mr-group-hint">click to expand</span>
+                </summary>
+                {group.items.map((item) => <AttentionRow key={item.id} item={item} />)}
+              </details>
+            ))}
+          </>
+        )}
     </section>
   );
 }

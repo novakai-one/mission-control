@@ -22,6 +22,27 @@ export interface RoomFact {
   tone: 'steady' | 'attention';
 }
 
+/**
+ * Packet-file candidates collapse into ONE calm row (Chris's UI law: amber is
+ * scarce — one attention signal at a time). Per-file detail is preserved
+ * inside the group and revealed on demand; nothing is lost.
+ */
+export interface AttentionGroup {
+  id: string;
+  label: string;
+  items: AttentionItem[];
+}
+
+/** The Attention panel's data: distinct gap rows, grouped candidates, honest total. */
+export interface AttentionSectionModel {
+  /** Distinct facts (assignments, presence, activity, exp ref, thread/room ref) — one row each. */
+  items: AttentionItem[];
+  /** Grouped candidates (packet evidence) — one expandable row per group. */
+  groups: AttentionGroup[];
+  /** Total underlying items including grouped ones — the single amber count. */
+  count: number;
+}
+
 /** Section data the Mission Room component renders, in display order. */
 export interface MissionRoomViewModel {
   title: Sourced<string>;
@@ -41,8 +62,8 @@ export interface MissionRoomViewModel {
   timeline: TimelineEntry[];
   /** Resolved, explicitly ref'd artifacts (S4). */
   artifacts: ArtifactView[];
-  /** THE trust feature: every ambiguous fact, labeled, with sourceRefs. */
-  attention: AttentionItem[];
+  /** THE trust feature: every ambiguous fact, labeled, calmly grouped (UI law: scarce amber). */
+  attention: AttentionSectionModel;
   /** Freshness + recoverable read problems — always visible (M6). */
   trust: { asOf: string; issues: string[] };
 }
@@ -107,6 +128,26 @@ function missionFacts(snapshot: MissionSnapshot): RoomFact[] {
   ];
 }
 
+/** Backend label for per-file packet candidates — the groupable attention class. */
+const PACKET_CANDIDATE_LABEL = 'unlinked evidence candidates';
+
+/**
+ * Groups the attention list for calm rendering (Chris's UI law: one signal at
+ * a time). Distinct gap items stay individual rows; same-label packet-file
+ * candidates collapse into a single expandable group. The count stays the
+ * honest total of underlying items.
+ */
+export function groupAttention(attention: AttentionItem[]): AttentionSectionModel {
+  const items = attention.filter((item) => item.label !== PACKET_CANDIDATE_LABEL);
+  const candidates = attention.filter((item) => item.label === PACKET_CANDIDATE_LABEL);
+  const groups: AttentionGroup[] = candidates.length === 0 ? [] : [{
+    id: 'att-group-packet-evidence',
+    label: `Packet evidence not explicitly ref'd — ${candidates.length} file${candidates.length === 1 ? '' : 's'}`,
+    items: candidates,
+  }];
+  return { items, groups, count: attention.length };
+}
+
 /**
  * Builds the room's section data from the snapshot alone. Pass-throughs are
  * deliberate: the snapshot is the only legal data root for this surface, and
@@ -123,7 +164,7 @@ export function missionRoomViewModel(snapshot: MissionSnapshot): MissionRoomView
     currentActivity: snapshot.currentActivity,
     timeline: snapshot.timeline,
     artifacts: snapshot.artifacts,
-    attention: snapshot.attention,
+    attention: groupAttention(snapshot.attention),
     trust: { asOf: snapshot.asOf, issues: snapshot.issues },
   };
 }
