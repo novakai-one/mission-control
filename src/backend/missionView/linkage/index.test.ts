@@ -55,7 +55,10 @@ function testDuplicateReverse(): void {
   });
   const linkage = resolved(resolveLinkage('mission_a', stores));
   assert.equal(linkage.linked.length, 2, 'both duplicates stay visible');
-  assert.ok(linkage.problems.some((entry) => entry.message.includes("duplicate id 'task_a'")));
+  const merged = linkage.problems.filter((entry) => entry.message.includes("duplicate id 'task_a'"));
+  assert.equal(merged.length, 1, 'duplicate messages merge into one issue');
+  const lines = merged[0].sourceRefs.map((sourceRef) => sourceRef.line).sort();
+  assert.deepEqual(lines, [1, 2], 'BOTH line refs survive the merge — the duplication fact proves itself (T1)');
 }
 
 function testWrongKind(): void {

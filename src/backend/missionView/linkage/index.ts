@@ -235,14 +235,27 @@ function issueOf(record: RawRecord, message: string): ReadIssue {
   return { message, sourceRefs: [{ store: record.store, recordId: String(record.block.id ?? ''), path: record.path, line: record.line }] };
 }
 
-/** Duplicate problem strings collapse; provenance of the first occurrence is kept. */
+/** Duplicate messages merge into one issue; sourceRefs from EVERY occurrence survive (T1). */
 function dedupeIssues(problems: ReadIssue[]): ReadIssue[] {
-  const seen = new Set<string>();
-  return problems.filter((problem) => {
-    if (seen.has(problem.message)) return false;
-    seen.add(problem.message);
-    return true;
-  });
+  const byMessage = new Map<string, ReadIssue>();
+  for (const problem of problems) {
+    const existing = byMessage.get(problem.message);
+    if (!existing) {
+      byMessage.set(problem.message, { message: problem.message, sourceRefs: [...problem.sourceRefs] });
+      continue;
+    }
+    const seen = new Set(existing.sourceRefs.map(refKeyOf));
+    for (const sourceRef of problem.sourceRefs) {
+      if (seen.has(refKeyOf(sourceRef))) continue;
+      seen.add(refKeyOf(sourceRef));
+      existing.sourceRefs.push(sourceRef);
+    }
+  }
+  return [...byMessage.values()];
+}
+
+function refKeyOf(sourceRef: SourceRef): string {
+  return `${sourceRef.store}|${sourceRef.recordId ?? ''}|${sourceRef.path ?? ''}|${sourceRef.line ?? ''}`;
 }
 
 function toCandidate(record: RawRecord): AmbiguousCandidate {
