@@ -14,13 +14,16 @@ import {
   type Conversation,
   type TunnelEnvelope,
 } from '../../../../lib/tunnelModel/index.js';
-import { laneStatsFor, recapNotesFor, roomIdentityFor, roomLabelFor } from '../model.js';
+import { laneStatsFor, recapNotesFor, roomIdentityFor } from '../model.js';
 import './index.css';
 
 type PersonTab = 'tasks' | 'stats' | 'settings';
 
 interface ContextPanelProps {
   conversation: Conversation;
+  /** Rendered lane label — collision-suffixed by the model (C2), so the
+   *  "where you are" header always matches the rail row Chris clicked. */
+  laneLabel: string;
   messages: TunnelEnvelope[];
   agents: AgentInfo[];
   unreadCount: number;
@@ -88,7 +91,7 @@ function SummaryView(props: Omit<ContextPanelProps, 'working'>) {
       </div>
       <div className="msg-context-body">
         <div className="msg-person-head">
-          <strong>{roomLabelFor(conversation)}</strong>
+          <strong>{props.laneLabel}</strong>
           <span>{roomIdentityFor(conversation)}</span>
         </div>
         <section className="msg-panel">
@@ -156,7 +159,7 @@ function PersonView(props: ContextPanelProps) {
       </div>
       <div className="msg-context-body">
         <div className="msg-person-head">
-          <strong>{conversation.title}</strong>
+          <strong>{props.laneLabel}</strong>
           <span>{agent?.provider ?? 'agent'}</span>
           {working === conversation.title && <em>Working…</em>}
         </div>

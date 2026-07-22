@@ -358,6 +358,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
       {selected && (
         <ContextPanel
           conversation={selected}
+          laneLabel={labels.get(selected.id) ?? (selected.kind === 'dm' ? selected.title : roomLabelFor(selected))}
           messages={laneMessages}
           agents={agents}
           unreadCount={unread[selected.id] ?? 0}
