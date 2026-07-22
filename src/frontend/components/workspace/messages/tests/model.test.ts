@@ -5,6 +5,7 @@ import {
   DEFAULT_RAIL_WIDTHS,
   DENSITY_SCALE,
   MESSAGING_SETTINGS,
+  capRailLanes,
   clampRailWidth,
   composerTargetsFor,
   dayLabelFor,
@@ -31,6 +32,7 @@ import {
   rowDeliveryFor,
   snippetFor,
   splitRailSections,
+  windowMessages,
   userScrollActive,
   workingAgentFor,
   WORKING_WINDOW_MS,
@@ -356,3 +358,74 @@ const offlineTargets = composerTargetsFor([{ name: 'atlas', provider: null, live
 assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => target.label), ['atlas']);
 
 console.log('messages/model tests passed');
+
+// ---- C1 (audit S4): hard rail bound, +page to ceiling, #team pinned --------
+{
+  const many: Conversation[] = [];
+  for (let index = 0; index < 120; index += 1) many.push(lane(`dm:agent-${index}`, 'dm', `agent-${index}`));
+  many.splice(60, 0, lane('#team', 'channel', '#team')); // channel buried mid-list
+  for (let index = 120; index < 220; index += 1) many.push(lane(`room_${index}`, 'room', `room-${index}`));
+
+  const first = capRailLanes(many, MESSAGING_SETTINGS.rail.cap);
+  assert.equal(first.lanes.length, 50);
+  assert.equal(first.lanes[0].id, '#team'); // pinned above the cap, never displaced
+  assert.equal(first.hiddenCount, many.length - 50);
+
+  const paged = capRailLanes(many, MESSAGING_SETTINGS.rail.cap + MESSAGING_SETTINGS.rail.page);
+  assert.equal(paged.lanes.length, 100);
+  assert.equal(paged.lanes[0].id, '#team');
+
+  // The ceiling is HARD: any visibleCount beyond it renders exactly 150.
+  assert.equal(capRailLanes(many, 150).lanes.length, 150);
+  assert.equal(capRailLanes(many, 200).lanes.length, 150);
+  assert.equal(capRailLanes(many, 99999).lanes.length, 150);
+  assert.equal(capRailLanes(many, 99999).hiddenCount, many.length - 150);
+
+  // Under the bound: everything renders, nothing hidden, #team still first.
+  const few = [lane('dm:a', 'dm', 'a'), lane('#team', 'channel', '#team')];
+  const small = capRailLanes(few, MESSAGING_SETTINGS.rail.cap);
+  assert.equal(small.lanes.length, 2);
+  assert.equal(small.lanes[0].id, '#team');
+  assert.equal(small.hiddenCount, 0);
+
+  // No channel present (filtered search result): plain bounded slice.
+  const noTeam = capRailLanes(many.filter((entry) => entry.kind !== 'channel'), 50);
+  assert.equal(noTeam.lanes.length, 50);
+  assert.equal(noTeam.lanes[0].id, 'dm:agent-0');
+}
+
+// ---- C1 thread window + M3 anchored window ---------------------------------
+{
+  const feed: TunnelEnvelope[] = [];
+  for (let index = 0; index < 250; index += 1) {
+    feed.push(envelope({ id: `env-${index}`, createdAt: new Date(1700000000000 + index * 1000).toISOString() }));
+  }
+  const tail = windowMessages(feed, MESSAGING_SETTINGS.thread.windowSize);
+  assert.equal(tail.messages.length, 100);
+  assert.equal(tail.messages[0].id, 'env-150');
+  assert.equal(tail.earlierCount, 150);
+  assert.equal(tail.laterCount, 0);
+
+  const short = windowMessages(feed.slice(0, 5), 100);
+  assert.equal(short.messages.length, 5);
+  assert.equal(short.earlierCount, 0);
+  assert.equal(short.laterCount, 0);
+
+  // Anchored (review reaches a target older than the tail window): the
+  // window is bounded AROUND the anchor, with honest earlier/later counts.
+  const anchored = windowMessages(feed, 100, 'env-20');
+  assert.equal(anchored.messages.length, 100);
+  assert.ok(anchored.messages.some((entry) => entry.id === 'env-20'));
+  assert.equal(anchored.earlierCount, 0);
+  assert.equal(anchored.laterCount, 150);
+
+  const mid = windowMessages(feed, 100, 'env-125');
+  assert.equal(mid.messages.length, 100);
+  assert.ok(mid.messages.some((entry) => entry.id === 'env-125'));
+  assert.equal(mid.earlierCount + mid.laterCount, 150);
+
+  // Unknown anchor falls back to the tail window.
+  const missing = windowMessages(feed, 100, 'env-nope');
+  assert.equal(missing.messages[0].id, 'env-150');
+  assert.equal(missing.earlierCount, 150);
+}

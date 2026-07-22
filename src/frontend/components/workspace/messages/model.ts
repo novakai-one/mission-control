@@ -43,6 +43,10 @@ export interface MessagingTabSettings {
   };
   /** Send-and-know (round 3 M7 — see isOwnFreshSend / userScrollActive). */
   sendFollow: { ownSendWindowMs: number; scrollGuardMs: number };
+  /** Bounded rail (mission messages-tab-v1 C1, audit S4 — see capRailLanes). */
+  rail: { cap: number; page: number; ceiling: number };
+  /** Windowed thread (C1 + M3 anchored review — see windowMessages). */
+  thread: { windowSize: number };
 }
 
 export const DENSITY_SCALE: Record<MessagingDensity, number> = {
@@ -59,6 +63,8 @@ export const MESSAGING_SETTINGS: MessagingTabSettings = {
   delivery: { sendingWindowMs: 60_000 },
   review: { scrollTimeoutMs: 2_000 },
   sendFollow: { ownSendWindowMs: 10_000, scrollGuardMs: 1_200 },
+  rail: { cap: 50, page: 50, ceiling: 150 },
+  thread: { windowSize: 100 },
 };
 
 /* ---------- Delivery status grammar (round 2 — states settle honestly) -----
@@ -226,6 +232,57 @@ export function splitRailSections(conversations: Conversation[]): RailSections {
 /** Rail/composer label for a room lane: '#team' → 'team', 'room_…' → its name. */
 export function roomLabelFor(conversation: Conversation): string {
   return conversation.title.replace(/^#/, '');
+}
+
+/* ---------- Bounded rail (C1, audit S4) --------------------------------------
+   The rail NEVER renders more than the ceiling, no matter what sequence of
+   show-more clicks arrives — there is deliberately no "return all" mode.
+   Lanes beyond the ceiling are reached via search (the query runs over the
+   full lane set upstream; its result passes back through this same bound).
+   The #team channel is pinned first and never displaced by the bound. */
+export interface CappedLanes {
+  lanes: Conversation[];
+  hiddenCount: number;
+}
+
+export function capRailLanes(lanes: Conversation[], visibleCount: number): CappedLanes {
+  const bound = Math.min(Math.max(visibleCount, 1), MESSAGING_SETTINGS.rail.ceiling);
+  const channel = lanes.find((entry) => entry.kind === 'channel');
+  const rest = channel ? lanes.filter((entry) => entry !== channel) : lanes;
+  const capped = channel
+    ? [channel, ...rest.slice(0, bound - 1)]
+    : rest.slice(0, bound);
+  return { lanes: capped, hiddenCount: lanes.length - capped.length };
+}
+
+/* ---------- Windowed thread (C1 + M3) ----------------------------------------
+   Default: the newest windowSize rows — no full-journal map, ever. An
+   anchorId (the review flow reaching a failed envelope older than the tail)
+   bounds the window AROUND the target instead, with honest counts of what
+   sits outside it on each side. Unknown anchors fall back to the tail. */
+export interface ThreadWindow {
+  messages: TunnelEnvelope[];
+  earlierCount: number;
+  laterCount: number;
+}
+
+export function windowMessages(
+  messages: TunnelEnvelope[],
+  visibleCount: number,
+  anchorId?: string,
+): ThreadWindow {
+  const anchorIndex = anchorId ? messages.findIndex((entry) => entry.id === anchorId) : -1;
+  if (anchorIndex === -1) {
+    const start = Math.max(0, messages.length - visibleCount);
+    return { messages: messages.slice(start), earlierCount: start, laterCount: 0 };
+  }
+  const end = Math.min(messages.length, Math.max(anchorIndex + Math.ceil(visibleCount / 2), visibleCount));
+  const start = Math.max(0, end - visibleCount);
+  return {
+    messages: messages.slice(start, end),
+    earlierCount: start,
+    laterCount: messages.length - end,
+  };
 }
 
 /* ---------- Known agents (round 3 M5 — New room / New DM pickers) ----------
