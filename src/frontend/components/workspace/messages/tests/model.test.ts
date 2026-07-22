@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import type { Conversation, TunnelEnvelope } from '../../../../lib/tunnelModel/index.js';
-import { buildConversations, registeredRoster } from '../../../../lib/tunnelModel/index.js';
+import { buildConversations, dmId, registeredRoster } from '../../../../lib/tunnelModel/index.js';
 import {
   DEFAULT_RAIL_WIDTHS,
   DENSITY_SCALE,
@@ -510,6 +510,32 @@ assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => targe
   assert.ok(!visible.includes('dm:worker-f'), '(a) exited registered, agent-only history → hidden');
   assert.ok(!visible.includes('dm:worker-b'), 'unregistered, agent-only history → hidden');
   assert.ok(!visible.includes('dm:phantom') && !visible.includes('dm:ghost2'), 'stranger lanes hidden');
+}
+
+// ---- C4 (audit S1): spawn lane renders from the 201 ALONE ------------------
+// Composed through the same seams the view uses. Phase 1 — the roster frame
+// is WITHHELD: buildConversations knows nothing of the spawned agent, so the
+// lane exists only as the overlay spawnAgent created before selecting.
+{
+  const spawnedTitle = 'claude-7'; // as minted by the POST /api/agents 201
+  const overlay = dmLaneFor(spawnedTitle);
+  const selectedId = overlay.id;
+  const withheld = visibleLanesFor(buildConversations([], [], registeredRoster([])), [], []);
+  assert.equal(withheld.some((entry) => entry.id === overlay.id), false, 'no derived lane before the frame');
+  const rendered = resolveSelectedLane(withheld, overlay, selectedId);
+  assert.ok(rendered, 'the overlay lane renders from the 201 alone');
+  assert.equal(rendered.id, dmId(spawnedTitle));
+  assert.equal(rendered.kind, 'dm');
+
+  // Phase 2 — the agents-changed frame lands: the lane derives for real,
+  // survives pruning (registered + empty), and reconciliation prefers the
+  // DERIVED lane over the overlay.
+  const roster = [agent({ agentId: 'ag-7', title: spawnedTitle, status: 'running' })];
+  const derived = visibleLanesFor(buildConversations([], [], registeredRoster(roster)), [], roster);
+  const reconciled = resolveSelectedLane(derived, overlay, selectedId);
+  assert.ok(reconciled, 'lane still selected after the frame');
+  assert.equal(reconciled.id, dmId(spawnedTitle));
+  assert.ok(derived.includes(reconciled), 'reconciled to the derived lane, not the overlay');
 }
 
 console.log('messages/model tests passed');

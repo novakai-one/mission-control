@@ -6,6 +6,8 @@
 // not-yet-derived lane until Chris's first envelope lands and
 // buildConversations picks the lane up for real.
 import { useState } from 'react';
+import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
+import type { ProviderId } from '../../../../../shared/project/schema.js';
 import {
   type Conversation,
   type ConversationId,
@@ -42,6 +44,7 @@ export function useLaneFlows({ ingestRoom, openLane }: LaneFlowDeps): {
   resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null;
   startRoom(members: string[], name: string): Promise<void>;
   openDm(name: string): Conversation;
+  spawnAgent(provider: ProviderId, title?: string): Promise<void>;
 } {
   const [overlay, setOverlay] = useState<Conversation | null>(null);
   async function startRoom(members: string[], name: string): Promise<void> {
@@ -52,8 +55,20 @@ export function useLaneFlows({ ingestRoom, openLane }: LaneFlowDeps): {
     const lane = dmLaneFor(name);
     setOverlay(lane); return lane;
   }
+  // Spawn-from-Messages (C4, audit S1): the same POST /api/agents path the
+  // Agents pane uses; the server mints a unique title when none is given.
+  // The overlay is created BEFORE selecting so the lane renders from the
+  // 201 ALONE — no dependency on the agents-changed roster frame, which
+  // races the response. When the frame lands, resolveSelectedLane
+  // reconciles to the derived lane exactly as openDm's overlay does.
+  async function spawnAgent(provider: ProviderId, title?: string): Promise<void> {
+    const created = (await postJson('/api/agents', title ? { provider, title } : { provider })) as AgentInfo;
+    const lane = dmLaneFor(created.title);
+    setOverlay(lane);
+    openLane(lane.id);
+  }
   function resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null {
     return resolveSelectedLane(conversations, overlay, selectedId);
   }
-  return { resolveSelected, startRoom, openDm };
+  return { resolveSelected, startRoom, openDm, spawnAgent };
 }

@@ -301,6 +301,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
         onSelect={select}
         onStartChat={flows.startRoom}
         onOpenDm={openDm}
+        onSpawnAgent={flows.spawnAgent}
       />
       <main className="msg-thread">
         {selected && (

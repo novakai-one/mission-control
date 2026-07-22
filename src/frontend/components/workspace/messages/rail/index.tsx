@@ -23,8 +23,9 @@ import {
   splitRailSections,
   type KnownAgent,
 } from '../model.js';
+import type { ProviderId } from '../../../../../shared/project/schema.js';
 import { NEW_ACTION_STYLE, resolveStyle } from '../styles/index.js';
-import { NewDmPicker, NewRoomPicker } from './pickers.js';
+import { NewAgentPicker, NewDmPicker, NewRoomPicker } from './pickers.js';
 import './index.css';
 
 interface RoomsRailProps {
@@ -42,6 +43,7 @@ interface RoomsRailProps {
   onSelect(conversation: Conversation): void;
   onStartChat(members: string[], name: string): Promise<void>;
   onOpenDm(name: string): void;
+  onSpawnAgent(provider: ProviderId, title?: string): Promise<void>;
 }
 
 function RoomRow(props: {
@@ -97,7 +99,7 @@ function PersonRow(props: {
   );
 }
 
-type NewFlow = 'room' | 'dm';
+type NewFlow = 'room' | 'dm' | 'agent';
 
 export function RoomsRail(props: RoomsRailProps) {
   const [flow, setFlow] = useState<NewFlow | null>(null);
@@ -172,7 +174,18 @@ export function RoomsRail(props: RoomsRailProps) {
             >
               New DM
             </button>
+            <button
+              type="button"
+              className={resolveStyle(NEW_ACTION_STYLE.base, flow === 'agent' && NEW_ACTION_STYLE.active)}
+              aria-expanded={flow === 'agent'}
+              onClick={() => toggleFlow('agent')}
+            >
+              New agent
+            </button>
           </div>
+          {flow === 'agent' && (
+            <NewAgentPicker onSpawnAgent={props.onSpawnAgent} onClose={() => setFlow(null)} />
+          )}
           {flow === 'room' && (
             <NewRoomPicker
               knownAgents={props.knownAgents}
