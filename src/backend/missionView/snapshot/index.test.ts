@@ -125,6 +125,16 @@ function testCommunication(snapshot: MissionSnapshot): void {
   assert.ok(!snapshot.timeline.some((entry) => entry.summary.includes('in body')), 'never promoted into the timeline');
 }
 
+function testMalformedJournalBodyIsRecoverable(): void {
+  const malformed = JSON.parse('{"id":"msg_bad","from":"agent-a","to":"agent-b","delivery":"normal",'
+    + '"createdAt":"2026-07-21T11:30:00+10:00","status":"delivered"}') as MessageEnvelope;
+  const snapshot = deriveSnapshot(makeFacts(linked('mission_a', fullStores()), {
+    journal: [envelope('msg_good', 'mission_a in body'), malformed],
+  }));
+  const item = snapshot.attention.find((entry) => entry.id === 'attention:no-thread-ref');
+  assert.ok(item?.detail.includes('1 journal envelope(s)'), 'only string bodies contribute to diagnostic mention counts');
+}
+
 // C1: a room WITH an explicit typed mission ref resolves into the timeline;
 // rooms without one stay out, and the communication gap item disappears.
 function testRoomsResolve(): void {
@@ -229,6 +239,7 @@ function main(): void {
   testArtifacts(snapshot);
   testAttention(snapshot);
   testCommunication(snapshot);
+  testMalformedJournalBodyIsRecoverable();
   testTimeline(snapshot);
   testRoomsResolve();
   testCommunicationStatesVerifiedRooms();
