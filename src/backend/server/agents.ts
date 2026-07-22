@@ -17,6 +17,7 @@ import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.j
 import { SubagentWatcher } from '../transcript/subagents/index.js';
 import type { SessionControlIntent } from '../../shared/sessionControl.js';
 import { SessionControl } from '../terminal/control/index.js';
+import { ObjectModel, ObjectModelError } from '../objectModel/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -54,6 +55,8 @@ export class AgentsHub {
     private readonly manager: TerminalRuntime = new TerminalManager(),
     /** Durable mailbox names are always taken; defaults to the static seeds. */
     private readonly mailboxLookup: MailboxLookup = mailboxIdentityFor,
+    /** The durable mission graph — absent in setups without stores (tests). */
+    private readonly objectModel?: ObjectModel,
   ) {
     this.sessionControl = new SessionControl(this.manager);
     this.manager.onData((agentId, data) => {
@@ -61,9 +64,22 @@ export class AgentsHub {
     });
     this.manager.onExit((agentId, exitCode) => this.handleExit(agentId, exitCode));
     this.manager.onSession((info) => {
+      // Presence resolved → attach to the durable Agent (idempotent; 'unknown'
+      // just means this spawn is outside the mission model). The record always
+      // exists before the PTY (ruling S4), so this can never race creation.
+      if (info.sessionId) this.attachSessionSafely(info.agentId, info.sessionId);
       this.broadcastAgentsChanged();
       for (const listener of this.sessionListeners) listener(info);
     });
+  }
+
+  /** A store hiccup must not take down session plumbing — log and continue. */
+  private attachSessionSafely(agentId: string, sessionId: string): void {
+    try {
+      this.objectModel?.attachAgentSession(agentId, sessionId);
+    } catch (error) {
+      console.error(`[agents] session attach failed for ${agentId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   onSessionResolved(listener: (info: AgentInfo) => void): void {
@@ -99,6 +115,7 @@ export class AgentsHub {
   registerRoutes(application: Express): void {
     application.post('/api/agents', (request, response) => this.createAgent(request, response));
     application.get('/api/agents', (_request, response) => response.json({ agents: this.manager.list() }));
+    application.get('/api/agents/:agentId/identity', (request, response) => this.agentIdentity(request, response));
     application.patch('/api/agents/:agentId', (request, response) => this.renameAgent(request, response));
     application.post('/api/agents/:agentId/kill', (request, response) => this.killAgent(request, response));
     application.delete('/api/agents/:agentId', (request, response) => this.archiveAgent(request, response));
@@ -265,11 +282,55 @@ export class AgentsHub {
       return;
     }
     const title = requested ?? nextSpawnName(provider, this.manager.list().map((agent) => agent.title));
-    try {
-      response.status(201).json(await this.launch({ title, cwd, provider }));
-    } catch (error) {
-      response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+
+    // Mission spawn (plan v2 §1.4): one id minted once, durable Agent block
+    // persisted BEFORE the Presence exists, launch failure marked explicitly.
+    const missionId = typeof request.body?.missionId === 'string' ? request.body.missionId : undefined;
+    const teamId = typeof request.body?.teamId === 'string' ? request.body.teamId : undefined;
+    let agentId: string | undefined;
+    if (missionId !== undefined || teamId !== undefined) {
+      if (!missionId || !teamId || !this.objectModel) {
+        response.status(400).json({ error: 'mission spawns need both missionId and teamId (and a configured object model)' });
+        return;
+      }
+      try {
+        agentId = this.objectModel.createAgent({ name: title, provider, teamId, missionId });
+      } catch (error) {
+        if (error instanceof ObjectModelError) {
+          response.status(400).json({ error: error.message });
+          return;
+        }
+        throw error;
+      }
     }
+    try {
+      response.status(201).json(await this.launch({ title, cwd, provider, ...(agentId ? { agentId } : {}) }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (agentId) this.markFailedSafely(agentId, message);
+      response.status(500).json({ error: message });
+    }
+  }
+
+  private markFailedSafely(agentId: string, reason: string): void {
+    try {
+      this.objectModel?.markAgentFailed(agentId, reason);
+    } catch (error) {
+      console.error(`[agents] failed-state record for ${agentId} could not be written: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /** The confirmation projection (plan v2 §1.4): durable Agent + runtime
+   * Presence in one response — everything scripts/team/confirm.mjs needs. */
+  private agentIdentity(request: Request, response: Response): void {
+    const agentId = request.params.agentId;
+    const runtime = this.manager.list().find((agent) => agent.agentId === agentId) ?? null;
+    const durable = this.objectModel?.agentRecord(agentId) ?? null;
+    if (!runtime && !durable) {
+      response.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    response.json({ agentId, durable, runtime });
   }
 
   private renameAgent(request: Request, response: Response): void {

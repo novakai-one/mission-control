@@ -21,6 +21,7 @@ import { AnalyticsHub } from './analytics/index.js';
 import { DesignHub } from './design/index.js';
 import { MailboxRegistry, MessagingHub } from '../messaging/index.js';
 import { MissionViewHub } from '../missionView/index.js';
+import { ObjectModel } from '../objectModel/index.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
@@ -79,6 +80,7 @@ export class ServerController {
   private readonly messagingHub: MessagingHub;
   private readonly missionViewHub: MissionViewHub;
   private readonly mailboxRegistry: MailboxRegistry;
+  private readonly objectModel: ObjectModel;
 
   constructor(
     private readonly port: number,
@@ -88,6 +90,7 @@ export class ServerController {
   ) {
     // One durable mailbox registry shared by messaging routing and spawn-name checks.
     this.mailboxRegistry = new MailboxRegistry();
+    this.objectModel = this.buildObjectModel();
     this.agentsHub = this.buildAgentsHub(terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
@@ -115,11 +118,24 @@ export class ServerController {
     return [new CanvasHub(broadcast), new AnalyticsHub(broadcast), new DesignHub(broadcast)];
   }
 
+  /**
+   * The durable mission graph (plan v2 §1.2): roots injected exactly here —
+   * same env overrides as the MissionView read side, so a scratch backend
+   * points BOTH sides at the same fixture directory.
+   */
+  private buildObjectModel(): ObjectModel {
+    return new ObjectModel({
+      storesDir: process.env.NVK_MISSION_STORES_DIR ?? path.resolve('.novakai/stores'),
+      baselinePath: process.env.NVK_STORES_BASELINE ?? path.resolve('stores-baseline.json'),
+    });
+  }
+
   private buildAgentsHub(terminals: TerminalRuntime): AgentsHub {
     return new AgentsHub(
       this.activeSockets,
       terminals,
       (name) => this.mailboxRegistry.identityFor(name),
+      this.objectModel,
     );
   }
 

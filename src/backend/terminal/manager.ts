@@ -41,6 +41,9 @@ export interface CreateAgentOptions {
   provider?: ProviderId;
   projectId?: string;
   threadId?: string;
+  /** Durable object-model identity minted by the spawn path — the runtime
+   * adopts it verbatim so there is exactly one agentId (ruling S4). */
+  agentId?: string;
 }
 
 function buildAgentInfo(
@@ -121,7 +124,8 @@ export class TerminalManager {
   }
 
   private launchAgent(options: CreateAgentOptions): AgentInfo {
-    const agentId = `agent_${randomUUID()}`;
+    const agentId = options.agentId ?? `agent_${randomUUID()}`;
+    if (this.agents.has(agentId)) throw new Error(`agentId "${agentId}" already exists in the terminal registry`);
     const requestedSessionId = randomUUID();
     const launched = this.launcher(options.provider || 'claude', options.cwd, requestedSessionId);
     const provider = options.provider || 'claude';
