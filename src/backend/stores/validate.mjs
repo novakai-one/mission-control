@@ -3,6 +3,7 @@
 import {
   STORE_KINDS, REF_KINDS, RESOLVABLE_REF_KINDS, KIND_RULES, TS_PATTERN,
   idPattern, TOMBSTONE_STATUS, TOMBSTONE_TARGET_KINDS, EVIDENCE_TARGET_KINDS,
+  ARTIFACT_ANCHOR_KINDS,
 } from './schema.mjs';
 
 /**
@@ -150,6 +151,74 @@ function validateEvidence(block, index, addViolation) {
   }
 }
 
+/** Cardinality law from the object-model authority table: refRules = {refKind: {min, max}}. */
+function validateRefCardinality(block, rules, addViolation) {
+  if (!rules.refRules || !Array.isArray(block.refs)) {
+    // A kind with a min>0 rule and no refs array at all still violates.
+    for (const [refKind, { min }] of Object.entries(rules.refRules ?? {})) {
+      if (min > 0 && !Array.isArray(block.refs)) {
+        addViolation('REF-CARDINALITY', `kind "${block.kind}" requires ${min} ref(s) of kind "${refKind}" (authority table)`);
+      }
+    }
+    return;
+  }
+  for (const [refKind, { min, max }] of Object.entries(rules.refRules)) {
+    const count = block.refs.filter((ref) => ref !== null && typeof ref === 'object' && ref.kind === refKind).length;
+    if (count < min) {
+      addViolation('REF-CARDINALITY', `kind "${block.kind}" requires at least ${min} ref(s) of kind "${refKind}", found ${count}`);
+    }
+    if (count > max) {
+      addViolation('REF-CARDINALITY', `kind "${block.kind}" allows at most ${max} ref(s) of kind "${refKind}", found ${count}`);
+    }
+  }
+}
+
+/** blockedReason iff blocked (plan v2 §1.1) — both directions are violations. */
+function validateBlockedReason(block, addViolation) {
+  const blocked = block.status === 'blocked';
+  const reason = block.blockedReason;
+  if (blocked && (typeof reason !== 'string' || reason.trim() === '')) {
+    addViolation('FIELD-MISSING', 'a blocked task must carry a non-empty "blockedReason"');
+  }
+  if (!blocked && reason !== undefined) {
+    addViolation('FIELD-INVALID', '"blockedReason" is only allowed when status is "blocked"');
+  }
+}
+
+/** An artifact names exactly one location (path xor url) and anchors to mission/task. */
+function validateArtifactShape(block, addViolation) {
+  const hasPath = typeof block.path === 'string' && block.path !== '';
+  const hasUrl = typeof block.url === 'string' && block.url !== '';
+  if (hasPath === hasUrl) {
+    addViolation('FIELD-INVALID', 'an artifact must carry exactly one of "path" or "url"');
+  }
+  const refs = Array.isArray(block.refs) ? block.refs : [];
+  const anchored = refs.some((ref) => ref !== null && typeof ref === 'object' && ARTIFACT_ANCHOR_KINDS.includes(ref.kind));
+  if (!anchored) {
+    addViolation('RELATION-MISSING', `an artifact must ref at least one ${ARTIFACT_ANCHOR_KINDS.join('|')}`);
+  }
+}
+
+/**
+ * Agent↔Team mission agreement (authority table): the agent's team must ref
+ * the same mission the agent refs. Only checked when both sides resolve
+ * cleanly — dangling/ambiguous refs are already their own violations.
+ */
+function validateAgentTeamConsistency(block, index, addViolation) {
+  const refs = Array.isArray(block.refs) ? block.refs : [];
+  const refValue = (kind) => refs.find((ref) => ref !== null && typeof ref === 'object' && ref.kind === kind)?.value;
+  const teamId = refValue('team');
+  const missionId = refValue('mission');
+  if (typeof teamId !== 'string' || typeof missionId !== 'string') return;
+  const teamOccurrences = index.get(teamId);
+  if (!teamOccurrences || teamOccurrences.length !== 1 || teamOccurrences[0].block.kind !== 'team') return;
+  const teamRefs = Array.isArray(teamOccurrences[0].block.refs) ? teamOccurrences[0].block.refs : [];
+  const teamMission = teamRefs.find((ref) => ref !== null && typeof ref === 'object' && ref.kind === 'mission')?.value;
+  if (teamMission !== undefined && teamMission !== missionId) {
+    addViolation('RELATION-INCONSISTENT', `agent refs mission "${missionId}" but its team "${teamId}" refs mission "${teamMission}" — they must agree`);
+  }
+}
+
 function validateNestedKrs(block, addViolation) {
   for (const [field, value] of Object.entries(block)) {
     if (!Array.isArray(value)) continue;
@@ -223,6 +292,8 @@ export function validateBlock(block, { storeFile, index = new Map() }) {
     }
   }
 
+  validateRefCardinality(block, rules, addViolation);
+
   if (kind === 'learning') validateEvidence(block, index, addViolation);
   if (kind === 'kr' && block.objective !== undefined) {
     validateScalarRelation(block, 'objective', ['objective'], false, index, addViolation);
@@ -231,6 +302,9 @@ export function validateBlock(block, { storeFile, index = new Map() }) {
     validateScalarRelation(block, 'decision', ['decision'], true, index, addViolation);
   }
   if (kind === 'objective') validateNestedKrs(block, addViolation);
+  if (kind === 'task') validateBlockedReason(block, addViolation);
+  if (kind === 'artifact') validateArtifactShape(block, addViolation);
+  if (kind === 'agent') validateAgentTeamConsistency(block, index, addViolation);
 
   return violations;
 }
@@ -275,9 +349,13 @@ export function validateCandidate(rawLine, { storeFile, snapshot }) {
 }
 
 /**
- * M6 seed: pure validation of a proposed in-place replacement (state
- * transition). No shell in this mission performs replacements — this exists so
- * a future replacement writer can enforce legality without inventing rules.
+ * Pure validation of a proposed in-place replacement (state transition).
+ * Grown from the M6 seed into the enforcement behind replaceLine
+ * (mission_mission-object-model ruling S3): id/kind immutable, destination
+ * status legal, and `updated` STRICTLY monotonic on parsed instants — equal
+ * or lexically-tricky offset timestamps are rejected, never string-compared.
+ * Field-level deltas beyond these are judged by the full-candidate
+ * validateBlock pass the writer runs against the post-transition snapshot.
  * @returns {Violation[]}
  */
 export function validateTransition(currentBlock, candidateBlock) {
@@ -294,8 +372,12 @@ export function validateTransition(currentBlock, candidateBlock) {
   }
   if (typeof candidateBlock.updated !== 'string' || !TS_PATTERN.test(candidateBlock.updated)) {
     addViolation('TRANSITION-INVALID', '"updated" must be present (ISO-8601 with offset) on a transition (AGENTS.md: keep updated current)');
-  } else if (typeof currentBlock.updated === 'string' && candidateBlock.updated < currentBlock.updated) {
-    addViolation('TRANSITION-INVALID', `"updated" may not move backwards (${candidateBlock.updated} < ${currentBlock.updated})`);
+  } else if (typeof currentBlock.updated === 'string' && TS_PATTERN.test(currentBlock.updated)) {
+    const currentInstant = Date.parse(currentBlock.updated);
+    const candidateInstant = Date.parse(candidateBlock.updated);
+    if (!(candidateInstant > currentInstant)) {
+      addViolation('TRANSITION-INVALID', `"updated" must move strictly forward in time (${candidateBlock.updated} is not after ${currentBlock.updated})`);
+    }
   }
   return violations;
 }

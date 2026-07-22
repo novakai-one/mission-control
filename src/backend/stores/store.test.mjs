@@ -148,7 +148,7 @@ function assertUnchanged(before, dir) {
     ['CORE-MISSING', 'tasks.jsonl', JSON.stringify({ id: 'task_r3', kind: 'task', title: 'no ts', created: TS })],
     ['ID-FORMAT', 'tasks.jsonl', JSON.stringify({ id: 'task_', kind: 'task', ts: TS, title: 'bad id' })],
     ['WRONG-STORE', 'missions.jsonl', JSON.stringify({ id: 'task_r4', kind: 'task', ts: TS, title: 'wrong home' })],
-    ['STATUS-UNKNOWN', 'tasks.jsonl', JSON.stringify({ id: 'task_r5', kind: 'task', ts: TS, title: 'T', status: 'doing' })],
+    ['STATUS-UNKNOWN', 'tasks.jsonl', JSON.stringify({ id: 'task_r5', kind: 'task', ts: TS, title: 'T', status: 'zombie' })],  // doing joined the set (mission_mission-object-model)
     ['FIELD-MISSING', 'missions.jsonl', JSON.stringify({ id: 'mission_r6', kind: 'mission', ts: TS, owner: 'x' })],
     ['FIELD-INVALID', 'okrs.jsonl', JSON.stringify({ id: 'okr_r7', kind: 'objective', ts: TS, title: 'O', horizon: 'someday' })],
     ['REF-SHAPE', 'tasks.jsonl', JSON.stringify({ id: 'task_r8', kind: 'task', ts: TS, title: 'T', refs: [{ kind: 'wombat', value: 'x' }] })],

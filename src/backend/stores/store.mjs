@@ -1,14 +1,18 @@
 // The store facade — the ONE public interface to .novakai/stores validation.
 // Pure core lives in validate.mjs/schema.mjs (internal); this module owns the
 // impure edges: directory reads, SC4-bracketed audits, and the guarded
-// append-only writer. Nothing here ever rewrites an existing byte of a store.
+// append-only writer. Appends never rewrite an existing byte; the ONE
+// sanctioned exception is replaceLine — a locked, CAS-guarded, fully
+// validated, atomic single-record state transition (Manager ruling,
+// mission_mission-object-model; partially closes
+// issue_store-writer-residual-gap). Every other byte of history is immutable.
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  appendFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, realpathSync, writeFileSync,
+  appendFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, realpathSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import { STORE_KINDS } from './schema.mjs';
-import { parseSnapshot, validateCandidate, auditSnapshot } from './validate.mjs';
+import { parseSnapshot, validateCandidate, auditSnapshot, validateBlock, buildIndex, validateTransition } from './validate.mjs';
 
 export { validateCandidate, auditSnapshot, validateTransition } from './validate.mjs';
 
@@ -26,6 +30,15 @@ export class StoreRefusalError extends Error {
   constructor(message) {
     super(message);
     this.name = 'StoreRefusalError';
+  }
+}
+
+/** Raised when a transition's compare-and-swap fails: the record changed under
+ * the caller. Retry by re-reading the current line — never by forcing. */
+export class StoreConflictError extends StoreRefusalError {
+  constructor(message) {
+    super(message);
+    this.name = 'StoreConflictError';
   }
 }
 
@@ -191,6 +204,95 @@ export function appendLine(storeDir, storeFile, rawLine, { lockTimeoutMs = 5000,
     }
     if (baselinePath) enrollBaselineId(baselinePath, block.id);
     return { id: block.id, storeFile, bytesAppended: Buffer.byteLength(rawLine) + 1 };
+  } finally {
+    releaseLock(lock);
+  }
+}
+
+// --- guarded transition writer (replaceLine) ---------------------------------
+
+/**
+ * Replace ONE existing record with a validated successor — the sanctioned
+ * state-transition path (ruling S3). Under the lock: the target id must be
+ * unique across every store and live in `storeFile`; `expectedRaw` must equal
+ * the record's current raw line (CAS — a mismatch throws StoreConflictError,
+ * and the caller retries by re-reading, never by forcing); the candidate must
+ * pass validateTransition (id/kind immutable, status legal, `updated` strictly
+ * forward) AND full validateBlock against the post-transition snapshot. The
+ * write is crash-safe: same-dir temp file, byte-exact verify, atomic rename,
+ * byte-exact read-back. A failed read-back throws and repairs nothing.
+ */
+export function replaceLine(storeDir, storeFile, id, candidateLine, { expectedRaw, lockTimeoutMs = 5000, seams } = {}) {
+  const { resolvedDir, filePath } = resolveAppendTarget(storeDir, storeFile);
+  if (typeof expectedRaw !== 'string' || /[\r\n]/.test(expectedRaw)) {
+    throw new StoreRefusalError('expectedRaw (the exact current line, no newline) is required — transitions are compare-and-swap');
+  }
+  if (/[\r\n]/.test(candidateLine)) {
+    throw new StoreValidationError([{ code: 'LINE-BOUNDARY', message: 'a candidate must be exactly one line', storeFile }]);
+  }
+  let candidateBlock;
+  try {
+    candidateBlock = JSON.parse(candidateLine);
+  } catch (error) {
+    throw new StoreValidationError([{ code: 'PARSE', message: `invalid JSON: ${error.message}`, storeFile }]);
+  }
+  if (candidateBlock === null || typeof candidateBlock !== 'object' || Array.isArray(candidateBlock)) {
+    throw new StoreValidationError([{ code: 'PARSE', message: 'candidate is not a single JSON object', storeFile }]);
+  }
+  const lock = acquireLock(resolvedDir, { timeoutMs: lockTimeoutMs });
+  try {
+    const originalText = readFileSync(filePath, 'utf8');
+    if (originalText.length > 0 && !originalText.endsWith('\n')) {
+      throw new StoreRefusalError(`${storeFile} does not end with a newline — transitioning would touch an unterminated final line; refused (no repair attempted)`);
+    }
+    const snapshot = readStoreDir(resolvedDir);
+    const occurrences = buildIndex(snapshot).get(id);
+    if (!occurrences || occurrences.length === 0) {
+      throw new StoreRefusalError(`id "${id}" resolves to no record — replaceLine never creates`);
+    }
+    if (occurrences.length > 1) {
+      throw new StoreRefusalError(`id "${id}" occurs ${occurrences.length} times (${occurrences.map((occurrence) => occurrence.storeFile).join(', ')}) — ambiguous target refused`);
+    }
+    if (occurrences[0].storeFile !== storeFile) {
+      throw new StoreRefusalError(`id "${id}" lives in ${occurrences[0].storeFile}, not ${storeFile}`);
+    }
+    const record = snapshot.files[storeFile].records.find((candidate) => candidate.block.id === id);
+    if (record.raw !== expectedRaw) {
+      throw new StoreConflictError(`CAS conflict: the current line for "${id}" differs from expectedRaw — re-read and retry`);
+    }
+    const violations = [...validateTransition(record.block, candidateBlock)];
+    // Full-candidate legality is judged against the world AFTER the swap, so
+    // self-refs and cross-refs resolve against the candidate, not the past.
+    const postSnapshot = parseSnapshot(Object.fromEntries(
+      Object.entries(snapshot.files).map(([name, file]) => {
+        const text = file.records.map((existing) => (existing === record ? candidateLine : existing.raw)).join('\n');
+        return [name, text.length > 0 ? text + '\n' : ''];
+      }),
+    ));
+    violations.push(...validateBlock(candidateBlock, { storeFile, index: buildIndex(postSnapshot) }));
+    if (violations.length > 0) throw new StoreValidationError(violations);
+
+    const lines = originalText.split('\n');
+    lines[record.line - 1] = candidateLine;
+    const newText = lines.join('\n');
+    const tempPath = path.join(resolvedDir, `.${storeFile}.transition-${randomUUID()}`);
+    try {
+      writeFileSync(tempPath, newText);
+      seams?.afterTempWrite?.(tempPath); // @internal crash-injection seam (tests only)
+      if (!readFileSync(tempPath).equals(Buffer.from(newText))) {
+        throw new Error(`SC5-T: temp file bytes for ${storeFile} do not match the intended content — stopping before rename; no repair attempted`);
+      }
+      seams?.beforeRename?.(tempPath); // @internal crash-injection seam (tests only)
+      renameSync(tempPath, filePath);
+    } catch (error) {
+      rmSync(tempPath, { force: true });
+      throw error;
+    }
+    seams?.afterRename?.(filePath); // @internal crash-injection seam (tests only)
+    if (!readFileSync(filePath).equals(Buffer.from(newText))) {
+      throw new Error(`SC5-T: post-transition bytes of ${storeFile} are not exactly the intended content — stopping; no repair or rollback will be attempted`);
+    }
+    return { id, storeFile, line: record.line };
   } finally {
     releaseLock(lock);
   }
