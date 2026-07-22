@@ -40,7 +40,7 @@ class FakeSocket {
 (globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket;
 
 const agentSocket = await import('./index.js');
-const { connect, subscribeAgent, sendInput, watchSession, unwatchSession, setBackoffForTest, onRoomsChanged } = agentSocket;
+const { connect, subscribeAgent, sendInput, watchSession, unwatchSession, setBackoffForTest, onRoomsChanged, connectionStatus, onConnectionChanged } = agentSocket;
 
 function framesOf(instance: FakeSocket, type: string): Record<string, unknown>[] {
   return instance.sent.map(frame => JSON.parse(frame)).filter(frame => frame.type === type);
@@ -132,5 +132,32 @@ assert.deepEqual(
 );
 const resentWatchAfterUnwatch = framesOf(socketThree, 'watch-session');
 assert.equal(resentWatchAfterUnwatch.length, 0); // unwatched target must not resurrect on reconnect
+
+
+// ---- C5: client-side connection status (wire protocol untouched) -----------
+// socketThree is open at this point.
+assert.equal(connectionStatus(), 'connected');
+const transitions: string[] = [];
+const offConnection = onConnectionChanged(status => transitions.push(status));
+socketThree.triggerClose();
+assert.equal(connectionStatus(), 'disconnected');
+assert.deepEqual(transitions, ['disconnected']);
+// A second failed attempt closing again must NOT re-emit 'disconnected' —
+// reconnect backoff would otherwise spam every listener on every retry.
+await new Promise(resolve => setTimeout(resolve, 30));
+const socketFour = FakeSocket.instances[3];
+socketFour.triggerClose();
+assert.deepEqual(transitions, ['disconnected']);
+await new Promise(resolve => setTimeout(resolve, 60));
+const socketFive = FakeSocket.instances[4];
+socketFive.triggerOpen();
+assert.equal(connectionStatus(), 'connected');
+assert.deepEqual(transitions, ['disconnected', 'connected']);
+// Unsubscribed listeners hear nothing further.
+offConnection();
+socketFive.triggerClose();
+assert.equal(connectionStatus(), 'disconnected');
+assert.deepEqual(transitions, ['disconnected', 'connected']);
+
 
 console.log('PASS');

@@ -70,6 +70,19 @@ let backoffMs = 500;
 let backoffMaxMs = 8000;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
+// C5 (connection honesty): CLIENT-side status only — the wire protocol is
+// frozen; nothing here sends or reshapes a frame. Emits on CHANGE only, so
+// reconnect backoff's repeated failed attempts never spam listeners.
+export type ConnectionStatus = 'connected' | 'disconnected';
+let currentStatus: ConnectionStatus = 'disconnected';
+const connectionListeners: Array<(status: ConnectionStatus) => void> = [];
+
+function setConnectionStatus(next: ConnectionStatus): void {
+  if (next === currentStatus) return;
+  currentStatus = next;
+  emitAll(connectionListeners, next);
+}
+
 // Test seam: resolved lazily so a fake class installed on globalThis before
 // connect() runs is picked up instead of the real browser WebSocket.
 function getWebSocketCtor(): typeof WebSocket {
@@ -160,6 +173,7 @@ function handleOpen(): void {
   backoffMs = backoffInitialMs;
   flushQueue();
   resubscribeAll();
+  setConnectionStatus('connected');
 }
 
 function scheduleReconnect(): void {
@@ -174,6 +188,7 @@ function scheduleReconnect(): void {
 
 function handleClose(): void {
   socket = null;
+  setConnectionStatus('disconnected');
   scheduleReconnect();
 }
 
@@ -278,6 +293,18 @@ export function onSubagentEvent(
   listener: (sessionId: string, subagentId: string, event: unknown) => void
 ): () => void {
   return addListener(subagentEventListeners, listener);
+}
+
+/** Current client↔backend ws status — 'disconnected' until the first open. */
+export function connectionStatus(): ConnectionStatus {
+  return currentStatus;
+}
+
+/** Fires on every connected↔disconnected TRANSITION (never on retries while
+ * already down). Reconnect itself stays the existing backoff loop — this is
+ * the missing trigger for refetch-on-reopen, nothing more. */
+export function onConnectionChanged(listener: (status: ConnectionStatus) => void): () => void {
+  return addListener(connectionListeners, listener);
 }
 
 export function onSessionControlResult(
