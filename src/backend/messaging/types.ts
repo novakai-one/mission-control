@@ -4,13 +4,18 @@ import type { ProviderId } from '../../shared/project/schema.js';
 
 export interface MessageEnvelope {
   id: string;            // msg_<uuid>
-  from: string;          // sender agent name
-  to: string;            // agent name or '#team'
+  from: string;          // sender agent name (presentation)
+  to: string;            // agent name or '#team' (presentation)
   delivery: 'normal' | 'interrupt';
   body: string;
   threadId?: string;     // optional conversation grouping
   createdAt: string;     // ISO
   status: 'queued' | 'delivered' | 'partial' | 'failed';
+  // Server-derived, never client-trusted (plan v2 §1.5, M11): durable joins
+  // use these ids, so renames never sever message→Agent history.
+  senderAgentId?: string;
+  recipientAgentId?: string;
+  missionId?: string;
 }
 
 export interface Room {
@@ -45,6 +50,7 @@ export interface MessageQuery {
   withAgent?: string;
   withRoom?: string;
   threadId?: string;
+  missionId?: string;
   since?: string;
   limit?: number;
 }

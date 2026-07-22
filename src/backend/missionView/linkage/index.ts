@@ -52,6 +52,7 @@ export type LinkageResult =
 const REF_KINDS = new Set([
   'task', 'mission', 'project', 'doc', 'decision', 'log',
   'exp', 'objective', 'request', 'issue', 'session', 'learning',
+  'team', 'agent', 'artifact', 'thread',
 ]);
 const UNRESOLVABLE_KINDS = new Set(['exp', 'session']);
 const KINDS_BY_STORE: Record<StoreName, string[]> = {
@@ -61,6 +62,11 @@ const KINDS_BY_STORE: Record<StoreName, string[]> = {
   'requests': ['request'],
   'issues': ['issue'],
   'captains-log': ['log'],
+  'projects': ['project'],
+  'teams': ['team'],
+  'agents': ['agent'],
+  'artifacts': ['artifact'],
+  'threads': ['thread'],
 };
 /** Ref kinds backed by a store we read — dangling checks apply to these only. */
 const STORE_BY_REF_KIND = new Map<string, StoreName>([
@@ -70,6 +76,11 @@ const STORE_BY_REF_KIND = new Map<string, StoreName>([
   ['issue', 'issues'],
   ['objective', 'okrs'],
   ['request', 'requests'],
+  ['project', 'projects'],
+  ['team', 'teams'],
+  ['agent', 'agents'],
+  ['artifact', 'artifacts'],
+  ['thread', 'threads'],
 ]);
 
 /**

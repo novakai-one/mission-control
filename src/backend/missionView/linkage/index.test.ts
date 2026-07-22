@@ -11,7 +11,10 @@ function record(store: StoreName, line: number, json: string): RawRecord {
 }
 
 function storesOf(partials: Partial<Record<StoreName, RawRecord[]>>): Record<StoreName, RawRecord[]> {
-  return { 'missions': [], 'tasks': [], 'okrs': [], 'requests': [], 'issues': [], 'captains-log': [], ...partials };
+  return {
+    'missions': [], 'tasks': [], 'okrs': [], 'requests': [], 'issues': [], 'captains-log': [],
+    'projects': [], 'teams': [], 'agents': [], 'artifacts': [], 'threads': [], ...partials,
+  };
 }
 
 function resolved(result: LinkageResult): MissionLinkage {

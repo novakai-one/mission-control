@@ -59,11 +59,14 @@ export class MissionViewHub {
     if (result.status === 'ambiguous') {
       throw new MissionAmbiguousError(`ambiguous mission id: ${missionId} (duplicate store records)`, result.candidates);
     }
-    return deriveSnapshot(this.collectFacts(missionId, result.linkage, stores.problems));
+    return deriveSnapshot(this.collectFacts(missionId, result.linkage, stores.records, stores.problems));
   }
 
   /** Impure reads gathered at the edge; the derive itself is pure. */
-  private collectFacts(missionId: string, linkage: MissionLinkage, storeProblems: ReadIssue[]): MissionFacts {
+  private collectFacts(
+    missionId: string, linkage: MissionLinkage,
+    storeRecords: MissionFacts['stores'], storeProblems: ReadIssue[],
+  ): MissionFacts {
     const journal = readJournal(this.roots.journalPath);
     const registry = readRegistry(this.roots.registryPath);
     const rooms = readRooms(this.roots.roomsPath);
@@ -71,6 +74,7 @@ export class MissionViewHub {
     return {
       missionId,
       linkage,
+      stores: storeRecords,
       journal: journal.envelopes,
       journalPath: this.roots.journalPath,
       registry: registry.entries,

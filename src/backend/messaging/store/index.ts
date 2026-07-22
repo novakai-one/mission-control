@@ -65,6 +65,8 @@ export class MessageStore {
     }
     if (query.threadId !== undefined)
       envelopes = envelopes.filter((message) => message.threadId === query.threadId);
+    if (query.missionId !== undefined)
+      envelopes = envelopes.filter((message) => message.missionId === query.missionId);
     if (query.since !== undefined) {
       const since = query.since;
       envelopes = envelopes.filter((message) => message.createdAt >= since);

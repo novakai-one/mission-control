@@ -16,12 +16,15 @@ import type {
 } from '../../../shared/missionView/schema.js';
 import type { MessageEnvelope } from '../../messaging/types.js';
 import type { MissionLinkage, RefValue } from '../linkage/index.js';
-import type { PacketFile, RawRecord, RegistryEntry, RoomRecord } from '../sources/index.js';
+import type { PacketFile, RawRecord, RegistryEntry, RoomRecord, StoreName } from '../sources/index.js';
+import { buildTree } from '../tree/index.js';
 
 /** Everything deriveSnapshot needs: linkage output plus the other source reads. */
 export interface MissionFacts {
   missionId: string;
   linkage: MissionLinkage;
+  /** Raw store records — the object-model tree derives from these. */
+  stores: Record<StoreName, RawRecord[]>;
   journal: MessageEnvelope[];
   journalPath: string;
   registry: RegistryEntry[];
@@ -50,6 +53,7 @@ export function deriveSnapshot(facts: MissionFacts): MissionSnapshot {
     currentActivity: buildActivity(),
     timeline: buildTimeline(facts, rooms),
     artifacts: buildArtifacts(facts),
+    tree: buildTree(facts.missionId, facts.linkage.mission, facts.stores),
     attention,
     asOf: facts.asOf,
     issues,
@@ -292,6 +296,12 @@ function evidenceAttention(facts: MissionFacts): AttentionItem[] {
  */
 function communicationAttention(facts: MissionFacts, rooms: RoomRecord[]): AttentionItem[] {
   if (rooms.length > 0) return [];
+  // A typed thread block IS the explicit mission↔room link (plan v2 §1.5) —
+  // when one exists, communication is linked, not a gap.
+  if (facts.stores.threads.some((record) => {
+    const rawRefs = record.block.refs;
+    return Array.isArray(rawRefs) && rawRefs.some((entry) => isMissionRef(entry, facts.missionId));
+  })) return [];
   const mentions = facts.journal.filter((envelope) => (
     typeof envelope.body === 'string' && envelope.body.includes(facts.missionId)
   )).length;

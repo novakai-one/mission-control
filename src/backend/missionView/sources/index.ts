@@ -21,8 +21,9 @@ export interface MissionViewRoots {
   roomsPath: string;
 }
 
-/** The six .novakai stores the snapshot joins over. */
-export type StoreName = 'missions' | 'tasks' | 'okrs' | 'requests' | 'issues' | 'captains-log';
+/** The .novakai stores the snapshot joins over (object-model stores included). */
+export type StoreName = 'missions' | 'tasks' | 'okrs' | 'requests' | 'issues' | 'captains-log'
+  | 'projects' | 'teams' | 'agents' | 'artifacts' | 'threads';
 
 /** One parsed-but-unvalidated store block with its provenance (store, file, line). */
 export interface RawRecord {
@@ -76,6 +77,11 @@ const STORE_FILES: ReadonlyArray<{ name: StoreName; file: string }> = [
   { name: 'requests', file: 'requests.jsonl' },
   { name: 'issues', file: 'issues.jsonl' },
   { name: 'captains-log', file: 'captains-log.jsonl' },
+  { name: 'projects', file: 'projects.jsonl' },
+  { name: 'teams', file: 'teams.jsonl' },
+  { name: 'agents', file: 'agents.jsonl' },
+  { name: 'artifacts', file: 'artifacts.jsonl' },
+  { name: 'threads', file: 'threads.jsonl' },
 ];
 
 /**
@@ -85,7 +91,7 @@ const STORE_FILES: ReadonlyArray<{ name: StoreName; file: string }> = [
 export type ReadAttemptHook = (attempt: number, storesDir: string) => void;
 
 /**
- * One coherent read of all six stores (S5): sha256 every file before reading,
+ * One coherent read of all the stores (S5): sha256 every file before reading,
  * re-hash after; on any mismatch retry the whole read ONCE; a second mismatch
  * adds a visible problem entry and still serves the final read honestly.
  */

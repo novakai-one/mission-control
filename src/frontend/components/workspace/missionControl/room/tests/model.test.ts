@@ -56,6 +56,7 @@ function unlinkedSnapshot(): MissionSnapshot {
     currentActivity: [],
     timeline: [],
     artifacts: [],
+    tree: { ancestry: [], team: null, agents: [], unassignedTasks: [], artifacts: [], threads: [] },
     attention: unlinkedAttention(),
     asOf: '2026-07-21T01:00:00.000Z',
     issues: [{ message: 'tasks:10 task_store-validator missing required field ts', sourceRefs: [{ store: 'tasks', recordId: 'task_store-validator', line: 10 }] }],

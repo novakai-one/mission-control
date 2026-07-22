@@ -21,6 +21,8 @@ import {
 import { RoomStore } from './rooms/index.js';
 import { MailboxConflictError, MailboxRegistry } from './mailbox/index.js';
 import { SendApi, InvalidSendError } from './send/index.js';
+import { EnvelopeIdentity } from './identity/index.js';
+import type { MissionGraph } from './identity/index.js';
 import { MessageStore } from './store/index.js';
 import { CHRIS_IDENTITY, CHRIS_MEMBER } from './types.js';
 import type { MessageQuery, Room, SendMessage } from './types.js';
@@ -61,6 +63,9 @@ export interface MessagingOptions {
   spawnBriefingDelayMs?: number;
   /** Port quoted in the briefing's curl instructions. */
   serverPort?: number;
+  /** The durable mission graph — enables server-derived envelope identity
+   * and the POST /api/threads mission↔room link. */
+  missionGraph?: MissionGraph;
 }
 
 export class MessagingHub {
@@ -71,12 +76,14 @@ export class MessagingHub {
   private readonly sendApi: SendApi;
   private readonly spawnBriefingDelayMs: number;
   private readonly serverPort: number;
+  private readonly missionGraph?: MissionGraph;
 
   constructor(
     private readonly terminals: AgentTerminals,
     private readonly broadcast: (event: string, payload: unknown) => void,
     options: MessagingOptions = {},
   ) {
+    this.missionGraph = options.missionGraph;
     this.store = new MessageStore(options.storePath); this.rooms = new RoomStore(options.roomsStorePath);
     this.mailboxes = options.mailboxRegistry ?? new MailboxRegistry(options.mailboxStorePath);
     this.store.onAppend((envelope) => this.broadcast('message-envelope', envelope));
@@ -95,6 +102,7 @@ export class MessagingHub {
       () => rosterFromAgents(this.terminals.list()),
       new InterruptRateLimiter(options.maxInterruptsPerMinute),
       (name) => this.mailboxes.identityFor(name),
+      this.missionGraph ? new EnvelopeIdentity(this.missionGraph) : undefined,
     );
   }
 
@@ -120,6 +128,32 @@ export class MessagingHub {
       '/api/rooms/:roomId/members',
       (request, response) => this.handleAddMembers(request, response),
     );
+    application.post('/api/threads', (request, response) => this.handleCreateThread(request, response));
+  }
+
+  /** The mission↔room link: one typed thread block in the system of record. */
+  private handleCreateThread(request: Request, response: Response): void {
+    if (!this.missionGraph) {
+      response.status(501).json({ error: 'no mission graph configured on this backend' });
+      return;
+    }
+    const payload = (request.body ?? {}) as { roomId?: unknown; missionId?: unknown };
+    try {
+      const roomId = this.requireText(payload.roomId, 'roomId');
+      const missionId = this.requireText(payload.missionId, 'missionId');
+      if (!this.rooms.get(roomId)) {
+        response.status(404).json({ error: new RoomNotFoundError(roomId).message });
+        return;
+      }
+      const existing = this.missionGraph.missionForRoom(roomId);
+      if (existing) {
+        response.status(409).json({ error: `room ${roomId} is already linked to ${existing}` });
+        return;
+      }
+      response.status(201).json({ threadId: this.missionGraph.createThread({ roomId, missionId }) });
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   private handleRegisterMailbox(request: Request, response: Response): void {
@@ -277,6 +311,7 @@ export class MessagingHub {
     if (typeof request.query.withAgent === 'string') query.withAgent = request.query.withAgent;
     if (typeof request.query.withRoom === 'string') query.withRoom = request.query.withRoom;
     if (typeof request.query.threadId === 'string') query.threadId = request.query.threadId;
+    if (typeof request.query.missionId === 'string') query.missionId = request.query.missionId;
     if (typeof request.query.since === 'string') query.since = request.query.since;
     if (typeof request.query.limit === 'string') {
       const limit = Number.parseInt(request.query.limit, 10);

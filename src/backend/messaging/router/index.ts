@@ -9,6 +9,7 @@ import { MailboxDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../deli
 import { resolveActor } from '../actors/index.js';
 import type { ResolvedActor } from '../actors/index.js';
 import { RoomStore } from '../rooms/index.js';
+import type { EnvelopeIdentity } from '../identity/index.js';
 import { CHRIS_MEMBER, formatRoomInbound, isChannel, isRoom, mailboxIdentityFor } from '../types.js';
 import type { AgentAddress, DeliveryReceipt, MailboxLookup, MessageEnvelope, Room } from '../types.js';
 
@@ -81,11 +82,16 @@ export class MessageRouter {
     private readonly roster: () => AgentAddress[],
     private readonly interruptLimiter = new InterruptRateLimiter(),
     private readonly mailboxLookup: MailboxLookup = mailboxIdentityFor,
+    /** Stamps durable ids + missionId server-side; absent in rigs without stores. */
+    private readonly identity?: EnvelopeIdentity,
   ) {
     this.adapters = { agent: new PtyDeliveryAdapter(delivery), mailbox: new MailboxDeliveryAdapter() };
   }
 
   async route(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
+    // Identity is stamped before the FIRST append so the audit record carries
+    // the durable ids from birth (plan v2 §1.5).
+    this.identity?.stamp(envelope, this.roster());
     this.store.append(envelope);
     if (isChannel(envelope.to)) return this.routeChannel(envelope);
     if (isRoom(envelope.to)) return this.routeRoom(envelope);

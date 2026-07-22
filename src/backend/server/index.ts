@@ -148,7 +148,7 @@ export class ServerController {
     const messagingHub = new MessagingHub(
       this.agentsHub.terminals,
       (event, payload) => this.broadcastEvent(event, payload),
-      { serverPort: this.port, mailboxRegistry: this.mailboxRegistry },
+      { serverPort: this.port, mailboxRegistry: this.mailboxRegistry, missionGraph: this.objectModel },
     );
     this.agentsHub.onLaunch((info) => messagingHub.handleAgentSpawned(info));
     return messagingHub;

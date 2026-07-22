@@ -102,6 +102,65 @@ export interface ArtifactView {
   sourceRefs: SourceRef[];
 }
 
+// --- The object-model tree (mission_mission-object-model, plan v2 §1.6) -----
+// Mission → Team → Agent → Tasks → Artifacts rendered FROM DATA, with
+// Project → Objective → KR as ancestry context. Empty arrays / nulls are the
+// UI's explicit gap states — absence is shown, never invented.
+
+export interface TaskNode {
+  id: string;
+  title: string;
+  status: string;
+  blockedReason: string | null;
+  updated: string | null;
+  sourceRefs: SourceRef[];
+}
+
+export interface AgentNode {
+  id: string;
+  name: string;
+  provider: string;
+  status: string;
+  sessionId: string | null;
+  tasks: TaskNode[];
+  doneCount: number;
+  totalCount: number;
+  sourceRefs: SourceRef[];
+}
+
+/** One ancestry step in the header path: project → objective → KRs. */
+export interface AncestryNode {
+  id: string;
+  kind: 'project' | 'objective' | 'kr';
+  label: string;
+  sourceRefs: SourceRef[];
+}
+
+export interface ArtifactNode {
+  id: string;
+  title: string;
+  location: string;
+  /** Set when the artifact anchors to a task inside this mission. */
+  taskId: string | null;
+  sourceRefs: SourceRef[];
+}
+
+export interface ThreadNode {
+  id: string;
+  roomId: string;
+  sourceRefs: SourceRef[];
+}
+
+export interface MissionTreeView {
+  ancestry: AncestryNode[];
+  team: { id: string; name: string; sourceRefs: SourceRef[] } | null;
+  agents: AgentNode[];
+  /** Tasks refing the mission but no agent — rendered as an explicit gap group. */
+  unassignedTasks: TaskNode[];
+  artifacts: ArtifactNode[];
+  threads: ThreadNode[];
+}
+
 /** The deep read result: one mission, joined read-only, uncertainty preserved. */
 export interface MissionSnapshot {
   mission: {
@@ -121,6 +180,8 @@ export interface MissionSnapshot {
   currentActivity: CurrentActivityView[];
   timeline: TimelineEntry[];
   artifacts: ArtifactView[];
+  /** The object-model tree — the progress-tree UI renders from this, not prose. */
+  tree: MissionTreeView;
   attention: AttentionItem[];
   /** Snapshot generation time (ISO). */
   asOf: string;
