@@ -384,8 +384,8 @@ assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => targe
   assert.equal(capRailLanes(many, 99999).hiddenCount, many.length - 150);
 
   // Under the bound: everything renders, nothing hidden, #team still first.
-  const few = [lane('dm:a', 'dm', 'a'), lane('#team', 'channel', '#team')];
-  const small = capRailLanes(few, MESSAGING_SETTINGS.rail.cap);
+  const fewLanes = [lane('dm:a', 'dm', 'a'), lane('#team', 'channel', '#team')];
+  const small = capRailLanes(fewLanes, MESSAGING_SETTINGS.rail.cap);
   assert.equal(small.lanes.length, 2);
   assert.equal(small.lanes[0].id, '#team');
   assert.equal(small.hiddenCount, 0);
@@ -421,10 +421,10 @@ assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => targe
   assert.equal(anchored.earlierCount, 0);
   assert.equal(anchored.laterCount, 150);
 
-  const mid = windowMessages(feed, 100, 'env-125');
-  assert.equal(mid.messages.length, 100);
-  assert.ok(mid.messages.some((entry) => entry.id === 'env-125'));
-  assert.equal(mid.earlierCount + mid.laterCount, 150);
+  const midWindow = windowMessages(feed, 100, 'env-125');
+  assert.equal(midWindow.messages.length, 100);
+  assert.ok(midWindow.messages.some((entry) => entry.id === 'env-125'));
+  assert.equal(midWindow.earlierCount + midWindow.laterCount, 150);
 
   // Unknown anchor falls back to the tail window.
   const missing = windowMessages(feed, 100, 'env-nope');
@@ -442,13 +442,13 @@ assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => targe
     lane('dm:maya', 'dm', 'maya'),
   ];
   const labels = distinctRailLabels(collide);
-  const one = labels.get('room_aaaa-1234');
-  const two = labels.get('room_bbbb-1234');
-  assert.ok(one && two && one !== two, 'colliding rooms must render distinct labels');
-  assert.ok(one.startsWith('triage · ') && two.startsWith('triage · '));
+  const labelOne = labels.get('room_aaaa-1234');
+  const labelTwo = labels.get('room_bbbb-1234');
+  assert.ok(labelOne && labelTwo && labelOne !== labelTwo, 'colliding rooms must render distinct labels');
+  assert.ok(labelOne.startsWith('triage · ') && labelTwo.startsWith('triage · '));
   // Shortest-first: 4 chars tie ("1234"), 5 chars tie ("-1234"), 6 disambiguate.
-  assert.equal(one, 'triage · a-1234');
-  assert.equal(two, 'triage · b-1234');
+  assert.equal(labelOne, 'triage · a-1234');
+  assert.equal(labelTwo, 'triage · b-1234');
   assert.equal(labels.get('dm:maya'), 'maya'); // unique labels untouched
 
   // A room literally named 'team' collides with the #team channel label —

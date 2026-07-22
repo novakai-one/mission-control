@@ -36,6 +36,16 @@ interface LaneFlowDeps {
   openLane(id: ConversationId): void;
 }
 
+/** Spawn-from-Messages (C4, audit S1): the same POST /api/agents path the
+ *  Agents pane uses; the server mints a unique title when none is given.
+ *  The caller creates the DM overlay BEFORE selecting, so the lane renders
+ *  from this 201 ALONE — no dependency on the agents-changed roster frame,
+ *  which races the response. When the frame lands, resolveSelectedLane
+ *  reconciles to the derived lane exactly as openDm's overlay does. */
+async function spawnAgentRequest(provider: ProviderId, title?: string): Promise<AgentInfo> {
+  return (await postJson('/api/agents', title ? { provider, title } : { provider })) as AgentInfo;
+}
+
 /** Lane-creation flows for the rail entry points: startRoom posts the room
  *  and opens the lane the 201 returns; openDm derives the DM lane locally
  *  (a DM is not a server resource) and holds it as an overlay until the
@@ -55,16 +65,10 @@ export function useLaneFlows({ ingestRoom, openLane }: LaneFlowDeps): {
     const lane = dmLaneFor(name);
     setOverlay(lane); return lane;
   }
-  // Spawn-from-Messages (C4, audit S1): the same POST /api/agents path the
-  // Agents pane uses; the server mints a unique title when none is given.
-  // The overlay is created BEFORE selecting so the lane renders from the
-  // 201 ALONE — no dependency on the agents-changed roster frame, which
-  // races the response. When the frame lands, resolveSelectedLane
-  // reconciles to the derived lane exactly as openDm's overlay does.
   async function spawnAgent(provider: ProviderId, title?: string): Promise<void> {
-    const created = (await postJson('/api/agents', title ? { provider, title } : { provider })) as AgentInfo;
+    const created = await spawnAgentRequest(provider, title);
     const lane = dmLaneFor(created.title);
-    setOverlay(lane);
+    setOverlay(lane); // BEFORE selecting: the lane renders from the 201 alone (S1)
     openLane(lane.id);
   }
   function resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null {

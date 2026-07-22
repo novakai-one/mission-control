@@ -63,6 +63,7 @@ export const MESSAGING_SETTINGS: MessagingTabSettings = {
   delivery: { sendingWindowMs: 60_000 },
   review: { scrollTimeoutMs: 2_000 },
   sendFollow: { ownSendWindowMs: 10_000, scrollGuardMs: 1_200 },
+  // eslint-disable-next-line id-length -- 'cap' is the Chief-named knob (rail cap)
   rail: { cap: 50, page: 50, ceiling: 150 },
   thread: { windowSize: 100 },
 };
@@ -246,21 +247,26 @@ export function roomLabelFor(conversation: Conversation): string {
      (d) rooms → visible only when Chris is a member.
    Pure presentation-layer filter: conversationIdsFor is untouched and its
    fan-out semantics stay intact for attention/readCursor/review consumers. */
+function dmLaneStanding(feed: TunnelEnvelope[]): { hasHistory: Set<ConversationId>; chrisParty: Set<ConversationId> } {
+  const hasHistory = new Set<ConversationId>();
+  const chrisParty = new Set<ConversationId>();
+  for (const message of feed) {
+    for (const laneId of conversationIdsFor(message)) {
+      if (!laneId.startsWith('dm:')) continue;
+      hasHistory.add(laneId);
+      if (message.from === CHRIS || message.to === CHRIS) chrisParty.add(laneId);
+    }
+  }
+  return { hasHistory, chrisParty };
+}
+
 export function visibleLanesFor(
   lanes: Conversation[],
   feed: TunnelEnvelope[],
   agents: Pick<AgentInfo, 'title'>[],
 ): Conversation[] {
   const registered = new Set(agents.map((agent) => agent.title));
-  const hasHistory = new Set<ConversationId>();
-  const chrisParty = new Set<ConversationId>();
-  for (const message of feed) {
-    for (const id of conversationIdsFor(message)) {
-      if (!id.startsWith('dm:')) continue;
-      hasHistory.add(id);
-      if (message.from === CHRIS || message.to === CHRIS) chrisParty.add(id);
-    }
-  }
+  const { hasHistory, chrisParty } = dmLaneStanding(feed);
   return lanes.filter((entry) => {
     if (entry.kind === 'channel') return true;
     if (entry.kind === 'room') return entry.members?.includes(CHRIS) ?? false;
@@ -281,15 +287,15 @@ function railLabelBase(conversation: Conversation): string {
 
 const SUFFIX_START = 4;
 
-function shortestUniqueSuffixes(ids: string[]): Map<string, string> {
-  const longest = Math.max(...ids.map((id) => id.length));
+function shortestUniqueSuffixes(laneIds: string[]): Map<string, string> {
+  const longest = Math.max(...laneIds.map((laneId) => laneId.length));
   for (let length = SUFFIX_START; length <= longest; length += 1) {
-    const suffixes = ids.map((id) => id.slice(-length));
-    if (new Set(suffixes).size === ids.length) {
-      return new Map(ids.map((id, index) => [id, suffixes[index]]));
+    const suffixes = laneIds.map((laneId) => laneId.slice(-length));
+    if (new Set(suffixes).size === laneIds.length) {
+      return new Map(laneIds.map((laneId, index) => [laneId, suffixes[index]]));
     }
   }
-  return new Map(ids.map((id) => [id, id])); // full-id fallback
+  return new Map(laneIds.map((laneId) => [laneId, laneId])); // full-id fallback
 }
 
 export function distinctRailLabels(lanes: Conversation[]): Map<ConversationId, string> {
@@ -352,12 +358,12 @@ export function windowMessages(
     const start = Math.max(0, messages.length - visibleCount);
     return { messages: messages.slice(start), earlierCount: start, laterCount: 0 };
   }
-  const end = Math.min(messages.length, Math.max(anchorIndex + Math.ceil(visibleCount / 2), visibleCount));
-  const start = Math.max(0, end - visibleCount);
+  const sliceEnd = Math.min(messages.length, Math.max(anchorIndex + Math.ceil(visibleCount / 2), visibleCount));
+  const sliceStart = Math.max(0, sliceEnd - visibleCount);
   return {
-    messages: messages.slice(start, end),
-    earlierCount: start,
-    laterCount: messages.length - end,
+    messages: messages.slice(sliceStart, sliceEnd),
+    earlierCount: sliceStart,
+    laterCount: messages.length - sliceEnd,
   };
 }
 
