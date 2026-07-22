@@ -9,6 +9,7 @@
 // agent's own session transcript), never from "the bytes were written".
 //
 //   node scripts/nvk-agent.mjs spawn --provider kimi --title "Name" [--cwd D] [--brief "line"|--brief-file F]
+//   node scripts/nvk-agent.mjs register --provider kimi --title "Name" --session <id> --mission <id> [--team <id>] [--project-dir <slug>] [--no-announce]
 //   node scripts/nvk-agent.mjs send <agent> "single-line message"
 //   node scripts/nvk-agent.mjs status <agent>
 //   node scripts/nvk-agent.mjs tail <agent>
@@ -20,6 +21,7 @@
 import { discoverAgents, normalizeBackends, resolveAgent } from './team/channel.mjs';
 import { sendAndConfirm } from './team/confirm.mjs';
 import { activityProof, checkProcess, latestUseful } from './team/liveness.mjs';
+import { locateTranscript } from './team/transcripts.mjs';
 
 const SERVER = process.env.NVK_COMMAND_URL || 'http://127.0.0.1:3031';
 
@@ -183,7 +185,47 @@ async function cmdMailbox(query) {
   console.log(JSON.stringify(body.identity, null, 2));
 }
 
+// Register an externally-spawned session (a terminal-spawned chief or agent)
+// into the durable mission graph: Agent record + Presence attach + mailbox,
+// so Mission Control's DM lane is backed by durable identity. The pre-flight
+// proves the transcript exists BEFORE any store write — registering a
+// Presence that cannot be located would be a lie the stores have to keep.
+async function cmdRegister() {
+  const provider = opt('--provider');
+  const title = opt('--title');
+  const session = opt('--session');
+  const mission = opt('--mission');
+  const team = opt('--team');
+  const projectDir = opt('--project-dir');
+  const noAnnounce = args.includes('--no-announce');
+  if (!provider || !title || !session || !mission) {
+    fail('register requires --provider, --title, --session, and --mission');
+  }
+  const transcript = locateTranscript({ provider, sessionId: session, projectDir });
+  if (!transcript) {
+    fail(`no ${provider} transcript found for session ${session}${provider === 'claude' && !projectDir ? ' (claude needs --project-dir)' : ''} — refusing to register an unlocatable Presence`);
+  }
+  const response = await fetch(`${SERVER}/api/external-sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: title, provider, sessionId: session, missionId: mission,
+      ...(team ? { teamId: team } : {}), announce: !noAnnounce,
+    }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) fail(`register rejected: ${body.error ?? response.status}`);
+  console.log(`REGISTERED ${title} — agentId=${body.agentId} team=${body.teamId} mailbox=${body.mailbox} announcement=${body.announcement}`);
+  console.log(`  transcript: ${transcript}`);
+  console.log(`  DM lane "${title}" — the session reads mail with: node scripts/nvk-msg.mjs read "${title}"`);
+  if (body.announcement === 'failed') {
+    console.error(`WARN announcement failed: ${body.announcementError}`);
+    process.exit(2);
+  }
+}
+
 if (cmd === 'spawn') await cmdSpawn();
+else if (cmd === 'register') await cmdRegister();
 else if (cmd === 'send') {
   const query = args.shift();
   const body = args.join(' ');
@@ -194,6 +236,6 @@ else if (cmd === 'tail') await cmdTail(args[0] ?? fail('tail requires an agent')
 else if (cmd === 'kill') await cmdKill(args[0] ?? fail('kill requires an agent'));
 else if (cmd === 'mailbox') await cmdMailbox(args[0] ?? fail('mailbox requires an agent'));
 else {
-  console.error('usage: nvk-agent.mjs <spawn|send|status|tail|kill|mailbox> ...');
+  console.error('usage: nvk-agent.mjs <spawn|register|send|status|tail|kill|mailbox> ...');
   process.exit(1);
 }

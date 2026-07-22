@@ -142,6 +142,12 @@ export class MessagingHub {
     return this.mailboxes;
   }
 
+  /** The send seam — composition services (external-session registration)
+   * announce through the same router as everyone else. */
+  get send(): SendApi {
+    return this.sendApi;
+  }
+
   registerRoutes(application: Express): void {
     application.post('/api/messages', (request, response) => void this.handleSend(request, response));
     application.post('/api/user/messages', (request, response) => void this.handleUserSend(request, response));

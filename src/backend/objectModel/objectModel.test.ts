@@ -123,5 +123,11 @@ const roster = model.missionAgents('mission_alpha');
 assert.deepEqual(roster.map((block) => block.id).sort(), [agentId, doomedId].sort(), 'membership derives from Agent refs');
 console.log('thread/artifact/read tests passed');
 
+// --- mission pre-validation read ----------------------------------------------
+
+assert.equal(model.missionRecord('mission_alpha')?.title, 'Alpha');
+assert.equal(model.missionRecord('mission_ghost'), null, 'unknown mission resolves to null, never a throw');
+console.log('mission read test passed');
+
 rmSync(scratch, { recursive: true, force: true });
 console.log('object-model module tests passed');
