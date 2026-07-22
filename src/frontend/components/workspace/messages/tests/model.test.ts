@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import type { Conversation, TunnelEnvelope } from '../../../../lib/tunnelModel/index.js';
 import { buildConversations, dmId, registeredRoster } from '../../../../lib/tunnelModel/index.js';
+import { createLaneFlows } from '../flows/index.js';
 import {
   DEFAULT_RAIL_WIDTHS,
   DENSITY_SCALE,
@@ -536,6 +537,43 @@ assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => targe
   assert.ok(reconciled, 'lane still selected after the frame');
   assert.equal(reconciled.id, dmId(spawnedTitle));
   assert.ok(derived.includes(reconciled), 'reconciled to the derived lane, not the overlay');
+}
+
+// ---- C4 (audit S1 + evidence correction): spawnAgent through the REAL
+// composition — createLaneFlows drives the actual POST /api/agents fetch
+// seam (faked at globalThis) with the agents-changed frame withheld; the
+// assertions check the SEQUENCE, not a hand-assembled postcondition.
+{
+  const spawnCalls: string[] = [];
+  let overlay: Conversation | null = null;
+  let overlayAtSelection: Conversation | null = null;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: unknown, init?: { method?: string; body?: string }) => {
+    spawnCalls.push(`${init?.method ?? 'GET'} ${String(url)} ${init?.body ?? ''}`);
+    return new Response(
+      JSON.stringify({ agentId: 'ag-99', title: 'claude-9', provider: 'claude', status: 'running' }),
+      { status: 201 },
+    );
+  }) as typeof fetch;
+  try {
+    const flows = createLaneFlows({
+      ingestRoom: () => {},
+      setOverlay: (lane) => { overlay = lane; },
+      openLane: (laneId) => {
+        overlayAtSelection = overlay; // capture ordering: overlay must already exist
+        spawnCalls.push(`open ${laneId}`);
+      },
+    });
+    await flows.spawnAgent('claude');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.ok(
+    spawnCalls.some((entry) => entry.startsWith('POST /api/agents') && entry.includes('"provider":"claude"')),
+    'spawn goes through the real POST /api/agents seam',
+  );
+  assert.equal((overlayAtSelection as Conversation | null)?.id, dmId('claude-9'), 'overlay derived from the 201 title BEFORE selection (S1)');
+  assert.ok(spawnCalls.includes('open dm:claude-9'), 'lane selected from the 201 alone — roster frame withheld');
 }
 
 console.log('messages/model tests passed');

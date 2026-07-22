@@ -46,6 +46,34 @@ async function spawnAgentRequest(provider: ProviderId, title?: string): Promise<
   return (await postJson('/api/agents', title ? { provider, title } : { provider })) as AgentInfo;
 }
 
+/** The flow logic behind useLaneFlows, React-free so tests can drive the
+ *  REAL composition (fetch seam included) — the hook only binds state. */
+export interface LaneFlowIo extends LaneFlowDeps {
+  setOverlay(lane: Conversation | null): void;
+}
+
+export function createLaneFlows(io: LaneFlowIo): {
+  startRoom(members: string[], name: string): Promise<void>;
+  openDm(name: string): Conversation;
+  spawnAgent(provider: ProviderId, title?: string): Promise<void>;
+} {
+  async function startRoom(members: string[], name: string): Promise<void> {
+    const data = (await postJson('/api/user/rooms', { name, members })) as { room: TunnelRoom };
+    io.ingestRoom(data.room); io.openLane(data.room.roomId);
+  }
+  function openDm(name: string): Conversation {
+    const lane = dmLaneFor(name);
+    io.setOverlay(lane); return lane;
+  }
+  async function spawnAgent(provider: ProviderId, title?: string): Promise<void> {
+    const created = await spawnAgentRequest(provider, title);
+    const lane = dmLaneFor(created.title);
+    io.setOverlay(lane); // BEFORE selecting: the lane renders from the 201 alone (S1)
+    io.openLane(lane.id);
+  }
+  return { startRoom, openDm, spawnAgent };
+}
+
 /** Lane-creation flows for the rail entry points: startRoom posts the room
  *  and opens the lane the 201 returns; openDm derives the DM lane locally
  *  (a DM is not a server resource) and holds it as an overlay until the
@@ -57,22 +85,9 @@ export function useLaneFlows({ ingestRoom, openLane }: LaneFlowDeps): {
   spawnAgent(provider: ProviderId, title?: string): Promise<void>;
 } {
   const [overlay, setOverlay] = useState<Conversation | null>(null);
-  async function startRoom(members: string[], name: string): Promise<void> {
-    const data = (await postJson('/api/user/rooms', { name, members })) as { room: TunnelRoom };
-    ingestRoom(data.room); openLane(data.room.roomId);
-  }
-  function openDm(name: string): Conversation {
-    const lane = dmLaneFor(name);
-    setOverlay(lane); return lane;
-  }
-  async function spawnAgent(provider: ProviderId, title?: string): Promise<void> {
-    const created = await spawnAgentRequest(provider, title);
-    const lane = dmLaneFor(created.title);
-    setOverlay(lane); // BEFORE selecting: the lane renders from the 201 alone (S1)
-    openLane(lane.id);
-  }
+  const flows = createLaneFlows({ ingestRoom, openLane, setOverlay });
   function resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null {
     return resolveSelectedLane(conversations, overlay, selectedId);
   }
-  return { resolveSelected, startRoom, openDm, spawnAgent };
+  return { resolveSelected, ...flows };
 }

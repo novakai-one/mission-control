@@ -8,11 +8,13 @@ import {
   latestChrisQuestion,
   liveRoster,
   mergeFeed,
+  mountFeed,
   refetchOnReconnect,
   messagesFor,
   statusMeta,
   upsertEnvelope,
   upsertRoom,
+  watchRooms,
   type TunnelEnvelope,
   type TunnelRoom,
 } from './index.js';
@@ -183,19 +185,27 @@ assert.equal(latestChrisQuestion(feed), null);
 // fires the reload on every 'connected' transition — including the first
 // open (a mount fetch that raced a dead backend heals when the ws lands) —
 // and never on closes or repeated failed retries.
+class FakeSocket {
+  static instances: FakeSocket[] = [];
+  readyState = 0;
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  constructor(public targetUrl: string) { FakeSocket.instances.push(this); }
+  send(): void {}
+  triggerOpen(): void { this.readyState = 1; this.onopen?.(); }
+  triggerClose(): void { this.readyState = 3; this.onclose?.(); }
+}
+(globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket;
+
+/** Drop the live socket and let the backoff loop bring up a fresh one. */
+async function cycleReconnect(): Promise<void> {
+  FakeSocket.instances[FakeSocket.instances.length - 1].triggerClose();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  FakeSocket.instances[FakeSocket.instances.length - 1].triggerOpen();
+}
+
 {
-  class FakeSocket {
-    static instances: FakeSocket[] = [];
-    readyState = 0;
-    onopen: (() => void) | null = null;
-    onmessage: ((event: { data: string }) => void) | null = null;
-    onclose: (() => void) | null = null;
-    constructor(public targetUrl: string) { FakeSocket.instances.push(this); }
-    send(): void {}
-    triggerOpen(): void { this.readyState = 1; this.onopen?.(); }
-    triggerClose(): void { this.readyState = 3; this.onclose?.(); }
-  }
-  (globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket;
   const { connect, setBackoffForTest } = await import('../agentSocket/index.js');
   setBackoffForTest(5, 20);
   let reloads = 0;
@@ -216,6 +226,40 @@ assert.equal(latestChrisQuestion(feed), null);
   await new Promise(resolve => setTimeout(resolve, 30));
   FakeSocket.instances[3].triggerOpen();
   assert.equal(reloads, 2); // unsubscribed
+}
+
+
+// ---- C5 (evidence correction): the reconnect trigger exercises the REAL
+// feed and rooms wiring — mountFeed re-pulls the '#team' history and
+// watchRooms re-issues GET /api/rooms on reopen, not just a callback.
+{
+  const roomsFetches: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: unknown) => {
+    roomsFetches.push(String(url));
+    return new Response(JSON.stringify({ messages: [], rooms: [] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    // FEED: mountFeed pulls '#team' at mount and again on every reopen.
+    const lanePulls: string[] = [];
+    const unmount = mountFeed(() => {}, { current: true }, (laneId) => lanePulls.push(laneId));
+    assert.deepEqual(lanePulls, ['#team']);
+    await cycleReconnect();
+    assert.deepEqual(lanePulls, ['#team', '#team'], 'reopen re-pulls the #team history through loadConversation');
+    unmount();
+
+    // ROOMS: watchRooms re-issues its real GET /api/rooms fetch on reopen.
+    const unwatch = watchRooms(() => {}, () => true);
+    const before = roomsFetches.filter((url) => url.includes('/api/rooms')).length;
+    assert.equal(before, 1, 'one mount fetch');
+    await cycleReconnect();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const after = roomsFetches.filter((url) => url.includes('/api/rooms')).length;
+    assert.equal(after, before + 1, 'reopen re-issues GET /api/rooms');
+    unwatch();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 }
 
 console.log('tunnelModel: all assertions passed');

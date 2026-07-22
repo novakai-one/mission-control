@@ -252,7 +252,8 @@ function subscribeFeed(setFeed: FeedUpdater, isLive: () => boolean): () => void 
   });
 }
 
-function mountFeed(
+/** Exported for the reconnect-wiring test — the hook is its only app caller. */
+export function mountFeed(
   setFeed: FeedUpdater,
   mounted: { current: boolean },
   loadConversation: (id: ConversationId) => void,
@@ -317,7 +318,8 @@ function fetchRooms(apply: (rooms: TunnelRoom[]) => void, onSettled?: () => void
 /** One fetch now, `rooms-changed` snapshots after. Resilience fallback: a
  * post addressed to a room this client has never seen means the roster moved
  * while we weren't looking — refetch. Returns the unwatch. */
-function watchRooms(
+/** Exported for the reconnect-wiring test — the hook is its only app caller. */
+export function watchRooms(
   apply: (rooms: TunnelRoom[]) => void,
   knows: (roomId: string) => boolean,
   onSettled?: () => void,
