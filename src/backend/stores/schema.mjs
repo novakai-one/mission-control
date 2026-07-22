@@ -1,4 +1,4 @@
-// Schema law for .novakai/stores — INTERNAL to scripts/store/ (facade: store.mjs).
+// Schema law for .novakai/stores — INTERNAL to src/backend/stores/ (facade: store.mjs).
 // Sources: AGENTS.md store conventions + Chief rulings Q1–Q5 pinned verbatim in
 // .novakai/work/mission_store-validator/authorization.md. KIND_RULES implements
 // the rulings' exact words, not any paraphrase.

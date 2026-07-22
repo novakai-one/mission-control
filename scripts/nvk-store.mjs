@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { auditDir, appendLine, StoreValidationError, StoreRefusalError } from './store/store.mjs';
+import { auditDir, appendLine, StoreValidationError, StoreRefusalError } from '../src/backend/stores/store.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 

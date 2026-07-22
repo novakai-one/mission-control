@@ -17,7 +17,7 @@
     "lint": "node tools/gates/standards.mjs",
     "stores:audit": "node scripts/nvk-store.mjs audit --dir .novakai/stores",
     "stores:gate": "node tools/gates/stores.mjs",
-    "stores:test": "npx tsx scripts/store/validate.test.mjs && npx tsx scripts/store/store.test.mjs && npx tsx scripts/store/cli.test.mjs && npx tsx tools/gates/stores.test.mjs",
+    "stores:test": "npx tsx src/backend/stores/validate.test.mjs && npx tsx src/backend/stores/store.test.mjs && npx tsx src/backend/stores/cli.test.mjs && npx tsx tools/gates/stores.test.mjs",
     "app": "electron desktop",
     "app:build": "electron-builder --mac --config electron-builder.yml",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, 'stores.mjs');
-const FIXTURES = path.join(HERE, '..', '..', 'scripts', 'store', 'fixtures');
+const FIXTURES = path.join(HERE, '..', '..', 'src', 'backend', 'stores', 'fixtures');
 const TS = '2026-07-21T15:00:00+10:00';
 
 function freshSetup(fixture) {
