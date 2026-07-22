@@ -158,16 +158,23 @@ function MessageRow({ envelope, agents, targets, replyLabel, showWorking }: Mess
 
 interface MessageFeedProps {
   conversation: Conversation;
+  /** The WINDOWED slice (C1) — never the full lane transcript. */
   messages: TunnelEnvelope[];
   /** Full feed — reply parents may live outside the loaded lane window. */
   feed: TunnelEnvelope[];
   agents: AgentInfo[];
   targets: MentionTarget[];
+  /** Rows above/below the window (C1 + M3 anchored review). */
+  earlierCount: number;
+  laterCount: number;
+  onExtendWindow(): void;
   /** Reports the newest envelope createdAt genuinely shown in the foreground. */
   onSeen(seenCreatedAt: string): void;
 }
 
-export function MessageFeed({ conversation, messages, feed, agents, targets, onSeen }: MessageFeedProps) {
+export function MessageFeed({
+  conversation, messages, feed, agents, targets, earlierCount, laterCount, onExtendWindow, onSeen,
+}: MessageFeedProps) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
   const restoreRef = useRef<{ lane: string; done: boolean }>({ lane: '', done: false });
@@ -255,6 +262,13 @@ export function MessageFeed({ conversation, messages, feed, agents, targets, onS
 
   return (
     <div className="msg-feed" ref={bodyRef} onScroll={trackScroll} onWheel={noteGesture} onTouchMove={noteGesture}>
+      {earlierCount > 0 && (
+        <div className="msg-day">
+          <button type="button" className="msg-window-pill" onClick={onExtendWindow}>
+            Show earlier · {earlierCount}
+          </button>
+        </div>
+      )}
       {groups.map((group) => (
         <React.Fragment key={group.dayKey}>
           <div className="msg-day">
@@ -272,6 +286,13 @@ export function MessageFeed({ conversation, messages, feed, agents, targets, onS
           ))}
         </React.Fragment>
       ))}
+      {laterCount > 0 && (
+        <div className="msg-day">
+          <button type="button" className="msg-window-pill" onClick={onExtendWindow}>
+            Show later · {laterCount}
+          </button>
+        </div>
+      )}
       {dockVisible && (
         <div className={resolveStyle(NEW_MESSAGE_STYLE.dock)}>
           <button type="button" className={resolveStyle(NEW_MESSAGE_STYLE.pill)} onClick={jumpToNewest}>

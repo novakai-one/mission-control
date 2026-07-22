@@ -385,3 +385,19 @@
   font-size: var(--msg-fs-body);
   color: var(--msg-amber);
 }
+
+/* Bounded rail (C1): the quiet paging row at the rail's end. */
+.msg-rail-more {
+  margin: var(--msg-sp-2) var(--msg-sp-7);
+  padding: var(--msg-sp-4) 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: var(--msg-fs-body);
+  color: var(--msg-text-muted);
+  cursor: pointer;
+}
+
+.msg-rail-more:hover {
+  color: var(--msg-text);
+}

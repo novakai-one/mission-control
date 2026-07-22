@@ -13,8 +13,8 @@ import {
 import { buildTargets } from '../../../lib/mentions/index.js';
 import {
   buildConversations,
-  liveRoster,
   messagesFor,
+  registeredRoster,
   useTunnelFeed,
   useTunnelRooms,
   type Conversation,
@@ -33,12 +33,15 @@ import {
   MESSAGING_SETTINGS,
   clampRailWidth,
   composerTargetsFor,
+  distinctRailLabels,
   knownAgentsFor,
   loadRailWidths,
   reviewLanesFor,
   roomLabelFor,
   saveRailWidths,
   restoreDecision,
+  visibleLanesFor,
+  windowMessages,
   workingAgentFor,
   type RailWidths,
 } from './model.js';
@@ -77,15 +80,26 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
   const [resizing, setResizing] = useState(false);
   const [pendingReview, setPendingReview] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState<string | null>(null);
+  // Thread window (C1): how many rows render, and the M3 review anchor the
+  // window bounds around. Resets on lane switch; paging drops the anchor.
+  const [threadWindow, setThreadWindow] = useState<{ count: number; anchorId?: string }>(
+    { count: MESSAGING_SETTINGS.thread.windowSize },
+  );
   const [widths, setWidths] = useState<RailWidths>(() => loadRailWidths());
   const widthsRef = useRef(widths);
   widthsRef.current = widths;
 
-  const roster = useMemo(() => liveRoster(agents), [agents]);
+  // registeredRoster (not liveRoster) so exited teammates' empty DM lanes
+  // materialize; visibleLanesFor (C3) then prunes to lanes Chris is party
+  // to — the ONE list every consumer below sees (rail, unread, restore).
+  const roster = useMemo(() => registeredRoster(agents), [agents]);
   const conversations = useMemo(
-    () => buildConversations(feed, rooms, roster),
-    [feed, rooms, roster],
+    () => visibleLanesFor(buildConversations(feed, rooms, roster), feed, agents),
+    [feed, rooms, roster, agents],
   );
+  // Collision-suffixed labels (C2) — computed over the visible set so the
+  // rail rows and the thread topbar always agree.
+  const labels = useMemo(() => distinctRailLabels(conversations), [conversations]);
   // Known agents (live + exited + feed-history names) feed the M5 pickers.
   const knownAgents = useMemo(() => knownAgentsFor(agents, feed), [agents, feed]);
   const flows = useLaneFlows({
@@ -189,6 +203,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
   function select(conversation: Conversation): void {
     setSelectedId(conversation.id);
     saveLane(conversation.id);
+    setThreadWindow({ count: MESSAGING_SETTINGS.thread.windowSize }); // window + anchor reset per lane
     setRailOpen(false); // phone layout: picking a lane dismisses the rail overlay
   }
 
@@ -221,15 +236,27 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
       setReviewNote('That message is no longer in the loaded feed.');
       return;
     }
-    if (!selected || !lanes.includes(selected.id)) {
-      setSelectedId(lanes[0]);
-      saveLane(lanes[0]);
+    // C3: the target may live only in pruned lanes (agent↔agent traffic
+    // Chris is not party to) — say so honestly instead of a dead jump.
+    const reachable = lanes.filter((laneId) => conversations.some((lane) => lane.id === laneId));
+    if (reachable.length === 0) {
+      setReviewNote('That message lives in an agent↔agent lane outside your conversations.');
+      return;
     }
+    if (!selected || !reachable.includes(selected.id)) {
+      setSelectedId(reachable[0]);
+      saveLane(reachable[0]);
+    }
+    // M3: anchor the thread window around the target so a failure older
+    // than the tail window still renders.
+    setThreadWindow({ count: MESSAGING_SETTINGS.thread.windowSize, anchorId: envelopeId });
     setPendingReview(envelopeId);
   }
 
   const laneMessages = selected ? messagesFor(feed, selected.id) : [];
   const working = workingAgentFor(laneMessages, agents, Date.now());
+  // C1: only the windowed slice ever renders — never the full journal.
+  const thread = windowMessages(laneMessages, threadWindow.count, threadWindow.anchorId);
 
   // Scroll the moment the review target's row exists — lane switches and
   // history backfills land asynchronously…
@@ -238,7 +265,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
     const target = document.getElementById(messageRowId(pendingReview));
     target?.scrollIntoView({ block: 'center' });
     if (target) setPendingReview(null);
-  }, [pendingReview, laneMessages]);
+  }, [pendingReview, thread.messages]);
 
   // …but never wait forever: past the typed timeout, say why honestly.
   useEffect(() => {
@@ -262,6 +289,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
     <section className={viewClass} ref={rootRef} aria-label="Messages">
       <RoomsRail
         conversations={conversations}
+        labels={labels}
         unread={unread}
         selectedId={selectedId}
         agents={agents}
@@ -285,7 +313,9 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
               <span className="msg-ghost-glyph msg-glyph-list" aria-hidden="true" />
             </button>
             <span className="msg-thread-title">
-              {selected.kind === 'dm' ? `@ ${selected.title}` : `# ${roomLabelFor(selected)}`}
+              {selected.kind === 'dm'
+                ? `@ ${labels.get(selected.id) ?? selected.title}`
+                : `# ${labels.get(selected.id) ?? roomLabelFor(selected)}`}
             </span>
           </div>
         )}
@@ -293,10 +323,13 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
           <>
             <MessageFeed
               conversation={selected}
-              messages={laneMessages}
+              messages={thread.messages}
               feed={feed}
               agents={agents}
               targets={targets}
+              earlierCount={thread.earlierCount}
+              laterCount={thread.laterCount}
+              onExtendWindow={() => setThreadWindow((current) => ({ count: current.count + MESSAGING_SETTINGS.thread.windowSize }))}
               onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
             />
             <ComposerBar conversation={selected} targets={composerTargets} onSend={send} />

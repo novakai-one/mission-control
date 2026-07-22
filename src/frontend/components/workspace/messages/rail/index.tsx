@@ -13,7 +13,9 @@ import type {
   ConversationId,
 } from '../../../../lib/tunnelModel/index.js';
 import {
+  MESSAGING_SETTINGS,
   PRESENCE_LABEL,
+  capRailLanes,
   filterRailLanes,
   initialFor,
   presenceToneFor,
@@ -27,6 +29,8 @@ import './index.css';
 
 interface RoomsRailProps {
   conversations: Conversation[];
+  /** Rendered label per lane — collision-suffixed by the model (C2). */
+  labels: Map<ConversationId, string>;
   unread: Record<ConversationId, number>;
   selectedId: ConversationId | null;
   agents: AgentInfo[];
@@ -42,6 +46,7 @@ interface RoomsRailProps {
 
 function RoomRow(props: {
   lane: Conversation;
+  label: string;
   count: number;
   selected: boolean;
   onSelect(conversation: Conversation): void;
@@ -55,7 +60,7 @@ function RoomRow(props: {
       onClick={() => props.onSelect(props.lane)}
     >
       <span className="msg-hash" aria-hidden="true">#</span>
-      <span className="msg-room-name" title={roomLabelFor(props.lane)}>{roomLabelFor(props.lane)}</span>
+      <span className="msg-room-name" title={props.label}>{props.label}</span>
       {props.count > 0 && <span className="msg-badge">{props.count}</span>}
     </button>
   );
@@ -63,6 +68,7 @@ function RoomRow(props: {
 
 function PersonRow(props: {
   lane: Conversation;
+  label: string;
   agents: AgentInfo[];
   count: number;
   selected: boolean;
@@ -71,7 +77,7 @@ function PersonRow(props: {
   const agent = props.agents.find((entry) => entry.title === props.lane.title);
   const tone = presenceToneFor(props.count, agent?.status ?? null);
   const role = agent?.provider ?? 'agent';
-  const label = `${props.lane.title}, ${role}, ${PRESENCE_LABEL[tone]}`;
+  const label = `${props.label}, ${role}, ${PRESENCE_LABEL[tone]}`;
   const classes = props.selected ? 'msg-person is-selected' : 'msg-person';
   return (
     <button
@@ -83,7 +89,7 @@ function PersonRow(props: {
     >
       <span className="msg-person-av" aria-hidden="true">{initialFor(props.lane.title)}</span>
       <span className="msg-person-meta">
-        <strong title={props.lane.title}>{props.lane.title}</strong>
+        <strong title={props.label}>{props.label}</strong>
         <small title={role}>{role}</small>
       </span>
       <span className={`msg-dot msg-dot-${tone}`} aria-hidden="true" />
@@ -98,7 +104,13 @@ export function RoomsRail(props: RoomsRailProps) {
   // Rail search (M8c): one substring query filters both sections through the
   // model derivation — the old rail's search box, restored without the tabs.
   const [query, setQuery] = useState('');
-  const sections = splitRailSections(filterRailLanes(props.conversations, query));
+  // Bounded rail (C1, audit S4): search filters the FULL lane set first,
+  // then the hard bound applies — show-more pages +50 up to the 150 ceiling,
+  // beyond which older lanes are reached via search only.
+  const [visibleCount, setVisibleCount] = useState(MESSAGING_SETTINGS.rail.cap);
+  const capped = capRailLanes(filterRailLanes(props.conversations, query), visibleCount);
+  const sections = splitRailSections(capped.lanes);
+  const atCeiling = visibleCount >= MESSAGING_SETTINGS.rail.ceiling;
 
   function toggleFlow(next: NewFlow): void {
     setFlow((current) => (current === next ? null : next));
@@ -184,6 +196,7 @@ export function RoomsRail(props: RoomsRailProps) {
               <RoomRow
                 key={lane.id}
                 lane={lane}
+                label={props.labels.get(lane.id) ?? roomLabelFor(lane)}
                 count={props.unread[lane.id] ?? 0}
                 selected={lane.id === props.selectedId}
                 onSelect={props.onSelect}
@@ -196,6 +209,7 @@ export function RoomsRail(props: RoomsRailProps) {
               <PersonRow
                 key={lane.id}
                 lane={lane}
+                label={props.labels.get(lane.id) ?? lane.title}
                 agents={props.agents}
                 count={props.unread[lane.id] ?? 0}
                 selected={lane.id === props.selectedId}
@@ -204,6 +218,18 @@ export function RoomsRail(props: RoomsRailProps) {
             ))}
             {sections.directs.length === 0 && !query.trim() && <div className="msg-rail-quiet">No agents yet</div>}
           </div>
+          {capped.hiddenCount > 0 && !atCeiling && (
+            <button
+              type="button"
+              className="msg-rail-more"
+              onClick={() => setVisibleCount((current) => current + MESSAGING_SETTINGS.rail.page)}
+            >
+              Show more · {capped.hiddenCount}
+            </button>
+          )}
+          {capped.hiddenCount > 0 && atCeiling && (
+            <div className="msg-rail-quiet">Search to find older lanes</div>
+          )}
         </div>
       </div>
     </aside>
