@@ -373,9 +373,13 @@ missions in missions.jsonl only after he sees this list.
 
 ## 7. Chief input (Contract item: what-worked / what-didn't / what's-unclear)
 
-> **Slot open — pending relay from the Chief** (Contract: "Chief supplies
-> it"). To be incorporated as cited quotes when received; the mission does
-> not close this item silently.
+> **Status: UNAVAILABLE at delivery.** The original chief-kimi did not reply
+> to the coordination note (delivered to the kimi mailbox 2026-07-23
+> 08:12+10:00, msg_ea38884b; mailbox silence is the evidence), and that lane
+> is mid-chief-replacement — a successor (Chief Kimi II) announced handoff
+> ~08:30. The what-worked / what-didn't input is to be requested from the
+> successor chief once alive and confirmed; the mission does not block on
+> it. Source: chief-kimi-2 relay, msg_51ac0948.
 
 ---
 
