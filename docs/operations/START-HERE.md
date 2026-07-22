@@ -91,8 +91,10 @@ Otherwise follow the current Process Reviewer manual.
 
 1. Chris spawns and onboards the Chief.
 2. Chris gives the Chief natural direction; messy is allowed.
-3. The Chief explicitly invokes `$compile-mission-brief` and saves both the
-   raw prompt and compiled Mission Contract in a mission packet.
+3. The Chief explicitly invokes `$compile-mission-brief`, saves both the
+   raw prompt and compiled Mission Contract in a mission packet, and creates
+   the mission EXP with its BEFORE sections filled — before any work is
+   authorized, so predictions are never back-filled.
 4. The Chief spawns and onboards a Manager.
 5. The Chief assigns the Mission Contract after the Manager passes onboarding.
 6. The Manager runs the mission through Workers.
