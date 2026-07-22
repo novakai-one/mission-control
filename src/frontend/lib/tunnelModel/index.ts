@@ -107,6 +107,13 @@ export function liveRoster(agents: Pick<AgentInfo, 'title' | 'provider' | 'statu
     .map((agent) => ({ name: agent.title, provider: agent.provider }));
 }
 
+/** Every REGISTERED agent, any status — the Messages rail materializes an
+ * empty DM lane for exited teammates too (Chris can open a DM with anyone
+ * on the registry; liveRoster would silently drop the exited ones). */
+export function registeredRoster(agents: Pick<AgentInfo, 'title' | 'provider'>[]): RosterEntry[] {
+  return agents.map((agent) => ({ name: agent.title, provider: agent.provider }));
+}
+
 /** Same roomId replaces in place (amended copy); a new room appends. */
 export function upsertRoom(rooms: TunnelRoom[], room: TunnelRoom): TunnelRoom[] {
   const index = rooms.findIndex((entry) => entry.roomId === room.roomId);

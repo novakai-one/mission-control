@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import type { Conversation, TunnelEnvelope } from '../../../../lib/tunnelModel/index.js';
+import { buildConversations, registeredRoster } from '../../../../lib/tunnelModel/index.js';
 import {
   DEFAULT_RAIL_WIDTHS,
   DENSITY_SCALE,
@@ -11,6 +12,7 @@ import {
   dayLabelFor,
   displayNameFor,
   distinctRailLabels,
+  visibleLanesFor,
   dmLaneFor,
   filterRailLanes,
   groupByDay,
@@ -467,6 +469,47 @@ assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => targe
   ];
   const nestedLabels = distinctRailLabels(nested);
   assert.notEqual(nestedLabels.get('room_x-77'), nestedLabels.get('room_xx-77'));
+}
+
+// ---- C3 (audit S2): lane pruning, composed through buildConversations ------
+// Precedence: (a) history → visible only if Chris is a party (registration
+// NEVER overrides); (b) empty lane → registered agent, ANY status; (c) #team
+// always; (d) rooms → members only. registeredRoster (not liveRoster)
+// materializes exited agents' empty lanes.
+{
+  const agents = [
+    agent({ agentId: 'ag-a', title: 'worker-a', status: 'running' }),  // agent↔agent history only
+    agent({ agentId: 'ag-c', title: 'worker-c', status: 'exited' }),   // empty, exited
+    agent({ agentId: 'ag-d', title: 'worker-d', status: 'running' }),  // empty, running
+    agent({ agentId: 'ag-e', title: 'worker-e', status: 'running' }),  // chris-party history
+    agent({ agentId: 'ag-f', title: 'worker-f', status: 'exited' }),   // exited, agent↔agent history only
+  ];
+  const feed = [
+    envelope({ id: 'p1', from: 'worker-a', to: 'worker-b', body: 'private' }),
+    envelope({ id: 'p2', from: 'worker-f', to: 'worker-b', body: 'private' }),
+    envelope({ id: 'p3', from: 'chris', to: 'worker-e', body: 'hello' }),
+    envelope({ id: 'p4', from: 'ghost', to: 'chris', body: 'history knows me' }),
+    envelope({ id: 'p5', from: 'phantom', to: 'ghost2', body: 'strangers' }),
+  ];
+  const rooms = [
+    { roomId: 'room_mine-0001', name: 'mine', members: ['chris', 'worker-a'], createdBy: 'chris', createdAt: 'T', archived: false },
+    { roomId: 'room_them-0002', name: 'them', members: ['worker-a', 'worker-b'], createdBy: 'worker-a', createdAt: 'T', archived: false },
+  ];
+  // Exited agents MUST materialize: liveRoster omits them, registeredRoster does not.
+  const lanes = buildConversations(feed, rooms, registeredRoster(agents));
+  assert.ok(lanes.some((entry) => entry.id === 'dm:worker-c'), 'exited empty lane must materialize');
+  const visible = visibleLanesFor(lanes, feed, agents).map((entry) => entry.id);
+  assert.ok(visible.includes('#team'), '(c) #team always');
+  assert.ok(visible.includes('room_mine-0001'), '(d) member room kept');
+  assert.ok(!visible.includes('room_them-0002'), '(d) non-member room dropped');
+  assert.ok(visible.includes('dm:worker-e'), '(a) chris-party history kept');
+  assert.ok(visible.includes('dm:ghost'), '(a) unregistered but chris-party history kept');
+  assert.ok(visible.includes('dm:worker-c'), '(b) empty exited registered kept');
+  assert.ok(visible.includes('dm:worker-d'), '(b) empty running registered kept');
+  assert.ok(!visible.includes('dm:worker-a'), '(a) running registered, agent-only history → hidden');
+  assert.ok(!visible.includes('dm:worker-f'), '(a) exited registered, agent-only history → hidden');
+  assert.ok(!visible.includes('dm:worker-b'), 'unregistered, agent-only history → hidden');
+  assert.ok(!visible.includes('dm:phantom') && !visible.includes('dm:ghost2'), 'stranger lanes hidden');
 }
 
 console.log('messages/model tests passed');
