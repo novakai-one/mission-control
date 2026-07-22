@@ -93,8 +93,13 @@ When Chris gives you an outcome:
 4. Decide whether the Contract represents one mission or needs separate,
    non-overlapping missions.
 5. Complete the packet described in [`MISSION-PACKET.md`](MISSION-PACKET.md).
-6. Record the mission in the existing mission store.
-7. Choose one Manager to own it.
+6. Create the mission EXP from
+   [`trials/EXP-TEMPLATE-v2.md`](trials/EXP-TEMPLATE-v2.md) now and fill
+   every BEFORE section — predictions are written before any build starts,
+   never back-filled after. The AAR at offboarding only closes what this
+   step opened.
+7. Record the mission in the existing mission store.
+8. Choose one Manager to own it.
 
 The compiled Mission Contract is the canonical mission instruction. Messages
 point to it; they do not replace it. The raw prompt remains evidence for the
