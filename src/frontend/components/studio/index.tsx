@@ -12,18 +12,12 @@ import './index.css';
 
 export type ViewMode = 'workspace' | 'organization' | 'messages' | 'files' | 'canvas' | 'analytics' | 'design' | 'agents' | 'transcript' | 'ruleset' | 'debug';
 
+// Nav shows only today's real products (mission_studio-tab-cleanup). The other
+// eight ViewModes stay valid — their views live on in the repo, unrouted.
 const VIEW_TABS: { mode: ViewMode; label: string }[] = [
   { mode: 'workspace', label: 'Mission Control' },
-  { mode: 'organization', label: 'Organization' },
   { mode: 'messages', label: 'Messages' },
   { mode: 'files', label: 'Files' },
-  { mode: 'canvas', label: 'Canvas' },
-  { mode: 'analytics', label: 'Analytics' },
-  { mode: 'design', label: 'Design' },
-  { mode: 'agents', label: 'Agents' },
-  { mode: 'transcript', label: 'Transcript' },
-  { mode: 'ruleset', label: 'Ruleset' },
-  { mode: 'debug', label: 'Debug' },
 ];
 
 interface StudioRailProps {

@@ -85,7 +85,9 @@ const COL_MIN = 280;
 const COL_MAX = 900;
 const VIEW_MODE_STORAGE_KEY = 'novakai-view-mode';
 const SESSION_STORAGE_KEY = 'novakai-selected-session';
-const VIEW_MODES = new Set<ViewMode>(['workspace', 'organization', 'messages', 'files', 'canvas', 'analytics', 'design', 'agents', 'transcript', 'ruleset', 'debug']);
+// Restore-allowlist = the nav's visible tabs. A stored mode outside this set
+// (e.g. 'ruleset' persisted before the nav cleanup) falls back to 'workspace'.
+const VIEW_MODES = new Set<ViewMode>(['workspace', 'messages', 'files']);
 
 function restoredViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
