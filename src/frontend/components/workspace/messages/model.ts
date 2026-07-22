@@ -234,6 +234,47 @@ export function roomLabelFor(conversation: Conversation): string {
   return conversation.title.replace(/^#/, '');
 }
 
+/* ---------- Distinct rail labels (C2, audit M1) ------------------------------
+   Presentation-layer disambiguation ONLY — no identity or envelope change.
+   When two lanes would render the identical label, each collider gets the
+   SHORTEST id suffix that tells the collision set apart: start at 4 chars,
+   extend one char at a time, fall back to the full id. Collisions span
+   sections (a room named 'team' collides with the #team channel label). */
+function railLabelBase(conversation: Conversation): string {
+  return conversation.kind === 'dm' ? conversation.title : roomLabelFor(conversation);
+}
+
+const SUFFIX_START = 4;
+
+function shortestUniqueSuffixes(ids: string[]): Map<string, string> {
+  const longest = Math.max(...ids.map((id) => id.length));
+  for (let length = SUFFIX_START; length <= longest; length += 1) {
+    const suffixes = ids.map((id) => id.slice(-length));
+    if (new Set(suffixes).size === ids.length) {
+      return new Map(ids.map((id, index) => [id, suffixes[index]]));
+    }
+  }
+  return new Map(ids.map((id) => [id, id])); // full-id fallback
+}
+
+export function distinctRailLabels(lanes: Conversation[]): Map<ConversationId, string> {
+  const byLabel = new Map<string, Conversation[]>();
+  for (const entry of lanes) {
+    const base = railLabelBase(entry);
+    byLabel.set(base, [...(byLabel.get(base) ?? []), entry]);
+  }
+  const labels = new Map<ConversationId, string>();
+  for (const [base, group] of byLabel) {
+    if (group.length === 1) {
+      labels.set(group[0].id, base);
+      continue;
+    }
+    const suffixes = shortestUniqueSuffixes(group.map((entry) => entry.id));
+    for (const entry of group) labels.set(entry.id, `${base} · ${suffixes.get(entry.id)}`);
+  }
+  return labels;
+}
+
 /* ---------- Bounded rail (C1, audit S4) --------------------------------------
    The rail NEVER renders more than the ceiling, no matter what sequence of
    show-more clicks arrives — there is deliberately no "return all" mode.

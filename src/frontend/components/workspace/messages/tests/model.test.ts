@@ -10,6 +10,7 @@ import {
   composerTargetsFor,
   dayLabelFor,
   displayNameFor,
+  distinctRailLabels,
   dmLaneFor,
   filterRailLanes,
   groupByDay,
@@ -357,7 +358,6 @@ assert.deepEqual(
 const offlineTargets = composerTargetsFor([{ name: 'atlas', provider: null, live: false }]);
 assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => target.label), ['atlas']);
 
-console.log('messages/model tests passed');
 
 // ---- C1 (audit S4): hard rail bound, +page to ceiling, #team pinned --------
 {
@@ -429,3 +429,44 @@ console.log('messages/model tests passed');
   assert.equal(missing.messages[0].id, 'env-150');
   assert.equal(missing.earlierCount, 150);
 }
+
+// ---- C2 (audit M1): shortest progressively-extended unique suffix ----------
+{
+  // Two rooms sharing a name, ids differing early but SHARING the last 4
+  // chars — last-4 alone cannot disambiguate; the suffix must extend.
+  const collide = [
+    lane('room_aaaa-1234', 'room', 'triage'),
+    lane('room_bbbb-1234', 'room', 'triage'),
+    lane('dm:maya', 'dm', 'maya'),
+  ];
+  const labels = distinctRailLabels(collide);
+  const one = labels.get('room_aaaa-1234');
+  const two = labels.get('room_bbbb-1234');
+  assert.ok(one && two && one !== two, 'colliding rooms must render distinct labels');
+  assert.ok(one.startsWith('triage · ') && two.startsWith('triage · '));
+  // Shortest-first: 4 chars tie ("1234"), 5 chars tie ("-1234"), 6 disambiguate.
+  assert.equal(one, 'triage · a-1234');
+  assert.equal(two, 'triage · b-1234');
+  assert.equal(labels.get('dm:maya'), 'maya'); // unique labels untouched
+
+  // A room literally named 'team' collides with the #team channel label —
+  // both get suffixed (collisions span sections).
+  const teamClash = [
+    lane('#team', 'channel', '#team'),
+    lane('room_cafe-0001', 'room', 'team'),
+  ];
+  const teamLabels = distinctRailLabels(teamClash);
+  assert.notEqual(teamLabels.get('#team'), teamLabels.get('room_cafe-0001'));
+  assert.ok(teamLabels.get('room_cafe-0001')?.startsWith('team · '));
+
+  // Full-id fallback: ids whose every same-length suffix ties (one id is a
+  // suffix of the other) — the longer id's full length disambiguates.
+  const nested = [
+    lane('room_x-77', 'room', 'ops'),
+    lane('room_xx-77', 'room', 'ops'),
+  ];
+  const nestedLabels = distinctRailLabels(nested);
+  assert.notEqual(nestedLabels.get('room_x-77'), nestedLabels.get('room_xx-77'));
+}
+
+console.log('messages/model tests passed');
