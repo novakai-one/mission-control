@@ -383,9 +383,9 @@ missions in missions.jsonl only after he sees this list.
 
 | Evidence file | What it proves | Regenerate |
 |---|---|---|
-| [cli-census.json](evidence/cli-census.json) | 7 CLIs, 26 verbs, every flag, with file:line | `node evidence/cli-census.mjs .` |
-| [route-census.json](evidence/route-census.json) | all 53 routes, method+path+file:line | `node evidence/route-census.mjs .` |
-| [store-census.json](evidence/store-census.json) | ObjectModel write surface, engine exports, schema law | `node evidence/store-census.mjs .` |
+| [cli-census.json](evidence/cli-census.json) | 7 CLIs, 26 verbs, every flag, with file:line | from repo root: `node docs/reports/mission-lifecycle-map/evidence/cli-census.mjs .` |
+| [route-census.json](evidence/route-census.json) | all 53 routes, method+path+file:line | from repo root: `node docs/reports/mission-lifecycle-map/evidence/route-census.mjs .` |
+| [store-census.json](evidence/store-census.json) | ObjectModel write surface, engine exports, schema law | from repo root: `node docs/reports/mission-lifecycle-map/evidence/store-census.mjs .` |
 | [trace-commands.md](evidence/trace-commands.md) | 47 cited command rows, stage sequence, 9 no-trail stages, drift notes | greps in its §1 |
 | [store-rows.md](evidence/store-rows.md) | live store rows for both missions | grep in its header |
 | [exp-timing-evidence.md](evidence/exp-timing-evidence.md) | where the EXP timing confusion lived | greps in its header |
