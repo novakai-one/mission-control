@@ -235,8 +235,8 @@ async function cycleReconnect(): Promise<void> {
 {
   const roomsFetches: string[] = [];
   const realFetch = globalThis.fetch;
-  globalThis.fetch = (async (url: unknown) => {
-    roomsFetches.push(String(url));
+  globalThis.fetch = (async (requestUrl: unknown) => {
+    roomsFetches.push(String(requestUrl));
     return new Response(JSON.stringify({ messages: [], rooms: [] }), { status: 200 });
   }) as typeof fetch;
   try {
@@ -250,11 +250,11 @@ async function cycleReconnect(): Promise<void> {
 
     // ROOMS: watchRooms re-issues its real GET /api/rooms fetch on reopen.
     const unwatch = watchRooms(() => {}, () => true);
-    const before = roomsFetches.filter((url) => url.includes('/api/rooms')).length;
+    const before = roomsFetches.filter((entry) => entry.includes('/api/rooms')).length;
     assert.equal(before, 1, 'one mount fetch');
     await cycleReconnect();
     await new Promise(resolve => setTimeout(resolve, 10));
-    const after = roomsFetches.filter((url) => url.includes('/api/rooms')).length;
+    const after = roomsFetches.filter((entry) => entry.includes('/api/rooms')).length;
     assert.equal(after, before + 1, 'reopen re-issues GET /api/rooms');
     unwatch();
   } finally {

@@ -52,24 +52,23 @@ export interface LaneFlowIo extends LaneFlowDeps {
   setOverlay(lane: Conversation | null): void;
 }
 
-export function createLaneFlows(io: LaneFlowIo): {
+export function createLaneFlows(laneIo: LaneFlowIo): {
   startRoom(members: string[], name: string): Promise<void>;
   openDm(name: string): Conversation;
   spawnAgent(provider: ProviderId, title?: string): Promise<void>;
 } {
   async function startRoom(members: string[], name: string): Promise<void> {
     const data = (await postJson('/api/user/rooms', { name, members })) as { room: TunnelRoom };
-    io.ingestRoom(data.room); io.openLane(data.room.roomId);
+    laneIo.ingestRoom(data.room); laneIo.openLane(data.room.roomId);
   }
   function openDm(name: string): Conversation {
     const lane = dmLaneFor(name);
-    io.setOverlay(lane); return lane;
+    laneIo.setOverlay(lane); return lane;
   }
   async function spawnAgent(provider: ProviderId, title?: string): Promise<void> {
-    const created = await spawnAgentRequest(provider, title);
-    const lane = dmLaneFor(created.title);
-    io.setOverlay(lane); // BEFORE selecting: the lane renders from the 201 alone (S1)
-    io.openLane(lane.id);
+    const lane = dmLaneFor((await spawnAgentRequest(provider, title)).title);
+    laneIo.setOverlay(lane); // BEFORE selecting: the lane renders from the 201 alone (S1)
+    laneIo.openLane(lane.id);
   }
   return { startRoom, openDm, spawnAgent };
 }

@@ -548,8 +548,8 @@ assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => targe
   let overlay: Conversation | null = null;
   let overlayAtSelection: Conversation | null = null;
   const realFetch = globalThis.fetch;
-  globalThis.fetch = (async (url: unknown, init?: { method?: string; body?: string }) => {
-    spawnCalls.push(`${init?.method ?? 'GET'} ${String(url)} ${init?.body ?? ''}`);
+  globalThis.fetch = (async (requestUrl: unknown, init?: { method?: string; body?: string }) => {
+    spawnCalls.push(`${init?.method ?? 'GET'} ${String(requestUrl)} ${init?.body ?? ''}`);
     return new Response(
       JSON.stringify({ agentId: 'ag-99', title: 'claude-9', provider: 'claude', status: 'running' }),
       { status: 201 },
