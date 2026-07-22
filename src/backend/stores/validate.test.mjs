@@ -120,7 +120,7 @@ function validateIn(block, extraBlocks = []) {
 // --- statuses (documented sets enforce; ruling 5 = shape-only for the rest) --
 
 {
-  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_status-a', status: 'doing' })), ['STATUS-UNKNOWN']);
+  assert.deepEqual(codes(validateIn({ ...VALID.task, id: 'task_status-a', status: 'zombie' })), ['STATUS-UNKNOWN']); // doing/blocked joined the set (mission_mission-object-model)
   assert.deepEqual(codes(validateIn({ ...VALID.request, id: 'request_status-a', status: 'open' })), ['STATUS-UNKNOWN']);
   assert.deepEqual(validateIn({ ...VALID.request, id: 'request_status-b', status: 'answered', decision: 'DEC-2026-07-21-001' }), []);
   // shape-only kinds: any string status passes; non-string status is invalid
@@ -383,7 +383,7 @@ import { validateTransition } from './validate.mjs';
   assert.deepEqual(codes(validateTransition(current, { ...done, id: 'task_other' })), ['TRANSITION-INVALID']);
   assert.deepEqual(codes(validateTransition(current, { ...done, kind: 'mission' })), ['TRANSITION-INVALID']);
   // status outside the kind's set rejects
-  assert.deepEqual(codes(validateTransition(current, { ...done, status: 'doing' })), ['STATUS-UNKNOWN']);
+  assert.deepEqual(codes(validateTransition(current, { ...done, status: 'zombie' })), ['STATUS-UNKNOWN']); // doing joined the set (mission_mission-object-model)
   // updated must be present and must not move backwards
   const { updated, ...noUpdated } = done;
   assert.deepEqual(codes(validateTransition(current, noUpdated)), ['TRANSITION-INVALID']);

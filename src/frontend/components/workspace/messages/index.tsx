@@ -38,6 +38,7 @@ import {
   reviewLanesFor,
   roomLabelFor,
   saveRailWidths,
+  restoreDecision,
   workingAgentFor,
   type RailWidths,
 } from './model.js';
@@ -51,6 +52,8 @@ import './index.css';
 
 interface MessagesViewProps {
   agents: AgentInfo[];
+  /** Roster hydration signal — the D3 restore machine waits on it (S7). */
+  agentsLoaded: boolean;
   projects: ProjectRecord[];
   project: ProjectRecord | null;
   openRequest?: MessagesOpenRequest | null;
@@ -61,10 +64,10 @@ export interface MessagesOpenRequest {
   nonce: number;
 }
 
-export function MessagesView({ agents, projects, openRequest }: MessagesViewProps) {
+export function MessagesView({ agents, agentsLoaded, projects, openRequest }: MessagesViewProps) {
   const rootRef = useRef<HTMLElement | null>(null);
-  const { feed, loadConversation, ingestEnvelope } = useTunnelFeed();
-  const { rooms, ingestRoom } = useTunnelRooms();
+  const { feed, feedLoaded, loadConversation, ingestEnvelope } = useTunnelFeed();
+  const { rooms, roomsLoaded, ingestRoom } = useTunnelRooms();
   const cursors = useReadCursors();
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
@@ -157,13 +160,19 @@ export function MessagesView({ agents, projects, openRequest }: MessagesViewProp
     updateAttentionQueue(buildAttentionQueue(null, feed, dismissed));
   }, [feed, dismissed]);
 
-  // First open restores the lane Chris was in; else the freshest lane.
+  // First open restores the lane Chris was in (D3, ruling S7): the pure
+  // restore machine retains the remembered id while feed/rooms/roster hydrate
+  // and falls back only after ALL of them settle. A fallback selection is
+  // never saved — the remembered preference survives a broken reload.
   useEffect(() => {
-    if (selectedId || conversations.length === 0) return;
-    const remembered = savedLane();
-    const restored = remembered && conversations.find((lane) => lane.id === remembered);
-    setSelectedId(restored ? restored.id : conversations[0].id);
-  }, [selectedId, conversations]);
+    const decision = restoreDecision({
+      selectedId,
+      remembered: savedLane() ?? null,
+      conversationIds: conversations.map((lane) => lane.id),
+      feedLoaded, roomsLoaded, agentsLoaded,
+    });
+    if (decision.kind === 'restore' || decision.kind === 'fallback') setSelectedId(decision.id);
+  }, [selectedId, conversations, feedLoaded, roomsLoaded, agentsLoaded]);
 
   useEffect(() => {
     if (!openRequest || !conversations.some((lane) => lane.id === openRequest.id)) return;

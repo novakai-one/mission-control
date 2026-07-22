@@ -9,8 +9,10 @@ import { MailboxDeliveryAdapter, PtyDelivery, PtyDeliveryAdapter } from '../deli
 import { resolveActor } from '../actors/index.js';
 import type { ResolvedActor } from '../actors/index.js';
 import { RoomStore } from '../rooms/index.js';
-import { CHRIS_MEMBER, formatRoomInbound, isChannel, isRoom, mailboxIdentityFor } from '../types.js';
-import type { AgentAddress, DeliveryReceipt, MailboxLookup, MessageEnvelope, Room } from '../types.js';
+import type { EnvelopeIdentity } from '../identity/index.js';
+import { CHRIS_MEMBER, formatInboundMarker, formatRoomInbound, isChannel, isRoom, mailboxIdentityFor } from '../types.js';
+import type { AgentAddress, DeliveryOutcome, DeliveryReceipt, MailboxLookup, MessageEnvelope, Room } from '../types.js';
+import type { EffectConfirmer } from '../confirm/index.js';
 
 /** Recipient not found / not running — the error carries the live roster (§5). */
 export class RecipientNotFoundError extends Error {
@@ -71,6 +73,11 @@ export class InterruptRateLimiter {
   }
 }
 
+/** The Presence facts confirmation needs, looked up at delivery time. */
+export interface PresenceLookup {
+  (agentId: string): { sessionId: string; projectDir?: string; provider: string } | null;
+}
+
 export class MessageRouter {
   private readonly adapters: { agent: PtyDeliveryAdapter; mailbox: MailboxDeliveryAdapter };
 
@@ -81,11 +88,20 @@ export class MessageRouter {
     private readonly roster: () => AgentAddress[],
     private readonly interruptLimiter = new InterruptRateLimiter(),
     private readonly mailboxLookup: MailboxLookup = mailboxIdentityFor,
+    /** Stamps durable ids + missionId server-side; absent in rigs without stores. */
+    private readonly identity?: EnvelopeIdentity,
+    /** D1: transcript-backed effect verification for interrupts. */
+    private readonly confirmer?: EffectConfirmer,
+    private readonly presenceFor?: PresenceLookup,
+    private readonly confirmTimeoutMs = 15_000,
   ) {
     this.adapters = { agent: new PtyDeliveryAdapter(delivery), mailbox: new MailboxDeliveryAdapter() };
   }
 
   async route(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
+    // Identity is stamped before the FIRST append so the audit record carries
+    // the durable ids from birth (plan v2 §1.5).
+    this.identity?.stamp(envelope, this.roster());
     this.store.append(envelope);
     if (isChannel(envelope.to)) return this.routeChannel(envelope);
     if (isRoom(envelope.to)) return this.routeRoom(envelope);
@@ -151,10 +167,91 @@ export class MessageRouter {
     const actor = resolveActor(envelope.to, roster, [], this.mailboxLookup);
     if (actor?.kind === 'mailbox') return this.deliverResolved(envelope, actor);
     if (actor?.kind !== 'agent') throw this.fail(envelope, new RecipientNotFoundError(envelope.to, roster));
-    if (envelope.delivery === 'interrupt' && !this.interruptLimiter.tryAcquire(envelope.from)) {
-      throw this.fail(envelope, new InterruptRateLimitError(envelope.from, this.interruptLimiter.maxPerMinute));
+    if (envelope.delivery === 'interrupt') {
+      if (!this.interruptLimiter.tryAcquire(envelope.from)) {
+        throw this.fail(envelope, new InterruptRateLimitError(envelope.from, this.interruptLimiter.maxPerMinute));
+      }
+      return this.deliverInterrupt(envelope, actor.address);
     }
     return this.deliverResolved(envelope, actor);
+  }
+
+  /**
+   * D1 honesty: an interrupt settles 'accepted' when the bytes are written —
+   * 'delivered' is claimed ONLY when the recipient's transcript proves the
+   * turn arrived, and the amendment carries the evidence (M9). The
+   * confirmation runs asynchronously; the send path never blocks on it.
+   */
+  private async deliverInterrupt(envelope: MessageEnvelope, address: AgentAddress): Promise<DeliveryReceipt> {
+    try {
+      await this.adapters.agent.deliver({ kind: 'agent', address }, envelope);
+    } catch (error) {
+      throw this.fail(envelope, error instanceof Error ? error : new Error(String(error)));
+    }
+    const presence = this.presenceFor?.(address.agentId) ?? null;
+    this.amend(envelope, 'accepted', {
+      acceptedAt: new Date().toISOString(),
+      agentId: address.agentId,
+      provider: address.provider,
+      ...(presence?.sessionId ? { sessionId: presence.sessionId } : {}),
+    });
+    this.scheduleConfirmation(envelope, address, presence);
+    return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'interrupt-accepted' };
+  }
+
+  /** Fire-and-record: every outcome (proof, timeout, error) amends the audit record. */
+  scheduleConfirmation(
+    envelope: MessageEnvelope,
+    address: AgentAddress,
+    presence: { sessionId: string; projectDir?: string; provider: string } | null,
+    noteContext = '',
+  ): void {
+    const prefix = noteContext ? `${noteContext}: ` : '';
+    if (!this.confirmer || !presence?.sessionId) {
+      this.amend(envelope, envelope.status, { note: `${prefix}effect unverifiable — no confirmer or no sessionId for ${address.name}` });
+      return;
+    }
+    const target = { provider: address.provider, sessionId: presence.sessionId, projectDir: presence.projectDir };
+    void this.confirmer.confirm(target, formatInboundMarker(envelope), { timeoutMs: this.confirmTimeoutMs })
+      .then((proof) => this.recordProof(envelope, proof, prefix))
+      .catch((error: unknown) => {
+        this.amend(envelope, envelope.status, { note: `${prefix}confirmation error: ${error instanceof Error ? error.message : String(error)}` });
+      });
+  }
+
+  /** Every confirmation outcome amends the audit record — proof or honest timeout. */
+  private recordProof(envelope: MessageEnvelope, proof: { confirmedAt: string; transcriptEvent: string } | null, prefix: string): void {
+    if (proof) this.amend(envelope, 'delivered', { confirmedAt: proof.confirmedAt, transcriptEvent: proof.transcriptEvent });
+    else this.amend(envelope, envelope.status, { note: `${prefix}effect unverified within ${this.confirmTimeoutMs}ms` });
+  }
+
+  /**
+   * Startup reconciliation (D2, ruling S6): the journal is re-read after a
+   * backend restart and non-terminal envelopes are settled honestly —
+   * 'queued' (never written) is retried ONCE (the host's messageId dedupe
+   * makes a retry that actually reached the PTY a no-op); 'accepted' (written)
+   * is transcript-verified and NEVER re-typed. Bounded to a recency window so
+   * ancient journal history is never replayed.
+   */
+  async reconcile({ windowMs = 30 * 60 * 1000 }: { windowMs?: number } = {}): Promise<void> {
+    const since = new Date(Date.now() - windowMs).toISOString();
+    for (const envelope of this.store.history({ since })) {
+      if (envelope.status === 'queued') {
+        try {
+          await this.route({ ...envelope, status: 'queued' });
+        } catch {
+          // the retry's own failure already settled the envelope 'failed'
+        }
+      } else if (envelope.status === 'accepted') {
+        const address = this.roster().find((agent) => agent.name === envelope.to
+          || agent.agentId === envelope.outcome?.agentId);
+        if (!address) {
+          this.amend(envelope, 'accepted', { note: 'restart reconciliation: recipient no longer live — effect unverifiable' });
+          continue;
+        }
+        this.scheduleConfirmation(envelope, address, this.presenceFor?.(address.agentId) ?? null, 'restart reconciliation');
+      }
+    }
   }
 
   private async deliverResolved(envelope: MessageEnvelope, actor: ResolvedActor): Promise<DeliveryReceipt> {
@@ -171,6 +268,12 @@ export class MessageRouter {
   private settle(envelope: MessageEnvelope, status: MessageEnvelope['status']): void {
     envelope.status = status;
     this.store.updateStatus(envelope.id, status);
+  }
+
+  private amend(envelope: MessageEnvelope, status: MessageEnvelope['status'], outcome: DeliveryOutcome): void {
+    envelope.status = status;
+    envelope.outcome = { ...envelope.outcome, ...outcome };
+    this.store.amend(envelope.id, status, outcome);
   }
 
   private fail(envelope: MessageEnvelope, error: Error): Error {

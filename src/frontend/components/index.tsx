@@ -440,6 +440,7 @@ export function DashboardShell() {
         {viewMode === 'messages' ? (
           <MessagesView
             agents={agentsState.agents}
+            agentsLoaded={agentsState.agentsLoaded}
             projects={workspace.projects}
             project={workspace.selectedProject}
           />

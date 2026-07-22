@@ -41,6 +41,17 @@ export interface CreateAgentOptions {
   provider?: ProviderId;
   projectId?: string;
   threadId?: string;
+  /** Durable object-model identity minted by the spawn path — the runtime
+   * adopts it verbatim so there is exactly one agentId (ruling S4). */
+  agentId?: string;
+}
+
+/** Unref'd sleep: pending lifecycle steps never block process shutdown. */
+function pause(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, milliseconds);
+    timer.unref?.();
+  });
 }
 
 function buildAgentInfo(
@@ -67,6 +78,10 @@ function buildAgentInfo(
 export class TerminalManager {
   private readonly agents = new Map<string, AgentRecord>();
   private readonly pendingCodexCwds = new Set<string>();
+  /** Insertion-ordered dedupe of submitted job ids (bounded, D2 idempotence). */
+  private readonly submittedMessageIds = new Set<string>();
+  /** One serialized submission lane per agent (correction C2). */
+  private readonly submitLanes = new Map<string, Promise<void>>();
   private dataCallback: ((agentId: string, data: string) => void) | null = null;
   private exitCallback: ((agentId: string, exitCode: number | null) => void) | null = null;
   private sessionCallback: ((info: AgentInfo) => void) | null = null;
@@ -121,7 +136,8 @@ export class TerminalManager {
   }
 
   private launchAgent(options: CreateAgentOptions): AgentInfo {
-    const agentId = `agent_${randomUUID()}`;
+    const agentId = options.agentId ?? `agent_${randomUUID()}`;
+    if (this.agents.has(agentId)) throw new Error(`agentId "${agentId}" already exists in the terminal registry`);
     const requestedSessionId = randomUUID();
     const launched = this.launcher(options.provider || 'claude', options.cwd, requestedSessionId);
     const provider = options.provider || 'claude';
@@ -180,6 +196,49 @@ export class TerminalManager {
     if (!record?.ptyProcess) return false;
     record.ptyProcess.write(data);
     return true;
+  }
+
+  /**
+   * One timed provider submission owned by the PTY-owning process (D2): type
+   * the text, settle, submit with \r, and optionally flush with one more bare
+   * \r. Jobs are serialized PER AGENT across the FULL lifecycle (correction
+   * C2): job N+1's text never touches the PTY before job N's submit (and
+   * flush) have run, so two sends inside the settle window can never merge.
+   * Duplicate messageIds are no-ops so a reconciliation retry can never
+   * double-type. In-process this dies with the process — the detached host
+   * variant is what survives backend restarts.
+   */
+  submit(submission: { agentId: string; messageId: string; text: string; settleMs: number; flushMs?: number; leadIn?: { data: string; settleMs: number } }): boolean {
+    if (this.submittedMessageIds.has(submission.messageId)) return true;
+    if (!this.agents.get(submission.agentId)?.ptyProcess) return false;
+    this.rememberSubmitted(submission.messageId);
+    const lane = this.submitLanes.get(submission.agentId) ?? Promise.resolve();
+    const chained = lane.then(() => this.runSubmission(submission));
+    this.submitLanes.set(submission.agentId, chained.catch(() => undefined));
+    return true;
+  }
+
+  /** The full lifecycle of one queued submission; a PTY death mid-queue is a quiet no-op. */
+  private async runSubmission(submission: { agentId: string; messageId: string; text: string; settleMs: number; flushMs?: number; leadIn?: { data: string; settleMs: number } }): Promise<void> {
+    if (submission.leadIn) {
+      if (!this.write(submission.agentId, submission.leadIn.data)) return;
+      await pause(submission.leadIn.settleMs);
+    }
+    if (!this.write(submission.agentId, submission.text)) return;
+    await pause(submission.settleMs);
+    this.write(submission.agentId, '\r');
+    if (submission.flushMs !== undefined) {
+      await pause(Math.max(0, submission.flushMs - submission.settleMs));
+      this.write(submission.agentId, '\r');
+    }
+  }
+
+  private rememberSubmitted(messageId: string): void {
+    this.submittedMessageIds.add(messageId);
+    if (this.submittedMessageIds.size > 500) {
+      const oldest = this.submittedMessageIds.values().next().value;
+      if (oldest !== undefined) this.submittedMessageIds.delete(oldest);
+    }
   }
 
   resize(agentId: string, cols: number, rows: number): boolean {

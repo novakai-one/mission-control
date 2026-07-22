@@ -142,7 +142,7 @@ const laneMessages = [
   envelope({ id: 'msg_2', from: 'claude-1', 'to': 'chris', status: 'delivered' }),
   envelope({ id: 'msg_3', from: 'chris', 'to': 'claude-1', status: 'failed' }),
 ];
-assert.deepEqual(laneStatsFor(laneMessages), { sent: 2, received: 1, delivered: 2, failed: 1 });
+assert.deepEqual(laneStatsFor(laneMessages), { sent: 2, received: 1, delivered: 2, accepted: 0, failed: 1 });
 
 // Recap notes: unread, members, last word — all derived.
 const room = lane('room_a', 'room', 'alpha');

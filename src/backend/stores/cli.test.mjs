@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const CLI = path.join(HERE, '..', 'nvk-store.mjs');
+const CLI = path.join(HERE, '..', '..', '..', 'scripts', 'nvk-store.mjs');
 const KNOWN_VALID = path.join(HERE, 'fixtures', 'known-valid');
 const KNOWN_DRIFT = path.join(HERE, 'fixtures', 'known-drift');
 const TS = '2026-07-21T14:00:00+10:00';
@@ -133,7 +133,7 @@ function run(args, stdin) {
 {
   // an append into a foreign/temp dir must NEVER touch the repo baseline —
   // the exact leak class this validator exists to stop (found by Manager verify)
-  const repoBaseline = path.join(HERE, '..', '..', 'stores-baseline.json');
+  const repoBaseline = path.join(HERE, '..', '..', '..', 'stores-baseline.json');
   const baselineBefore = readFileSync(repoBaseline);
   const dir = freshDir();
   const ok = run(['append', '--dir', dir, '--store', 'tasks.jsonl', '--line',

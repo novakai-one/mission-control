@@ -1,9 +1,12 @@
 import type { AgentInfo, CreateAgentOptions } from '../manager.js';
+import type { SubmitJob } from '../host/protocol/index.js';
 
 /** Deep terminal seam shared by the in-process and detached-host adapters. */
 export interface TerminalRuntime {
   create(options: CreateAgentOptions): Promise<AgentInfo>;
   write(agentId: string, data: string): boolean;
+  /** Timed provider submission owned by the PTY-owning process (D2). */
+  submit(job: SubmitJob): boolean;
   resize(agentId: string, cols: number, rows: number): boolean;
   rename(agentId: string, title: string): boolean;
   kill(agentId: string): boolean;

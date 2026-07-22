@@ -9,6 +9,7 @@ import type {
   CurrentActivityView,
   MissionAssignmentView,
   MissionSnapshot,
+  MissionTreeView,
   PresenceView,
   SourceRef,
   Sourced,
@@ -63,6 +64,10 @@ export interface MissionRoomViewModel {
   timeline: TimelineEntry[];
   /** Resolved, explicitly ref'd artifacts (S4). */
   artifacts: ArtifactView[];
+  /** The object-model progress tree, rendered from data (plan v2 §1.6). */
+  tree: MissionTreeView;
+  /** L15 deterministic amber: the ONE blocked task allowed the gold accent, or null. */
+  amberTaskId: string | null;
   /** THE trust feature: every ambiguous fact, labeled, calmly grouped (UI law: scarce amber). */
   attention: AttentionSectionModel;
   /** Freshness + recoverable read problems — always visible (M6). */
@@ -150,6 +155,19 @@ export function groupAttention(attention: AttentionItem[]): AttentionSectionMode
 }
 
 /**
+ * L15 deterministic amber selection: among all blocked tasks in the tree, the
+ * earliest-blocked agent (by the task's `updated`) carries the ONE gold
+ * accent; every other blocked row renders plain. Ties break by task id so the
+ * choice never flickers between polls.
+ */
+export function amberTaskOf(tree: MissionTreeView): string | null {
+  const blocked = [...tree.agents.flatMap((agent) => agent.tasks), ...tree.unassignedTasks]
+    .filter((task) => task.status === 'blocked')
+    .sort((left, right) => (left.updated ?? '￿').localeCompare(right.updated ?? '￿') || left.id.localeCompare(right.id));
+  return blocked[0]?.id ?? null;
+}
+
+/**
  * Builds the room's section data from the snapshot alone. Pass-throughs are
  * deliberate: the snapshot is the only legal data root for this surface, and
  * empty sections stay empty — the attention items explain the gaps.
@@ -165,6 +183,8 @@ export function missionRoomViewModel(snapshot: MissionSnapshot): MissionRoomView
     currentActivity: snapshot.currentActivity,
     timeline: snapshot.timeline,
     artifacts: snapshot.artifacts,
+    tree: snapshot.tree,
+    amberTaskId: amberTaskOf(snapshot.tree),
     attention: groupAttention(snapshot.attention),
     trust: { asOf: snapshot.asOf, issues: snapshot.issues },
   };

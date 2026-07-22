@@ -31,7 +31,10 @@ recognized stores are:
 - `.novakai/stores/missions.jsonl` — `kind:"mission"`. Units of work: status, owner,
   refs to diffs/PRs. A mission = a team spawned with a brief (sprint-scale).
 - `.novakai/stores/tasks.jsonl` — `kind:"task"`. Atomic sub-units of missions.
-  Statuses: `todo`, `done`. Keep `updated` current when changing a task.
+  Statuses: `todo`, `doing`, `done`, `blocked` (a blocked task carries a
+  non-empty `blockedReason`; the field is only legal while blocked). Mission
+  tasks ref their agent and mission. Keep `updated` current when changing a
+  task — via `nvk-store.mjs transition-task`, never by hand.
 - `.novakai/stores/captains-log.jsonl` — `kind:"log"`. Dated facts only: observed,
   did, verified. Chief entries carry `author:"chief-kimi"`.
 - `.novakai/stores/learnings.jsonl` — `kind:"learning"`. One record per retro
@@ -46,6 +49,19 @@ recognized stores are:
 - `.novakai/stores/issues.jsonl` — `kind:"issue"`. Observed product, process,
   or infrastructure problems that require follow-up outside the current
   mission.
+- `.novakai/stores/teams.jsonl` — `kind:"team"`. The team assigned to a
+  mission (exactly one mission ref). Membership is NOT stored here — it
+  derives from Agent → team refs (single authority).
+- `.novakai/stores/agents.jsonl` — `kind:"agent"`. The durable Novakai agent
+  identity (`agent_<uuid>`, ≈ CONTEXT.md Person): name, provider, exactly one
+  team ref + one mission ref (they must agree), statuses
+  `spawning|live|failed|retired`. `sessionId` is the CURRENT session
+  (Presence) pointer; prior values rotate into the `sessions` history array.
+- `.novakai/stores/artifacts.jsonl` — `kind:"artifact"`. Produced outputs:
+  exactly one of `path`/`url`, at least one mission/task ref.
+- `.novakai/stores/threads.jsonl` — `kind:"thread"`. The mission↔messaging
+  link: exactly one resolvable mission ref plus a scalar `roomId` (a runtime
+  identifier, deliberately unchecked like `session`).
 
 Ref integrity rules (learned 2026-07-20, log_2026-07-20-017): an id once
 referenced never disappears (file a tombstone instead of deleting); project
@@ -62,14 +78,18 @@ use `okr_<slug>`; projects use `proj_<slug>`. Mission and task tombstones may
 use `status:"refiled"` with scalar `refiledTo`.
 
 Refs are typed. Allowed kinds are `task`, `mission`, `project`, `doc`,
-`decision`, `log`, `exp`, `objective`, `request`, `issue`, `session`, and
-`learning`.
+`decision`, `log`, `exp`, `objective`, `request`, `issue`, `session`,
+`learning`, `team`, `agent`, `artifact`, and `thread`.
 
-For append-only writes, use `scripts/nvk-store.mjs append`; run
-`npm run stores:audit` to inspect existing drift and `npm run stores:gate` to
-detect new drift or disappearing inventoried IDs. The current writer does not
-yet enforce direct file writes or in-place state transitions; that residual
-gap is tracked in `issue_store-writer-residual-gap`.
+For append-only writes, use `scripts/nvk-store.mjs append`. For state
+transitions (task status, agent session attach), use the intent-named
+transition path (`scripts/nvk-store.mjs transition-task`, or the backend
+object-model module) — a locked, CAS-guarded, fully validated atomic
+replacement; id and kind never change, `updated` moves strictly forward.
+Hand-editing store files remains forbidden. Run `npm run stores:audit` to
+inspect existing drift and `npm run stores:gate` to detect new drift or
+disappearing inventoried IDs. Direct-file-write enforcement is still open in
+`issue_store-writer-residual-gap` (the transition half is closed).
 
 Related but separate: `.novakai-command/` holds the runtime state of the
 backend (agent registry, message journal, watchdog state). Do not hand-edit

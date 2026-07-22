@@ -21,6 +21,11 @@ import {
 import { RoomStore } from './rooms/index.js';
 import { MailboxConflictError, MailboxRegistry } from './mailbox/index.js';
 import { SendApi, InvalidSendError } from './send/index.js';
+import { EnvelopeIdentity } from './identity/index.js';
+import type { MissionGraph } from './identity/index.js';
+import { TranscriptEffectConfirmer } from './confirm/index.js';
+import type { EffectConfirmer } from './confirm/index.js';
+import { createThreadRoute } from './threads/index.js';
 import { MessageStore } from './store/index.js';
 import { CHRIS_IDENTITY, CHRIS_MEMBER } from './types.js';
 import type { MessageQuery, Room, SendMessage } from './types.js';
@@ -61,6 +66,16 @@ export interface MessagingOptions {
   spawnBriefingDelayMs?: number;
   /** Port quoted in the briefing's curl instructions. */
   serverPort?: number;
+  /** The durable mission graph — enables server-derived envelope identity
+   * and the POST /api/threads mission↔room link. */
+  missionGraph?: MissionGraph;
+  /** D1 effect verification; defaults to the transcript confirmer. Tests
+   * inject fakes; null disables confirmation entirely. */
+  effectConfirmer?: EffectConfirmer | null;
+  /** Bounded transcript-confirmation window per interrupt. */
+  confirmTimeoutMs?: number;
+  /** Restart reconciliation (D2) runs shortly after boot unless disabled. */
+  reconcileOnStart?: boolean;
 }
 
 export class MessagingHub {
@@ -69,25 +84,38 @@ export class MessagingHub {
   private readonly rooms: RoomStore;
   private readonly mailboxes: MailboxRegistry;
   private readonly sendApi: SendApi;
+  private readonly router: MessageRouter;
   private readonly spawnBriefingDelayMs: number;
   private readonly serverPort: number;
+  private readonly missionGraph?: MissionGraph;
 
   constructor(
     private readonly terminals: AgentTerminals,
     private readonly broadcast: (event: string, payload: unknown) => void,
     options: MessagingOptions = {},
   ) {
+    this.missionGraph = options.missionGraph;
     this.store = new MessageStore(options.storePath); this.rooms = new RoomStore(options.roomsStorePath);
     this.mailboxes = options.mailboxRegistry ?? new MailboxRegistry(options.mailboxStorePath);
     this.store.onAppend((envelope) => this.broadcast('message-envelope', envelope));
     this.rooms.onAppend(() => this.broadcast('rooms-changed', { rooms: this.rooms.list() }));
     this.delivery = new PtyDelivery(this.terminals, options.timings);
-    this.sendApi = new SendApi(this.buildRouter(options));
+    this.router = this.buildRouter(options);
+    this.sendApi = new SendApi(this.router);
     this.spawnBriefingDelayMs = options.spawnBriefingDelayMs ?? 3000;
     this.serverPort = options.serverPort ?? 3031;
+    if (options.reconcileOnStart !== false) {
+      // Delayed + unref'd: short-lived rigs exit before it fires; a real
+      // backend reconciles the journal once the roster has had time to attach.
+      const timer = setTimeout(() => { void this.router.reconcile(); }, 1500);
+      timer.unref?.();
+    }
   }
 
   private buildRouter(options: MessagingOptions): MessageRouter {
+    const confirmer = options.effectConfirmer === null
+      ? undefined
+      : options.effectConfirmer ?? new TranscriptEffectConfirmer();
     return new MessageRouter(
       this.store,
       this.delivery,
@@ -95,7 +123,18 @@ export class MessagingHub {
       () => rosterFromAgents(this.terminals.list()),
       new InterruptRateLimiter(options.maxInterruptsPerMinute),
       (name) => this.mailboxes.identityFor(name),
+      this.missionGraph ? new EnvelopeIdentity(this.missionGraph) : undefined,
+      confirmer,
+      (agentId) => this.presenceFor(agentId),
+      options.confirmTimeoutMs,
     );
+  }
+
+  /** The Presence facts confirmation needs — live info from the terminal roster. */
+  private presenceFor(agentId: string): { sessionId: string; projectDir?: string; provider: string } | null {
+    const info = this.terminals.list().find((agent) => agent.agentId === agentId);
+    if (!info?.sessionId) return null;
+    return { sessionId: info.sessionId, projectDir: info.projectDir, provider: info.provider };
   }
 
   /** The durable mailbox registry — shared with AgentsHub for name checks. */
@@ -120,6 +159,12 @@ export class MessagingHub {
       '/api/rooms/:roomId/members',
       (request, response) => this.handleAddMembers(request, response),
     );
+    application.post('/api/threads', (request, response) => this.handleCreateThread(request, response));
+  }
+
+  /** The mission↔room link: one typed thread block in the system of record. */
+  private handleCreateThread(request: Request, response: Response): void {
+    createThreadRoute(request, response, this.missionGraph, (roomId) => this.rooms.get(roomId));
   }
 
   private handleRegisterMailbox(request: Request, response: Response): void {
@@ -277,6 +322,7 @@ export class MessagingHub {
     if (typeof request.query.withAgent === 'string') query.withAgent = request.query.withAgent;
     if (typeof request.query.withRoom === 'string') query.withRoom = request.query.withRoom;
     if (typeof request.query.threadId === 'string') query.threadId = request.query.threadId;
+    if (typeof request.query.missionId === 'string') query.missionId = request.query.missionId;
     if (typeof request.query.since === 'string') query.since = request.query.since;
     if (typeof request.query.limit === 'string') {
       const limit = Number.parseInt(request.query.limit, 10);

@@ -9,6 +9,8 @@ class FakeTerminals implements TerminalRuntime {
   constructor(readonly agents: AgentInfo[], private readonly writeResult = true) {}
 
   async create(_options: CreateAgentOptions): Promise<AgentInfo> { return this.agents[0]!; }
+  submit(): boolean { return true; }
+
   write(agentId: string, data: string): boolean {
     this.writes.push({ agentId, data });
     return this.writeResult;

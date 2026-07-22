@@ -14,6 +14,11 @@ import type { AgentAddress, DeliveryReceipt, MessageEnvelope } from '../types.js
 /** The one TerminalManager capability delivery needs. */
 export interface PtyWriter {
   write(agentId: string, data: string): boolean;
+  /** Timed submission owned by the PTY-hosting process (D2): when present,
+   * the type→settle→submit→flush sequence survives a backend restart and
+   * duplicate messageIds are no-ops. Absent in minimal rigs — delivery then
+   * falls back to in-process timers. */
+  submit?(job: { agentId: string; messageId: string; text: string; settleMs: number; flushMs?: number; leadIn?: { data: string; settleMs: number } }): boolean;
 }
 
 export interface DeliveryTimings {
@@ -37,50 +42,94 @@ function delay(milliseconds: number): Promise<void> {
 }
 
 export class PtyDelivery {
+  /** Per-agent serialization (S6): one in-flight delivery per PTY, so two
+   * concurrent sends can never interleave their type/submit sequences. */
+  private readonly lanes = new Map<string, Promise<void>>();
+
   constructor(
     private readonly writer: PtyWriter,
     private readonly timings: DeliveryTimings = DEFAULT_TIMINGS,
   ) {}
 
-  async deliver(
+  deliver(
     address: AgentAddress,
     envelope: MessageEnvelope,
     line = formatInbound(envelope),
   ): Promise<DeliveryReceipt> {
-    if (envelope.delivery === 'interrupt') {
+    return this.serialized(address.agentId, async () => {
+      await this.typeSequenced(address, envelope, line);
+      return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: envelope.delivery };
+    });
+  }
+
+  /** An interrupt's Esc rides INSIDE the host lane (C2) — it can never clear
+   * a prior job's mid-settle input, because it queues behind that job. */
+  private async typeSequenced(address: AgentAddress, envelope: MessageEnvelope, line: string): Promise<void> {
+    const interrupt = envelope.delivery === 'interrupt';
+    if (interrupt && this.writer.submit) {
+      await this.type(address, line, envelope.id, {
+        data: this.interruptSequence(address.provider), settleMs: this.timings.interruptSettleMs,
+      });
+      return;
+    }
+    if (interrupt) {
       this.write(address, this.interruptSequence(address.provider));
       await delay(this.timings.interruptSettleMs);
     }
-    await this.type(address, line);
-    return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: envelope.delivery };
-  }
-
-  /** Type one submission into the PTY. Raw newlines would submit early, so they become literal "\n". */
-  async type(address: AgentAddress, text: string): Promise<void> {
-    this.write(address, text.replace(/\r?\n/g, '\\n'));
-    await delay(this.timings.submitDelayMs);
-    this.write(address, '\r');
-    this.scheduleFlush(address);
+    await this.type(address, line, envelope.id);
   }
 
   /**
-   * kimi-only flush: one bare \r after the box settles, submitting anything the
-   * first \r missed. Hazard (accepted, documented): at +6s this submits whatever
-   * sits in the input box, and on a menu/dialog a bare \r can pick the
-   * highlighted option — so it fires only for kimi, where the swallowed-\r bug
-   * is proven. Never throws: a dead PTY at flush time is a silent no-op, not a
-   * backend-crashing uncaught exception.
+   * Type one submission into the PTY. Raw newlines would submit early, so they
+   * become literal "\n". When the writer offers a host-owned submit job, the
+   * settle/submit/flush timers live in the PTY-hosting process (keyed by
+   * messageId, duplicate-safe) and survive a backend restart (D2). The
+   * in-process fallback keeps the old behavior for minimal rigs. The
+   * kimi-only flush \r hazard is unchanged and documented: on a settled box
+   * it submits swallowed text; only kimi has the proven swallowed-\r bug.
    */
-  private scheduleFlush(address: AgentAddress): void {
-    if (address.provider !== 'kimi' || !this.timings.flushDelayMs) return;
-    const timer = setTimeout(() => {
-      try {
-        this.writer.write(address.agentId, '\r');
-      } catch {
-        // best-effort flush — the PTY may be gone; nothing to do
-      }
-    }, this.timings.flushDelayMs);
-    timer.unref?.();
+  async type(
+    address: AgentAddress,
+    text: string,
+    messageId = `job_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    leadIn?: { data: string; settleMs: number },
+  ): Promise<void> {
+    const oneLine = text.replace(/\r?\n/g, '\\n');
+    const flushMs = address.provider === 'kimi' ? this.timings.flushDelayMs : undefined;
+    if (this.writer.submit) {
+      const accepted = this.writer.submit({
+        agentId: address.agentId, messageId, text: oneLine, settleMs: this.timings.submitDelayMs,
+        ...(flushMs !== undefined ? { flushMs } : {}),
+        ...(leadIn ? { leadIn } : {}),
+      });
+      if (!accepted) throw new DeliveryFailedError(`no live PTY for ${address.name} (${address.agentId})`);
+      return;
+    }
+    await this.typeInProcess(address, oneLine, flushMs);
+  }
+
+  /** In-process fallback for rigs without a host-owned submit lane. */
+  private async typeInProcess(address: AgentAddress, oneLine: string, flushMs: number | undefined): Promise<void> {
+    this.write(address, oneLine);
+    await delay(this.timings.submitDelayMs);
+    this.write(address, '\r');
+    if (flushMs !== undefined) {
+      const timer = setTimeout(() => {
+        try {
+          this.writer.write(address.agentId, '\r');
+        } catch {
+          // best-effort flush — the PTY may be gone; nothing to do
+        }
+      }, flushMs);
+      timer.unref?.();
+    }
+  }
+
+  private serialized<T>(agentId: string, task: () => Promise<T>): Promise<T> {
+    const previous = this.lanes.get(agentId) ?? Promise.resolve();
+    const chained = previous.then(task, task);
+    this.lanes.set(agentId, chained.then(() => undefined, () => undefined));
+    return chained;
   }
 
   /** Esc breaks the current turn in both CLIs today; provider divergence slots in here. */

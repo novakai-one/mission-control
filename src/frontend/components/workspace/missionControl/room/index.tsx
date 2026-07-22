@@ -17,6 +17,7 @@ import {
   type MissionRoomViewModel,
   type RoomFact,
 } from './model.js';
+import { TreeSection } from './tree/index.js';
 import './index.css';
 
 interface MissionRoomProps {
@@ -247,7 +248,7 @@ export function MissionRoomHero(props: { snapshot: MissionSnapshot | null }) {
     <header className="mc-mission-hero">
       <div className="mc-mission-outcome">
         <span className="mc-kicker">Mission room · read-only snapshot</span>
-        <h1>{snap?.mission.title.value ?? 'Mission Room — Store Validator'}</h1>
+        <h1>{snap?.mission.title.value ?? 'Mission Room'}</h1>
         {facts && <p title={provenance}>{facts}</p>}
       </div>
     </header>
@@ -277,6 +278,7 @@ export function MissionRoom(props: MissionRoomProps) {
       )}
       <PulseSection model={model} />
       <ContextSection model={model} />
+      <TreeSection model={model} />
       <TeamSection model={model} />
       <TimelineSection model={model} />
       <EvidenceSection model={model} />

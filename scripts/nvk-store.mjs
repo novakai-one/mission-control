@@ -1,15 +1,22 @@
 #!/usr/bin/env node
 // nvk-store — the sanctioned way in and the honest mirror of .novakai/stores.
+// A thin CLI adapter over the application-owned engine (src/backend/stores/).
 //   audit  --dir <storeDir> [--jsonl]                  read-only, stdout-only
 //   append --dir <storeDir> --store <file> [--line s]  one raw JSON line (or stdin)
+//   transition-task --dir <storeDir> --id <taskId> --status <todo|doing|done|blocked>
+//                   [--reason <why>]                   intent-named state transition
 // Exit codes: 0 clean/accepted · 1 findings/rejected · 2 refused/unusable input.
 // Audit output goes to stdout ONLY — no output-file option exists, so no audit
 // artifact can ever resolve into the store directory (SC3 by construction).
+// transition-task is the sanctioned in-place path (mission_mission-object-model
+// ruling S3): it auto-mints `updated`, builds the candidate from the current
+// record, and goes through the engine's locked, CAS-guarded, atomic
+// replaceLine — hand edits of .novakai/stores stay forbidden.
 import { randomUUID } from 'node:crypto';
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { auditDir, appendLine, StoreValidationError, StoreRefusalError } from './store/store.mjs';
+import { auditDir, appendLine, replaceLine, readStoreDir, StoreValidationError, StoreRefusalError } from '../src/backend/stores/store.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -21,6 +28,9 @@ function parseArgs(argv) {
     else if (rest[i] === '--store') options.store = rest[++i];
     else if (rest[i] === '--line') options.line = rest[++i];
     else if (rest[i] === '--baseline') options.baseline = rest[++i];
+    else if (rest[i] === '--id') options.id = rest[++i];
+    else if (rest[i] === '--status') options.status = rest[++i];
+    else if (rest[i] === '--reason') options.reason = rest[++i];
     else if (rest[i] === '--jsonl') options.jsonl = true;
     else {
       console.error(`unknown argument: ${rest[i]}`);
@@ -148,7 +158,40 @@ async function main() {
       throw error;
     }
   }
-  console.error('usage: nvk-store.mjs audit --dir <storeDir> [--jsonl] | append --dir <storeDir> --store <file> [--line <raw>] [--baseline <file>]');
+  if (options.verb === 'transition-task') {
+    if (!options.dir || !options.id || !options.status) {
+      console.error('transition-task: --dir, --id, and --status are required');
+      process.exit(2);
+    }
+    try {
+      const snapshot = readStoreDir(realpathSync(options.dir));
+      const record = (snapshot.files['tasks.jsonl']?.records ?? []).find((entry) => entry.block.id === options.id);
+      if (!record) {
+        console.error(`refused: id "${options.id}" not found in tasks.jsonl`);
+        process.exit(2);
+      }
+      const candidate = { ...record.block, status: options.status };
+      if (options.status === 'blocked') candidate.blockedReason = options.reason;
+      else delete candidate.blockedReason;
+      // updated always moves strictly forward, even against a same-instant clock.
+      const previousUpdated = Date.parse(record.block.updated ?? '') || 0;
+      candidate.updated = new Date(Math.max(Date.now(), previousUpdated + 1)).toISOString();
+      const result = replaceLine(options.dir, 'tasks.jsonl', options.id, JSON.stringify(candidate), { expectedRaw: record.raw });
+      console.log(JSON.stringify({ transitioned: result.id, store: result.storeFile, status: options.status }));
+      process.exit(0);
+    } catch (error) {
+      if (error instanceof StoreValidationError) {
+        for (const violation of error.violations) console.error(`[${violation.code}] ${violation.message}`);
+        process.exit(1);
+      }
+      if (error instanceof StoreRefusalError) {
+        console.error(`refused: ${error.message}`);
+        process.exit(2);
+      }
+      throw error;
+    }
+  }
+  console.error('usage: nvk-store.mjs audit --dir <storeDir> [--jsonl] | append --dir <storeDir> --store <file> [--line <raw>] [--baseline <file>] | transition-task --dir <storeDir> --id <taskId> --status <status> [--reason <why>]');
   process.exit(2);
 }
 

@@ -113,6 +113,7 @@ export class TerminalHostServer {
     }
     switch (command.type) {
       case 'write': this.terminals.write(command.agentId, command.data); break;
+      case 'submit': this.terminals.submit(command.job); break;
       case 'resize': this.terminals.resize(command.agentId, command.cols, command.rows); break;
       case 'rename':
         this.terminals.rename(command.agentId, command.title);

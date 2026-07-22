@@ -175,6 +175,7 @@ function PersonView(props: ContextPanelProps) {
             <div className="msg-stat"><span>Sent by you</span><strong>{stats.sent}</strong></div>
             <div className="msg-stat"><span>Received</span><strong>{stats.received}</strong></div>
             <div className="msg-stat"><span>Delivered</span><strong>{stats.delivered}</strong></div>
+            {stats.accepted > 0 && <div className="msg-stat"><span>Accepted</span><strong>{stats.accepted}</strong></div>}
             <div className="msg-stat"><span>Failed</span><strong>{stats.failed}</strong></div>
           </section>
         )}
