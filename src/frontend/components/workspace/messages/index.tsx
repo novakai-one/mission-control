@@ -69,7 +69,7 @@ export interface MessagesOpenRequest {
 
 export function MessagesView({ agents, agentsLoaded, projects, openRequest }: MessagesViewProps) {
   const rootRef = useRef<HTMLElement | null>(null);
-  const { feed, feedLoaded, loadConversation, ingestEnvelope } = useTunnelFeed();
+  const { feed, feedLoaded, connection, loadConversation, ingestEnvelope } = useTunnelFeed();
   const { rooms, roomsLoaded, ingestRoom } = useTunnelRooms();
   const cursors = useReadCursors();
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
@@ -194,9 +194,11 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
     saveLane(openRequest.id);
   }, [openRequest?.nonce, conversations]);
 
+  // Lane history loads on selection AND on every reconnect (C5) — frames
+  // dropped during an outage come back through the same lane pull.
   useEffect(() => {
-    if (selectedId) loadConversation(selectedId);
-  }, [selectedId, loadConversation]);
+    if (selectedId && connection === 'connected') loadConversation(selectedId);
+  }, [selectedId, connection, loadConversation]);
 
   const selected = flows.resolveSelected(conversations, selectedId);
 
@@ -332,6 +334,9 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
               onExtendWindow={() => setThreadWindow((current) => ({ count: current.count + MESSAGING_SETTINGS.thread.windowSize }))}
               onSeen={(seenCreatedAt) => advanceCursor(selected.id, seenCreatedAt)}
             />
+            {connection === 'disconnected' && feedLoaded && (
+              <div className="msg-conn-strip" role="status">Reconnecting…</div>
+            )}
             <ComposerBar conversation={selected} targets={composerTargets} onSend={send} />
           </>
         ) : (

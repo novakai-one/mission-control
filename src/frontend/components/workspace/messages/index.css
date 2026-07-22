@@ -413,3 +413,20 @@
     display: none;
   }
 }
+
+/* Connection honesty (C5): one thin muted strip while the ws is down —
+   system state, not a needs-you-now, so no amber. The 600ms entry delay
+   swallows the boot race between the first fetch settling and the ws open. */
+.msg-conn-strip {
+  padding: var(--msg-sp-3) var(--msg-sp-8);
+  font-size: var(--msg-fs-meta);
+  letter-spacing: 0.08em;
+  color: var(--msg-text-faint);
+  border-top: 1px solid var(--msg-border);
+  animation: msg-conn-strip-in 0.3s ease 0.6s backwards;
+}
+
+@keyframes msg-conn-strip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

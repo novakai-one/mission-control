@@ -4,7 +4,15 @@
 // the shared ws as { event: 'message-envelope', payload } frames. Status
 // amendments reuse the envelope id — the feed folds by id, later wins.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { connect, onMessageEnvelope, onRoomsChanged, type AgentInfo } from '../agentSocket/index.js';
+import {
+  connect,
+  connectionStatus,
+  onConnectionChanged,
+  onMessageEnvelope,
+  onRoomsChanged,
+  type AgentInfo,
+  type ConnectionStatus,
+} from '../agentSocket/index.js';
 
 /** Frontend mirror of src/backend/messaging/types.ts MessageEnvelope. */
 export interface TunnelEnvelope {
@@ -226,6 +234,18 @@ function fetchMessages(path: string, apply: (messages: TunnelEnvelope[]) => void
  * dropped socket missed. */
 type FeedUpdater = (updater: (current: TunnelEnvelope[]) => TunnelEnvelope[]) => void;
 
+/** C5 (audit S3): the refetch-on-reopen trigger. Ws frames dropped while the
+ * socket was down are unrecoverable as frames — every projection riding the
+ * socket re-pulls through its own read interface when the connection comes
+ * back. Fires on every 'connected' transition (including the first open —
+ * a mount fetch that raced a dead backend heals when the ws lands), never
+ * on closes or repeated failed retries. Returns the unsubscribe. */
+export function refetchOnReconnect(reload: () => void): () => void {
+  return onConnectionChanged((status) => {
+    if (status === 'connected') reload();
+  });
+}
+
 function subscribeFeed(setFeed: FeedUpdater, isLive: () => boolean): () => void {
   return onMessageEnvelope((payload) => {
     if (isLive() && isEnvelope(payload)) setFeed((current) => upsertEnvelope(current, payload));
@@ -242,9 +262,11 @@ function mountFeed(
   loadConversation(TEAM_CHANNEL);
 
   const unsubscribe = subscribeFeed(setFeed, () => mounted.current);
+  const offReload = refetchOnReconnect(() => loadConversation(TEAM_CHANNEL));
   return () => {
     mounted.current = false;
     unsubscribe();
+    offReload();
   };
 }
 
@@ -253,6 +275,9 @@ export function useTunnelFeed(): {
   /** True once the initial history fetch has settled (success OR failure) —
    * the D3 restore machine waits on this, never on luck (ruling S7). */
   feedLoaded: boolean;
+  /** Live ws status (C5) — the view shows it and re-pulls the selected lane
+   * on each return to 'connected'. */
+  connection: ConnectionStatus;
   loadConversation: (id: ConversationId) => void;
   /** Folds a settled envelope in without waiting for the ws echo — the POST
    * /api/user/messages 201 carries the final status, so a sender's own row
@@ -261,6 +286,7 @@ export function useTunnelFeed(): {
 } {
   const [feed, setFeed] = useState<TunnelEnvelope[]>([]);
   const [feedLoaded, setFeedLoaded] = useState(false);
+  const [connection, setConnection] = useState<ConnectionStatus>(() => connectionStatus());
   const mounted = useRef(true);
   const loadConversation = useCallback((id: ConversationId): void => {
     fetchMessages(historyPath(id), (messages) => {
@@ -271,7 +297,8 @@ export function useTunnelFeed(): {
     setFeed((current) => upsertEnvelope(current, envelope));
   }, []);
   useEffect(() => mountFeed(setFeed, mounted, loadConversation), [loadConversation]);
-  return { feed, feedLoaded, loadConversation, ingestEnvelope };
+  useEffect(() => onConnectionChanged(setConnection), []);
+  return { feed, feedLoaded, connection, loadConversation, ingestEnvelope };
 }
 
 function isTunnelRoom(candidate: unknown): candidate is TunnelRoom {
@@ -302,9 +329,11 @@ function watchRooms(
   const unsubscribeEnvelopes = onMessageEnvelope((payload) => {
     if (isEnvelope(payload) && isRoomId(payload.to) && !knows(payload.to)) fetchRooms(apply);
   });
+  const offReload = refetchOnReconnect(() => fetchRooms(apply)); // C5: rooms made during an outage
   return () => {
     unsubscribeRooms();
     unsubscribeEnvelopes();
+    offReload();
   };
 }
 

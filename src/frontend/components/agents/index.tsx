@@ -37,16 +37,27 @@ export function useAgentsState(): AgentsState {
   );
 
   useEffect(() => {
-    fetch('/api/agents')
+    const fetchRoster = () => fetch('/api/agents')
       .then(res => res.json())
       .then(data => setAgents(previous => reconcileAgents(previous, data.agents ?? [])))
       .catch(() => {})
       .finally(() => setAgentsLoaded(true));
+    fetchRoster();
     agentSocket.connect();
-    return agentSocket.onAgentsChanged((nextAgents) => {
+    const offAgents = agentSocket.onAgentsChanged((nextAgents) => {
       setAgents(previous => reconcileAgents(previous, nextAgents));
       setAgentsLoaded(true);
     });
+    // C5 (mission messages-tab-v1, approved extension): agents-changed frames
+    // dropped while the ws was down are unrecoverable — re-pull the roster on
+    // every reconnect through the same read interface.
+    const offReconnect = agentSocket.onConnectionChanged((status) => {
+      if (status === 'connected') fetchRoster();
+    });
+    return () => {
+      offAgents();
+      offReconnect();
+    };
   }, []);
 
   const setActiveAgentId = useCallback((agentId: string | null) => {
