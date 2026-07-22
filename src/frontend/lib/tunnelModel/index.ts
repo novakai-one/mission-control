@@ -15,7 +15,8 @@ export interface TunnelEnvelope {
   body: string;
   threadId?: string;
   createdAt: string;
-  status: 'queued' | 'delivered' | 'partial' | 'failed';
+  // 'accepted' = bytes written, effect not yet transcript-proven (D1).
+  status: 'queued' | 'accepted' | 'delivered' | 'partial' | 'failed';
 }
 
 /** Same id replaces in place (status amendment); a new id appends. */
@@ -202,11 +203,12 @@ function historyPath(id: ConversationId): string {
   return '/api/messages';
 }
 
-function fetchMessages(path: string, apply: (messages: TunnelEnvelope[]) => void): void {
+function fetchMessages(path: string, apply: (messages: TunnelEnvelope[]) => void, onSettled?: () => void): void {
   fetch(path)
     .then((response) => response.json())
     .then((data: { messages?: TunnelEnvelope[] }) => apply(data.messages ?? []))
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => onSettled?.());
 }
 
 /** Live tunnel feed: one fetch of history on mount, then ws frames upserted
@@ -231,6 +233,7 @@ function mountFeed(
   mounted.current = true;
   connect();
   loadConversation(TEAM_CHANNEL);
+
   const unsubscribe = subscribeFeed(setFeed, () => mounted.current);
   return () => {
     mounted.current = false;
@@ -240,6 +243,9 @@ function mountFeed(
 
 export function useTunnelFeed(): {
   feed: TunnelEnvelope[];
+  /** True once the initial history fetch has settled (success OR failure) —
+   * the D3 restore machine waits on this, never on luck (ruling S7). */
+  feedLoaded: boolean;
   loadConversation: (id: ConversationId) => void;
   /** Folds a settled envelope in without waiting for the ws echo — the POST
    * /api/user/messages 201 carries the final status, so a sender's own row
@@ -247,17 +253,18 @@ export function useTunnelFeed(): {
   ingestEnvelope: (envelope: TunnelEnvelope) => void;
 } {
   const [feed, setFeed] = useState<TunnelEnvelope[]>([]);
+  const [feedLoaded, setFeedLoaded] = useState(false);
   const mounted = useRef(true);
   const loadConversation = useCallback((id: ConversationId): void => {
     fetchMessages(historyPath(id), (messages) => {
       if (mounted.current) setFeed((live) => mergeFeed(messages, live));
-    });
+    }, () => setFeedLoaded(true));
   }, []);
   const ingestEnvelope = useCallback((envelope: TunnelEnvelope): void => {
     setFeed((current) => upsertEnvelope(current, envelope));
   }, []);
   useEffect(() => mountFeed(setFeed, mounted, loadConversation), [loadConversation]);
-  return { feed, loadConversation, ingestEnvelope };
+  return { feed, feedLoaded, loadConversation, ingestEnvelope };
 }
 
 function isTunnelRoom(candidate: unknown): candidate is TunnelRoom {
@@ -265,18 +272,23 @@ function isTunnelRoom(candidate: unknown): candidate is TunnelRoom {
   return typeof room?.roomId === 'string' && typeof room.name === 'string' && Array.isArray(room.members);
 }
 
-function fetchRooms(apply: (rooms: TunnelRoom[]) => void): void {
+function fetchRooms(apply: (rooms: TunnelRoom[]) => void, onSettled?: () => void): void {
   fetch('/api/rooms')
     .then((response) => response.json())
     .then((data: { rooms?: unknown[] }) => apply((data.rooms ?? []).filter(isTunnelRoom)))
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => onSettled?.());
 }
 
 /** One fetch now, `rooms-changed` snapshots after. Resilience fallback: a
  * post addressed to a room this client has never seen means the roster moved
  * while we weren't looking — refetch. Returns the unwatch. */
-function watchRooms(apply: (rooms: TunnelRoom[]) => void, knows: (roomId: string) => boolean): () => void {
-  fetchRooms(apply);
+function watchRooms(
+  apply: (rooms: TunnelRoom[]) => void,
+  knows: (roomId: string) => boolean,
+  onSettled?: () => void,
+): () => void {
+  fetchRooms(apply, onSettled);
   const unsubscribeRooms = onRoomsChanged((payload) => {
     if (Array.isArray(payload)) apply(payload.filter(isTunnelRoom));
   });
@@ -303,13 +315,14 @@ function roomsApplier(
   };
 }
 
-export function useTunnelRooms(): { rooms: TunnelRoom[]; ingestRoom: (room: TunnelRoom) => void } {
+export function useTunnelRooms(): { rooms: TunnelRoom[]; roomsLoaded: boolean; ingestRoom: (room: TunnelRoom) => void } {
   const [rooms, setRooms] = useState<TunnelRoom[]>([]);
+  const [roomsLoaded, setRoomsLoaded] = useState(false);
   const known = useRef(new Set<string>());
   useEffect(() => {
     let cancelled = false; connect();
     const apply = roomsApplier(known, setRooms, () => !cancelled);
-    const unwatch = watchRooms(apply, (roomId) => known.current.has(roomId));
+    const unwatch = watchRooms(apply, (roomId) => known.current.has(roomId), () => setRoomsLoaded(true));
     return () => {
       cancelled = true;
       unwatch();
@@ -319,5 +332,5 @@ export function useTunnelRooms(): { rooms: TunnelRoom[]; ingestRoom: (room: Tunn
     known.current.add(room.roomId);
     setRooms((current) => upsertRoom(current, room));
   }
-  return { rooms, ingestRoom };
+  return { rooms, roomsLoaded, ingestRoom };
 }

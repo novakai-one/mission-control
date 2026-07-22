@@ -69,7 +69,7 @@ async function startHarness({ failLaunch = false } = {}): Promise<Harness> {
         cwd: options.cwd,
       }));
     },
-    write: () => true, resize: () => true, rename: () => true, kill: () => true, archive: () => true,
+    write: () => true, submit: () => true, resize: () => true, rename: () => true, kill: () => true, archive: () => true,
     snapshot: () => '', list: () => [],
     onData: () => {}, onExit: () => {},
     onSession: (callback) => { sessionCallback = callback; },

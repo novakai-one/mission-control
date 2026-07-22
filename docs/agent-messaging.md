@@ -134,3 +134,35 @@ Interfaces (as drawn on the canvas):
 6. **Messages view** — UI feed (DMs + channel) over existing ws; live update.
 7. **nvk CLI** — thin wrapper over the REST API (`nvk msg send/read`); until it
    exists, agents use `curl` (documented in the briefing).
+
+## 8. Delivery state machine and crash matrix (mission_mission-object-model)
+
+States: `queued` (journaled, nothing written) → `accepted` (bytes written to
+the PTY) → `delivered` (effect proven). Rooms keep `partial`; any error path
+settles `failed`. For **interrupts**, `delivered` is claimed ONLY when the
+recipient's own transcript shows the inbound marker (`[nvk-msg from <name>
+id <msgId>]`) as a new user turn; the amendment carries the evidence
+(`outcome`: acceptedAt/confirmedAt, agentId, sessionId, provider, transcript
+event). No proof within the window → the envelope honestly stays `accepted`
+with a note. **Normal** sends keep write-claimed `delivered` (documented
+receipt semantics — the D1 MUST covers interrupts).
+
+The timed type→settle→submit→flush sequence is ONE job owned by the
+PTY-hosting process (`submit` in the host protocol), keyed by message id and
+duplicate-safe — a backend restart cannot orphan its timers and a re-sent
+job never double-types. Deliveries are serialized per agent.
+
+Crash matrix (backend dies at X → recovery):
+
+| Crash point | Journal says | Recovery on restart |
+|---|---|---|
+| before journal append | (nothing) | sender saw an error; nothing to recover |
+| after append, before write | `queued` | reconciliation re-routes ONCE; host dedupe makes it a no-op if the job did reach the host |
+| after write, before amend | `queued` (bytes written) | same retry — host dedupe by message id prevents double-typing |
+| after amend, before effect | `accepted` | transcript verification; NEVER re-typed; delivered only on proof |
+| after effect, before final amend | `accepted` | same verification finds the turn and amends `delivered` |
+
+Reconciliation is bounded to a recency window (default 30 min) so ancient
+journal history is never replayed. With the in-process runtime (no detached
+host) the submit timers die with the process — the matrix above still holds,
+minus the cross-restart job survival; that lane is dev-only.

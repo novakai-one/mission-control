@@ -427,16 +427,19 @@ export interface LaneStats {
   sent: number;
   received: number;
   delivered: number;
+  /** Interrupts whose bytes were written but whose effect is not yet proven (D1). */
+  accepted: number;
   failed: number;
 }
 
 export function laneStatsFor(messages: TunnelEnvelope[]): LaneStats {
-  const stats: LaneStats = { sent: 0, received: 0, delivered: 0, failed: 0 };
+  const stats: LaneStats = { sent: 0, received: 0, delivered: 0, accepted: 0, failed: 0 };
   for (const message of messages) {
     if (message.from === CHRIS) stats.sent += 1;
     else stats.received += 1;
     if (message.status === 'failed') stats.failed += 1;
     else if (message.status === 'delivered') stats.delivered += 1;
+    else if (message.status === 'accepted') stats.accepted += 1;
   }
   return stats;
 }
@@ -453,4 +456,39 @@ export function recapNotesFor(
   const latest = messages[messages.length - 1];
   notes.push(latest ? `Last word ${formatClockTime(latest.createdAt)}.` : 'Nothing said yet.');
   return notes;
+}
+
+/* ---------- D3: lane restoration as a pure state machine (ruling S7) -------
+   Reload must return Chris to the conversation he was in. The remembered id
+   is retained while sources hydrate; a fallback is chosen only after feed,
+   rooms, AND roster have ALL settled — and a fallback is never saved as a
+   preference. */
+
+export interface RestoreInputs {
+  /** Restoration only runs while nothing is selected. */
+  selectedId: ConversationId | null;
+  /** The persisted lane id, or null when none was ever saved. */
+  remembered: ConversationId | null;
+  /** Lane ids currently derivable from feed + rooms + roster. */
+  conversationIds: ConversationId[];
+  feedLoaded: boolean;
+  roomsLoaded: boolean;
+  agentsLoaded: boolean;
+}
+
+export type RestoreDecision =
+  | { kind: 'wait' }
+  | { kind: 'restore'; id: ConversationId }
+  | { kind: 'fallback'; id: ConversationId }
+  | { kind: 'none' };
+
+export function restoreDecision(inputs: RestoreInputs): RestoreDecision {
+  if (inputs.selectedId !== null) return { kind: 'none' };
+  if (inputs.remembered !== null && inputs.conversationIds.includes(inputs.remembered)) {
+    return { kind: 'restore', id: inputs.remembered };
+  }
+  const settled = inputs.feedLoaded && inputs.roomsLoaded && inputs.agentsLoaded;
+  if (!settled) return { kind: 'wait' }; // the remembered id is retained, never abandoned early
+  const first = inputs.conversationIds[0];
+  return first !== undefined ? { kind: 'fallback', id: first } : { kind: 'wait' };
 }

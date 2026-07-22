@@ -10,12 +10,32 @@ export interface MessageEnvelope {
   body: string;
   threadId?: string;     // optional conversation grouping
   createdAt: string;     // ISO
-  status: 'queued' | 'delivered' | 'partial' | 'failed';
+  // 'accepted' = bytes written to the recipient's PTY (D1 honesty: never
+  // claimed as 'delivered' for an interrupt until the transcript proves the
+  // turn arrived). 'delivered' for an interrupt therefore always carries
+  // outcome evidence.
+  status: 'queued' | 'accepted' | 'delivered' | 'partial' | 'failed';
+  /** Delivery evidence, amended onto the audit record as it accrues (M9). */
+  outcome?: DeliveryOutcome;
   // Server-derived, never client-trusted (plan v2 §1.5, M11): durable joins
   // use these ids, so renames never sever message→Agent history.
   senderAgentId?: string;
   recipientAgentId?: string;
   missionId?: string;
+}
+
+/** Evidence metadata persisted on the envelope (ruling M9): who the bytes
+ * went to, when they were accepted, and the transcript event that proved the
+ * effect — or an honest note when no proof arrived. */
+export interface DeliveryOutcome {
+  acceptedAt?: string;
+  confirmedAt?: string;
+  agentId?: string;
+  sessionId?: string;
+  provider?: string;
+  /** Identity of the confirming transcript user turn (provider timestamp or index). */
+  transcriptEvent?: string;
+  note?: string;
 }
 
 export interface Room {
@@ -110,9 +130,14 @@ export function isRoom(recipient: string): boolean {
   return recipient.startsWith('room_');
 }
 
+/** The correlation marker: full sender + message id, never body text alone (M9). */
+export function formatInboundMarker(envelope: MessageEnvelope): string {
+  return `[nvk-msg from ${envelope.from} id ${envelope.id}]`;
+}
+
 /** Inbound line typed into a recipient PTY — distinguishes agent mail from Chris typing. */
 export function formatInbound(envelope: MessageEnvelope): string {
-  return `[nvk-msg from ${envelope.from} id ${envelope.id}] ${envelope.body}`;
+  return `${formatInboundMarker(envelope)} ${envelope.body}`;
 }
 
 /** Inbound PTY line for a room post. */

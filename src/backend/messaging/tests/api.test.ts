@@ -169,7 +169,7 @@ function fakeTerminals(createdOptions: CreateAgentOptions[]): TerminalRuntime {
   };
   return {
     create,
-    write: () => true, resize: () => true, rename: () => true, kill: () => true, archive: () => true,
+    write: () => true, submit: () => true, resize: () => true, rename: () => true, kill: () => true, archive: () => true,
     snapshot: () => '', list: () => agents,
     onData: () => {}, onExit: () => {}, onSession: () => {},
   };

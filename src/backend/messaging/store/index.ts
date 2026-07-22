@@ -46,9 +46,19 @@ export class MessageStore {
 
   /** Append an amended copy with the new status; returns it, or null if the id is unknown. */
   updateStatus(id: string, status: MessageEnvelope['status']): MessageEnvelope | null {
+    return this.amend(id, status);
+  }
+
+  /** Status + outcome-evidence amendment (M9): outcome fields MERGE across
+   * amendments so acceptedAt survives the later confirmedAt append. */
+  amend(id: string, status: MessageEnvelope['status'], outcome?: MessageEnvelope['outcome']): MessageEnvelope | null {
     const current = this.folded().get(id);
     if (!current) return null;
-    const updated: MessageEnvelope = { ...current, status };
+    const updated: MessageEnvelope = {
+      ...current,
+      status,
+      ...(outcome || current.outcome ? { outcome: { ...current.outcome, ...outcome } } : {}),
+    };
     this.append(updated);
     return updated;
   }

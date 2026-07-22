@@ -13,6 +13,9 @@ const ACTIVE_AGENT_STORAGE_KEY = 'novakai-active-agent';
 
 export interface AgentsState {
   agents: AgentInfo[];
+  /** True once the roster has hydrated (initial fetch settled or first ws
+   * frame) — the Messages restore machine waits on this (ruling S7). */
+  agentsLoaded: boolean;
   activeAgentId: string | null;
   setActiveAgentId: (agentId: string | null) => void;
   collapsed: boolean;
@@ -98,6 +101,7 @@ export function useAgentsState(): AgentsState {
 
   return {
     agents,
+    agentsLoaded,
     activeAgentId,
     setActiveAgentId,
     collapsed,

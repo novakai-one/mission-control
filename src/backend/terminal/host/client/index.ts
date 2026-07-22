@@ -3,6 +3,7 @@ import { connect, type Socket } from 'node:net';
 import { AgentBuffer } from '../../buffer.js';
 import type { AgentInfo, CreateAgentOptions } from '../../manager.js';
 import type { TerminalRuntime } from '../../runtime/index.js';
+import type { SubmitJob } from '../protocol/index.js';
 import {
   TERMINAL_HOST_PROTOCOL,
   encodeFrame,
@@ -60,6 +61,11 @@ export class TerminalHostClient implements TerminalRuntime {
 
   write(agentId: string, data: string): boolean {
     return this.isRunning(agentId) && this.send({ type: 'write', agentId, data });
+  }
+
+  /** The submission job runs host-side, so its timers survive backend restarts (D2). */
+  submit(job: SubmitJob): boolean {
+    return this.isRunning(job.agentId) && this.send({ type: 'submit', job });
   }
 
   resize(agentId: string, cols: number, rows: number): boolean {
