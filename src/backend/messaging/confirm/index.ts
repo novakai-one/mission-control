@@ -7,7 +7,7 @@
 // The per-provider transcript knowledge is ported from scripts/team/
 // transcripts.mjs into adapters behind one interface.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import os from 'node:os';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 /** What the confirmer needs to know about the recipient's Presence. */
@@ -55,23 +55,23 @@ function readEvents(filePath: string): Array<Record<string, unknown>> {
 }
 
 function walkFiles(root: string, limit = 4000): string[] {
-  const out: string[] = [];
+  const collected: string[] = [];
   const stack = [root];
-  while (stack.length > 0 && out.length < limit) {
-    const dir = stack.pop() as string;
+  while (stack.length > 0 && collected.length < limit) {
+    const current = stack.pop() as string;
     let entries;
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = readdirSync(current, { withFileTypes: true });
     } catch {
       continue;
     }
     for (const entry of entries) {
-      const full = path.join(dir, entry.name);
+      const full = path.join(current, entry.name);
       if (entry.isDirectory()) stack.push(full);
-      else if (entry.isFile()) out.push(full);
+      else if (entry.isFile()) collected.push(full);
     }
   }
-  return out;
+  return collected;
 }
 
 function eventTime(event: Record<string, unknown>): number | null {
@@ -171,7 +171,7 @@ function delay(milliseconds: number): Promise<void> {
  * asynchronously and amend the envelope when it resolves (M9).
  */
 export class TranscriptEffectConfirmer implements EffectConfirmer {
-  constructor(private readonly home: string = os.homedir()) {}
+  constructor(private readonly home: string = homedir()) {}
 
   async confirm(
     target: ConfirmTarget,
@@ -182,19 +182,22 @@ export class TranscriptEffectConfirmer implements EffectConfirmer {
     if (!adapter || !target.sessionId) return null;
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const transcript = adapter.locate(target, this.home);
-      if (transcript) {
-        const turn = this.findMarker(adapter, transcript, marker);
-        if (turn) {
-          return {
-            confirmedAt: new Date().toISOString(),
-            transcriptEvent: turn.time !== null ? `time:${turn.time}` : `turn-index:${turn.index}`,
-          };
-        }
-      }
+      const proof = this.checkOnce(adapter, target, marker);
+      if (proof) return proof;
       if (Date.now() >= deadline) return null;
       await delay(pollMs);
     }
+  }
+
+  private checkOnce(adapter: ProviderTranscript, target: ConfirmTarget, marker: string): EffectProof | null {
+    const transcript = adapter.locate(target, this.home);
+    if (!transcript) return null;
+    const turn = this.findMarker(adapter, transcript, marker);
+    if (!turn) return null;
+    return {
+      confirmedAt: new Date().toISOString(),
+      transcriptEvent: turn.time !== null ? `time:${turn.time}` : `turn-index:${turn.index}`,
+    };
   }
 
   private findMarker(adapter: ProviderTranscript, transcript: string, marker: string): UserTurn | null {

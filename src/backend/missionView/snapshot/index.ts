@@ -316,9 +316,21 @@ function communicationAttention(facts: MissionFacts, rooms: RoomRecord[]): Atten
   }];
 }
 
-/** Rooms carrying an explicit typed mission ref (kind 'mission', value = id) — C1 resolution. */
+/** Rooms linked to the mission: an explicit typed mission ref on the room
+ * record (legacy C1 shape) OR a thread block naming the room (ruling S2's
+ * typed link, completed per correction M2). */
 function linkedRooms(facts: MissionFacts): RoomRecord[] {
+  const threadRoomIds = new Set(
+    facts.stores.threads
+      .filter((record) => {
+        const rawRefs = record.block.refs;
+        return Array.isArray(rawRefs) && rawRefs.some((entry) => isMissionRef(entry, facts.missionId));
+      })
+      .map((record) => (typeof record.block.roomId === 'string' ? record.block.roomId : ''))
+      .filter(Boolean),
+  );
   return facts.rooms.filter((room) => {
+    if (threadRoomIds.has(room.roomId)) return true;
     const rawRefs = room.block.refs;
     return Array.isArray(rawRefs) && rawRefs.some((entry) => isMissionRef(entry, facts.missionId));
   });

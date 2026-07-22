@@ -28,6 +28,8 @@ export class StoreConflictError extends StoreRefusalError {}
 
 export function readStoreDir(storeDir: string): Snapshot;
 
+export function ensureStoreFiles(storeDir: string): string[];
+
 export function appendLine(
   storeDir: string,
   storeFile: string,

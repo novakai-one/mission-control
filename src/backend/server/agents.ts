@@ -17,7 +17,8 @@ import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.j
 import { SubagentWatcher } from '../transcript/subagents/index.js';
 import type { SessionControlIntent } from '../../shared/sessionControl.js';
 import { SessionControl } from '../terminal/control/index.js';
-import { ObjectModel, ObjectModelError } from '../objectModel/index.js';
+import { ObjectModel } from '../objectModel/index.js';
+import { resolveMissionSpawn } from './missionSpawn/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
 const SESSION_RE = /^[A-Za-z0-9-]+$/;
@@ -266,6 +267,17 @@ export class AgentsHub {
     return PROVIDER_IDS.includes(value as ProviderId) ? (value as ProviderId) : null;
   }
 
+  /** Messaging addressing (§5): a short unique name at spawn — provider +
+   * ordinal when none is supplied, 409 (null) on collisions. */
+  private resolveSpawnTitle(request: Request, response: Response, provider: ProviderId): string | null {
+    const requested = typeof request.body?.title === 'string' ? request.body.title : undefined;
+    if (requested !== undefined && isNameTaken(requested, this.manager.list(), undefined, this.mailboxLookup)) {
+      response.status(409).json({ error: `agent name "${requested}" is already taken` });
+      return null;
+    }
+    return requested ?? nextSpawnName(provider, this.manager.list().map((agent) => agent.title));
+  }
+
   private async createAgent(request: Request, response: Response): Promise<void> {
     const configuration = ConfigManager.load();
     const cwd = request.body?.cwd ?? configuration.activeRepo ?? process.cwd();
@@ -274,35 +286,12 @@ export class AgentsHub {
       response.status(400).json({ error: `provider must be one of ${PROVIDER_IDS.join(', ')}` });
       return;
     }
-    // Messaging addressing (§5): every agent gets a short unique name at
-    // spawn — provider + ordinal when none is supplied, 409 on collisions.
-    const requested = typeof request.body?.title === 'string' ? request.body.title : undefined;
-    if (requested !== undefined && isNameTaken(requested, this.manager.list(), undefined, this.mailboxLookup)) {
-      response.status(409).json({ error: `agent name "${requested}" is already taken` });
-      return;
-    }
-    const title = requested ?? nextSpawnName(provider, this.manager.list().map((agent) => agent.title));
-
+    const title = this.resolveSpawnTitle(request, response, provider);
+    if (title === null) return;
     // Mission spawn (plan v2 §1.4): one id minted once, durable Agent block
     // persisted BEFORE the Presence exists, launch failure marked explicitly.
-    const missionId = typeof request.body?.missionId === 'string' ? request.body.missionId : undefined;
-    const teamId = typeof request.body?.teamId === 'string' ? request.body.teamId : undefined;
-    let agentId: string | undefined;
-    if (missionId !== undefined || teamId !== undefined) {
-      if (!missionId || !teamId || !this.objectModel) {
-        response.status(400).json({ error: 'mission spawns need both missionId and teamId (and a configured object model)' });
-        return;
-      }
-      try {
-        agentId = this.objectModel.createAgent({ name: title, provider, teamId, missionId });
-      } catch (error) {
-        if (error instanceof ObjectModelError) {
-          response.status(400).json({ error: error.message });
-          return;
-        }
-        throw error;
-      }
-    }
+    const agentId = resolveMissionSpawn(request, response, this.objectModel, title, provider);
+    if (agentId === null) return;
     try {
       response.status(201).json(await this.launch({ title, cwd, provider, ...(agentId ? { agentId } : {}) }));
     } catch (error) {

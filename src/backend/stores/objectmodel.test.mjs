@@ -132,3 +132,53 @@ const codes = (violations) => violations.map((violation) => violation.code);
 }
 
 console.log('object-model schema tests passed');
+
+// --- M1/M10: conditional task authority + mission→project edge (write-strict) --
+
+{
+  const missionTaskNoAgent = line({ id: 'task_m1-a', kind: 'task', ts: TS, title: 'A', status: 'todo', updated: TS, refs: [ref('mission', 'mission_alpha')] });
+  const strict = validateCandidate(missionTaskNoAgent, { storeFile: 'tasks.jsonl', snapshot: world });
+  assert.ok(codes(strict.violations).includes('REF-CARDINALITY'), 'NEW mission task without an agent is rejected at write time');
+
+  const legacyAudit = validateBlock(JSON.parse(missionTaskNoAgent), { storeFile: 'tasks.jsonl', index });
+  assert.equal(codes(legacyAudit).includes('REF-CARDINALITY'), false, 'the same shape stays valid on AUDIT — legacy unassigned tasks gain no findings');
+
+  console.log('task write-strict authority tests passed');
+}
+
+{
+  // Agent on mission_alpha; a new task naming that agent but mission_beta must disagree.
+  const seededWorld = snapshotOf({
+    'missions.jsonl': [
+      { id: 'mission_alpha', kind: 'mission', ts: TS, title: 'Alpha', owner: 'chief' },
+      { id: 'mission_beta', kind: 'mission', ts: TS, title: 'Beta', owner: 'chief' },
+    ],
+    'teams.jsonl': [{ id: 'team_alpha', kind: 'team', ts: TS, name: 'A', refs: [ref('mission', 'mission_alpha')] }],
+    'agents.jsonl': [{ id: 'agent_w', kind: 'agent', ts: TS, name: 'w', provider: 'claude', status: 'live', refs: [ref('team', 'team_alpha'), ref('mission', 'mission_alpha')] }],
+  });
+  const crossTask = line({ id: 'task_m1-b', kind: 'task', ts: TS, title: 'B', status: 'todo', updated: TS, refs: [ref('mission', 'mission_beta'), ref('agent', 'agent_w')] });
+  const { violations } = validateCandidate(crossTask, { storeFile: 'tasks.jsonl', snapshot: seededWorld });
+  assert.ok(codes(violations).includes('RELATION-INCONSISTENT'), 'task mission must agree with its agent mission');
+
+  const goodTask = line({ id: 'task_m1-c', kind: 'task', ts: TS, title: 'C', status: 'todo', updated: TS, refs: [ref('mission', 'mission_alpha'), ref('agent', 'agent_w')] });
+  assert.equal(validateCandidate(goodTask, { storeFile: 'tasks.jsonl', snapshot: seededWorld }).violations.length, 0);
+  console.log('task/agent mission-agreement tests passed');
+}
+
+{
+  const twoProjects = line({
+    id: 'mission_m10', kind: 'mission', ts: TS, title: 'M', owner: 'chief',
+    refs: [ref('project', 'proj_a'), ref('project', 'proj_b')],
+  });
+  const seeded = snapshotOf({
+    'projects.jsonl': [
+      { id: 'proj_a', kind: 'project', ts: TS, title: 'A', status: 'active', path: '/a' },
+      { id: 'proj_b', kind: 'project', ts: TS, title: 'B', status: 'active', path: '/b' },
+    ],
+  });
+  const { violations } = validateCandidate(twoProjects, { storeFile: 'missions.jsonl', snapshot: seeded });
+  assert.ok(codes(violations).includes('REF-CARDINALITY'), 'a new mission names at most one project (M10 edge)');
+  console.log('mission→project cardinality test passed');
+}
+
+console.log('M1/M10 authority tests passed');

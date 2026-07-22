@@ -7,8 +7,10 @@ import { isChannel, isRoom } from '../types.js';
 import type { AgentAddress, MessageEnvelope } from '../types.js';
 
 /** The slice of the durable mission graph messaging needs. */
+type DurableAgent = { id: string; refs: Array<{ kind: string; value: string }> };
+
 export interface MissionGraph {
-  agentRecord(agentId: string): { id: string; refs: Array<{ kind: string; value: string }> } | null;
+  agentRecord(agentId: string): DurableAgent | null;
   missionForRoom(roomId: string): string | null;
   createThread(input: { roomId: string; missionId: string }): string;
 }
@@ -30,14 +32,15 @@ export class EnvelopeIdentity {
   stamp(envelope: MessageEnvelope, roster: AgentAddress[]): void {
     const sender = this.durableFor(envelope.from, roster);
     if (sender) envelope.senderAgentId = sender.id;
-
     if (isRoom(envelope.to)) {
       const missionId = this.graph.missionForRoom(envelope.to);
       if (missionId) envelope.missionId = missionId;
       return;
     }
-    if (isChannel(envelope.to)) return;
+    if (!isChannel(envelope.to)) this.stampDirect(envelope, sender, roster);
+  }
 
+  private stampDirect(envelope: MessageEnvelope, sender: DurableAgent | null, roster: AgentAddress[]): void {
     const recipient = this.durableFor(envelope.to, roster);
     if (recipient) envelope.recipientAgentId = recipient.id;
     if (sender && recipient) {
@@ -48,12 +51,12 @@ export class EnvelopeIdentity {
     }
   }
 
-  private durableFor(name: string, roster: AgentAddress[]): { id: string; refs: Array<{ kind: string; value: string }> } | null {
+  private durableFor(name: string, roster: AgentAddress[]): DurableAgent | null {
     const address = roster.find((agent) => agent.name === name);
     return address ? this.graph.agentRecord(address.agentId) : null;
   }
 }
 
-function missionOf(record: { refs: Array<{ kind: string; value: string }> }): string | null {
-  return record.refs.find((ref) => ref.kind === 'mission')?.value ?? null;
+function missionOf(record: DurableAgent): string | null {
+  return record.refs.find((entry) => entry.kind === 'mission')?.value ?? null;
 }

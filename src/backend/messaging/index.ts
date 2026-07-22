@@ -25,6 +25,7 @@ import { EnvelopeIdentity } from './identity/index.js';
 import type { MissionGraph } from './identity/index.js';
 import { TranscriptEffectConfirmer } from './confirm/index.js';
 import type { EffectConfirmer } from './confirm/index.js';
+import { createThreadRoute } from './threads/index.js';
 import { MessageStore } from './store/index.js';
 import { CHRIS_IDENTITY, CHRIS_MEMBER } from './types.js';
 import type { MessageQuery, Room, SendMessage } from './types.js';
@@ -163,27 +164,7 @@ export class MessagingHub {
 
   /** The mission↔room link: one typed thread block in the system of record. */
   private handleCreateThread(request: Request, response: Response): void {
-    if (!this.missionGraph) {
-      response.status(501).json({ error: 'no mission graph configured on this backend' });
-      return;
-    }
-    const payload = (request.body ?? {}) as { roomId?: unknown; missionId?: unknown };
-    try {
-      const roomId = this.requireText(payload.roomId, 'roomId');
-      const missionId = this.requireText(payload.missionId, 'missionId');
-      if (!this.rooms.get(roomId)) {
-        response.status(404).json({ error: new RoomNotFoundError(roomId).message });
-        return;
-      }
-      const existing = this.missionGraph.missionForRoom(roomId);
-      if (existing) {
-        response.status(409).json({ error: `room ${roomId} is already linked to ${existing}` });
-        return;
-      }
-      response.status(201).json({ threadId: this.missionGraph.createThread({ roomId, missionId }) });
-    } catch (error) {
-      response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
-    }
+    createThreadRoute(request, response, this.missionGraph, (roomId) => this.rooms.get(roomId));
   }
 
   private handleRegisterMailbox(request: Request, response: Response): void {

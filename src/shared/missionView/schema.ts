@@ -113,6 +113,8 @@ export interface TaskNode {
   status: string;
   blockedReason: string | null;
   updated: string | null;
+  /** Artifacts anchored to THIS task (correction C3 — the S1 hierarchy). */
+  artifacts: ArtifactNode[];
   sourceRefs: SourceRef[];
 }
 
@@ -157,6 +159,7 @@ export interface MissionTreeView {
   agents: AgentNode[];
   /** Tasks refing the mission but no agent — rendered as an explicit gap group. */
   unassignedTasks: TaskNode[];
+  /** Mission-level artifacts only; task-anchored ones nest under their task (C3). */
   artifacts: ArtifactNode[];
   threads: ThreadNode[];
 }

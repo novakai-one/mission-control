@@ -19,6 +19,9 @@ export interface SubmitJob {
   text: string;
   settleMs: number;
   flushMs?: number;
+  /** Optional pre-text sequence (an interrupt's Esc) — serialized INSIDE the
+   * lane so it can never clear a prior job's mid-settle input (C2). */
+  leadIn?: { data: string; settleMs: number };
 }
 
 export type HostCommand =

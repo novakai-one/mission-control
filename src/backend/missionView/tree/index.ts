@@ -13,9 +13,9 @@ type Stores = Record<StoreName, RawRecord[]>;
 interface StoredRef { kind: string; value: string }
 
 function refsOf(record: RawRecord): StoredRef[] {
-  const raw = record.block.refs;
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((entry): entry is StoredRef => entry !== null && typeof entry === 'object'
+  const rawRefs = record.block.refs;
+  if (!Array.isArray(rawRefs)) return [];
+  return rawRefs.filter((entry): entry is StoredRef => entry !== null && typeof entry === 'object'
     && typeof (entry as StoredRef).kind === 'string' && typeof (entry as StoredRef).value === 'string');
 }
 
@@ -38,12 +38,15 @@ function stringOrNull(value: unknown): string | null {
 export function buildTree(missionId: string, mission: RawRecord, stores: Stores): MissionTreeView {
   const tasks = stores.tasks.filter((record) => refersToMission(record, missionId));
   const agents = stores.agents.filter((record) => refersToMission(record, missionId));
+  const artifacts = collectArtifacts(missionId, tasks, stores);
+  const taskArtifacts = (taskId: string): ArtifactNode[] => artifacts.filter((artifact) => artifact.taskId === taskId);
   return {
     ancestry: buildAncestry(mission, stores),
     team: buildTeam(missionId, stores),
-    agents: agents.map((record) => buildAgent(record, tasks)).sort((a, b) => a.name.localeCompare(b.name)),
-    unassignedTasks: tasks.filter((record) => refValue(record, 'agent') === null).map(buildTask),
-    artifacts: buildArtifacts(missionId, tasks, stores),
+    agents: agents.map((record) => buildAgent(record, tasks, taskArtifacts)).sort((left, right) => left.name.localeCompare(right.name)),
+    unassignedTasks: tasks.filter((record) => refValue(record, 'agent') === null).map((record) => buildTask(record, taskArtifacts)),
+    // C3: mission-level artifacts only — task-anchored ones live under their task.
+    artifacts: artifacts.filter((artifact) => artifact.taskId === null),
     threads: stores.threads.filter((record) => refersToMission(record, missionId)).map(buildThread),
   };
 }
@@ -61,8 +64,8 @@ function buildAncestry(mission: RawRecord, stores: Stores): AncestryNode[] {
   const objective = objectiveId ? byId(stores.okrs, objectiveId) : null;
   if (objective) {
     ancestry.push(node(objective, 'objective', stringOrNull(objective.block.title)));
-    for (const kr of stores.okrs.filter((record) => record.block.kind === 'kr' && record.block.objective === objective.block.id)) {
-      ancestry.push(node(kr, 'kr', stringOrNull(kr.block.body)));
+    for (const keyResult of stores.okrs.filter((record) => record.block.kind === 'kr' && record.block.objective === objective.block.id)) {
+      ancestry.push(node(keyResult, 'kr', stringOrNull(keyResult.block.body)));
     }
   }
   return ancestry;
@@ -79,12 +82,12 @@ function buildTeam(missionId: string, stores: Stores): MissionTreeView['team'] {
   };
 }
 
-function buildAgent(record: RawRecord, missionTasks: RawRecord[]): AgentNode {
+function buildAgent(record: RawRecord, missionTasks: RawRecord[], taskArtifacts: (taskId: string) => ArtifactNode[]): AgentNode {
   const agentId = stringOrNull(record.block.id) ?? '';
   const tasks = missionTasks
     .filter((task) => refValue(task, 'agent') === agentId)
-    .map(buildTask)
-    .sort((a, b) => (a.updated ?? '').localeCompare(b.updated ?? ''));
+    .map((task) => buildTask(task, taskArtifacts))
+    .sort((left, right) => (left.updated ?? '').localeCompare(right.updated ?? ''));
   return {
     id: agentId,
     name: stringOrNull(record.block.name) ?? agentId,
@@ -98,19 +101,21 @@ function buildAgent(record: RawRecord, missionTasks: RawRecord[]): AgentNode {
   };
 }
 
-function buildTask(record: RawRecord): TaskNode {
+function buildTask(record: RawRecord, taskArtifacts: (taskId: string) => ArtifactNode[]): TaskNode {
+  const taskId = stringOrNull(record.block.id) ?? '';
   return {
-    id: stringOrNull(record.block.id) ?? '',
+    id: taskId,
     title: stringOrNull(record.block.title) ?? '(untitled)',
     status: stringOrNull(record.block.status) ?? 'todo',
     blockedReason: stringOrNull(record.block.blockedReason),
     updated: stringOrNull(record.block.updated),
+    artifacts: taskArtifacts(taskId),
     sourceRefs: sourceOf(record),
   };
 }
 
 /** Artifacts anchor to the mission directly or to one of its tasks. */
-function buildArtifacts(missionId: string, missionTasks: RawRecord[], stores: Stores): ArtifactNode[] {
+function collectArtifacts(missionId: string, missionTasks: RawRecord[], stores: Stores): ArtifactNode[] {
   const taskIds = new Set(missionTasks.map((record) => stringOrNull(record.block.id)).filter(Boolean));
   return stores.artifacts
     .map((record) => ({ record, taskId: refsOf(record).find((entry) => entry.kind === 'task' && taskIds.has(entry.value))?.value ?? null }))

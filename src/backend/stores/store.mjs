@@ -209,6 +209,28 @@ export function appendLine(storeDir, storeFile, rawLine, { lockTimeoutMs = 5000,
   }
 }
 
+/**
+ * Provision the recognized store files (correction C1): create-if-missing
+ * empty files so a fresh deployment needs no manual touch step. Composition
+ * (the object model's roots) is the ONE sanctioned caller — appendLine's
+ * missing-file refusal stays, protecting the CLI from filename typos.
+ * @returns {string[]} the files that were created
+ */
+export function ensureStoreFiles(storeDir) {
+  const resolvedDir = realpathSync(storeDir);
+  const created = [];
+  for (const storeFile of Object.keys(STORE_KINDS)) {
+    const filePath = path.join(resolvedDir, storeFile);
+    try {
+      lstatSync(filePath);
+    } catch {
+      writeFileSync(filePath, '', { flag: 'wx' });
+      created.push(storeFile);
+    }
+  }
+  return created;
+}
+
 // --- guarded transition writer (replaceLine) ---------------------------------
 
 /**

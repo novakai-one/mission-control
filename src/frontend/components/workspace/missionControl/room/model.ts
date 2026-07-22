@@ -163,7 +163,7 @@ export function groupAttention(attention: AttentionItem[]): AttentionSectionMode
 export function amberTaskOf(tree: MissionTreeView): string | null {
   const blocked = [...tree.agents.flatMap((agent) => agent.tasks), ...tree.unassignedTasks]
     .filter((task) => task.status === 'blocked')
-    .sort((a, b) => (a.updated ?? '￿').localeCompare(b.updated ?? '￿') || a.id.localeCompare(b.id));
+    .sort((left, right) => (left.updated ?? '￿').localeCompare(right.updated ?? '￿') || left.id.localeCompare(right.id));
   return blocked[0]?.id ?? null;
 }
 

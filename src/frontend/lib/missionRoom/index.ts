@@ -7,11 +7,13 @@ import type {
   MissionSnapshotResponse,
 } from '../../../shared/missionView/schema.js';
 
-/** The single mission the V1 room renders (Contract: one room, one slice). */
-export const MISSION_ROOM_V1_TARGET = 'mission_store-validator';
+/** The room resolves the CURRENT active mission server-side (correction C4):
+ * latest team-linked mission, else latest open mission. A mission picker is a
+ * recorded follow-up. */
+export const MISSION_ROOM_V1_TARGET = 'active';
 
 /** Conversation id of the pinned Mission Room entry in the Mission Control rail. */
-export const MISSION_ROOM_CONVERSATION_ID = 'mission-room-store-validator';
+export const MISSION_ROOM_CONVERSATION_ID = 'mission-room-active';
 
 /**
  * Snapshot polling cadence in ms. 5s is a deliberate new cadence for this

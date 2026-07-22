@@ -21,6 +21,28 @@ import type { MissionViewRoots } from './sources/index.js';
 
 export type { MissionViewRoots } from './sources/index.js';
 
+const CLOSED_MISSION_STATUSES = new Set(['done', 'closed', 'refiled']);
+
+/** C4 rule: latest team-linked mission, else latest open mission, else null. */
+function resolveActiveMissionId(records: Record<string, Array<{ block: Record<string, unknown> }>>): string | null {
+  const missions = records['missions'] ?? [];
+  const teamLinked = new Set<string>();
+  for (const team of records['teams'] ?? []) {
+    const refs = team.block.refs;
+    if (!Array.isArray(refs)) continue;
+    for (const ref of refs as Array<{ kind?: unknown; value?: unknown }>) {
+      if (ref?.kind === 'mission' && typeof ref.value === 'string') teamLinked.add(ref.value);
+    }
+  }
+  const freshness = (block: Record<string, unknown>): string =>
+    (typeof block.updated === 'string' ? block.updated : typeof block.ts === 'string' ? block.ts : '');
+  const newestFirst = [...missions].sort((left, right) => freshness(right.block).localeCompare(freshness(left.block)));
+  const withTeam = newestFirst.find((mission) => typeof mission.block.id === 'string' && teamLinked.has(mission.block.id));
+  if (withTeam) return withTeam.block.id as string;
+  const open = newestFirst.find((mission) => !CLOSED_MISSION_STATUSES.has(String(mission.block.status ?? '')));
+  return typeof open?.block.id === 'string' ? open.block.id : null;
+}
+
 /** 400 — the id contains a path separator or '..' (S1 containment). */
 export class InvalidMissionIdError extends Error {}
 
@@ -54,6 +76,15 @@ export class MissionViewHub {
   readMissionSnapshot(missionId: string): MissionSnapshot {
     if (!isSafeMissionId(missionId)) throw new InvalidMissionIdError(`invalid mission id: ${missionId}`);
     const stores = readStores(this.roots.storesDir);
+    // Correction C4: 'active' unpins the room. The rule, exactly: the most
+    // recently `updated` mission that a team block refs; if no team exists,
+    // the most recently updated/ts'd mission whose status is not closed.
+    // A full mission picker is a recorded follow-up, not this resolution.
+    if (missionId === 'active') {
+      const resolved = resolveActiveMissionId(stores.records);
+      if (!resolved) throw new MissionNotFoundError('no active mission: no team-linked or open mission found');
+      missionId = resolved;
+    }
     const result = resolveLinkage(missionId, stores.records);
     if (result.status === 'absent') throw new MissionNotFoundError(`mission not found: ${missionId}`);
     if (result.status === 'ambiguous') {

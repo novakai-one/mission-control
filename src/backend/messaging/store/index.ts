@@ -10,6 +10,15 @@ import path from 'node:path';
 import { TEAM_CHANNEL } from '../types.js';
 import type { ChannelQuery, MessageEnvelope, MessageQuery } from '../types.js';
 
+function matchesQuery(message: MessageEnvelope, query: MessageQuery): boolean {
+  if (query.withAgent !== undefined && message.from !== query.withAgent && message.to !== query.withAgent) return false;
+  if (query.withRoom !== undefined && message.to !== query.withRoom) return false;
+  if (query.threadId !== undefined && message.threadId !== query.threadId) return false;
+  if (query.missionId !== undefined && message.missionId !== query.missionId) return false;
+  if (query.since !== undefined && message.createdAt < query.since) return false;
+  return true;
+}
+
 interface FileFingerprint {
   size: number;
   mtimeMs: number;
@@ -64,26 +73,8 @@ export class MessageStore {
   }
 
   history(query: MessageQuery = {}): MessageEnvelope[] {
-    let envelopes = Array.from(this.fresh().values());
-    if (query.withAgent !== undefined) {
-      const agent = query.withAgent;
-      envelopes = envelopes.filter((message) => message.from === agent || message.to === agent);
-    }
-    if (query.withRoom !== undefined) {
-      const room = query.withRoom;
-      envelopes = envelopes.filter((message) => message.to === room);
-    }
-    if (query.threadId !== undefined)
-      envelopes = envelopes.filter((message) => message.threadId === query.threadId);
-    if (query.missionId !== undefined)
-      envelopes = envelopes.filter((message) => message.missionId === query.missionId);
-    if (query.since !== undefined) {
-      const since = query.since;
-      envelopes = envelopes.filter((message) => message.createdAt >= since);
-    }
-    if (query.limit !== undefined && query.limit > 0)
-      envelopes = envelopes.slice(-query.limit);
-    return envelopes;
+    const envelopes = Array.from(this.fresh().values()).filter((message) => matchesQuery(message, query));
+    return query.limit !== undefined && query.limit > 0 ? envelopes.slice(-query.limit) : envelopes;
   }
 
   /** #team is pull-only: readers query the record, nothing is pushed (§4). */

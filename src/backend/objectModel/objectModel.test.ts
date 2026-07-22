@@ -9,7 +9,7 @@ import path from 'node:path';
 import { ObjectModel, ObjectModelError } from './index.js';
 import { readStoreDir } from '../stores/store.mjs';
 
-const TS = '2026-07-22T10:00:00+10:00';
+const STAMP = '2026-07-22T10:00:00+10:00';
 const STORE_FILES = [
   'decisions.jsonl', 'requests.jsonl', 'missions.jsonl', 'tasks.jsonl', 'captains-log.jsonl',
   'learnings.jsonl', 'okrs.jsonl', 'projects.jsonl', 'issues.jsonl',
@@ -17,32 +17,32 @@ const STORE_FILES = [
 ];
 
 function scratchStores(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), 'nvk-objectmodel-'));
-  for (const name of STORE_FILES) writeFileSync(path.join(dir, name), '');
-  writeFileSync(path.join(dir, 'missions.jsonl'), [
-    JSON.stringify({ id: 'mission_alpha', kind: 'mission', ts: TS, title: 'Alpha', owner: 'chief' }),
-    JSON.stringify({ id: 'mission_beta', kind: 'mission', ts: TS, title: 'Beta', owner: 'chief' }),
+  const scratch = mkdtempSync(path.join(tmpdir(), 'nvk-objectmodel-'));
+  for (const name of STORE_FILES) writeFileSync(path.join(scratch, name), '');
+  writeFileSync(path.join(scratch, 'missions.jsonl'), [
+    JSON.stringify({ id: 'mission_alpha', kind: 'mission', 'ts': STAMP, title: 'Alpha', owner: 'chief' }),
+    JSON.stringify({ id: 'mission_beta', kind: 'mission', 'ts': STAMP, title: 'Beta', owner: 'chief' }),
   ].join('\n') + '\n');
-  return dir;
+  return scratch;
 }
 
-function blockById(dir: string, storeFile: string, id: string): Record<string, unknown> {
-  const record = readStoreDir(dir).files[storeFile].records.find((entry) => entry.block.id === id);
+function blockById(scratch: string, storeFile: string, id: string): Record<string, unknown> {
+  const record = readStoreDir(scratch).files[storeFile].records.find((entry) => entry.block.id === id);
   assert.ok(record, `${id} exists in ${storeFile}`);
   return record.block;
 }
 
-const dir = scratchStores();
-const model = new ObjectModel({ storesDir: dir });
+const scratch = scratchStores();
+const model = new ObjectModel({ storesDir: scratch });
 
 // --- team + agent creation, mission agreement --------------------------------
 
 const teamId = model.createTeam({ name: 'Object Model Crew', missionId: 'mission_alpha' });
 assert.match(teamId, /^team_/);
-assert.equal(blockById(dir, 'teams.jsonl', teamId).name, 'Object Model Crew');
+assert.equal(blockById(scratch, 'teams.jsonl', teamId).name, 'Object Model Crew');
 
 const agentId = model.createAgent({ name: 'Worker One', provider: 'claude', teamId, missionId: 'mission_alpha' });
-assert.equal(blockById(dir, 'agents.jsonl', agentId).status, 'spawning');
+assert.equal(blockById(scratch, 'agents.jsonl', agentId).status, 'spawning');
 
 assert.throws(
   () => model.createAgent({ name: 'Lost', provider: 'claude', teamId, missionId: 'mission_beta' }),
@@ -61,14 +61,14 @@ console.log('team/agent creation tests passed');
 assert.equal(model.attachAgentSession('agent_not-in-model', 'session-1'), 'unknown', 'non-model agents are not an error');
 
 assert.equal(model.attachAgentSession(agentId, 'session-1'), 'attached');
-let agentBlock = blockById(dir, 'agents.jsonl', agentId);
+let agentBlock = blockById(scratch, 'agents.jsonl', agentId);
 assert.equal(agentBlock.sessionId, 'session-1');
 assert.equal(agentBlock.status, 'live');
 
 assert.equal(model.attachAgentSession(agentId, 'session-1'), 'noop', 'replayed callback is a no-op');
 
 assert.equal(model.attachAgentSession(agentId, 'session-2'), 'attached');
-agentBlock = blockById(dir, 'agents.jsonl', agentId);
+agentBlock = blockById(scratch, 'agents.jsonl', agentId);
 assert.equal(agentBlock.sessionId, 'session-2');
 assert.deepEqual(agentBlock.sessions, ['session-1'], 'previous Presence rotated into history, never erased (M13)');
 console.log('session attach tests passed');
@@ -77,7 +77,7 @@ console.log('session attach tests passed');
 
 const doomedId = model.createAgent({ name: 'Doomed', provider: 'codex', teamId, missionId: 'mission_alpha' });
 model.markAgentFailed(doomedId, 'PTY launch refused');
-const doomed = blockById(dir, 'agents.jsonl', doomedId);
+const doomed = blockById(scratch, 'agents.jsonl', doomedId);
 assert.equal(doomed.status, 'failed');
 assert.equal(doomed.failureReason, 'PTY launch refused');
 console.log('failure record test passed');
@@ -85,18 +85,18 @@ console.log('failure record test passed');
 // --- tasks as data: create + transitions -------------------------------------
 
 const taskId = model.createTask({ title: 'Wire the tree', missionId: 'mission_alpha', agentId });
-assert.equal(blockById(dir, 'tasks.jsonl', taskId).status, 'todo');
+assert.equal(blockById(scratch, 'tasks.jsonl', taskId).status, 'todo');
 
 model.transitionTask(taskId, 'doing');
-assert.equal(blockById(dir, 'tasks.jsonl', taskId).status, 'doing');
+assert.equal(blockById(scratch, 'tasks.jsonl', taskId).status, 'doing');
 
 model.transitionTask(taskId, 'blocked', 'waiting on snapshot schema');
-let taskBlock = blockById(dir, 'tasks.jsonl', taskId);
+let taskBlock = blockById(scratch, 'tasks.jsonl', taskId);
 assert.equal(taskBlock.status, 'blocked');
 assert.equal(taskBlock.blockedReason, 'waiting on snapshot schema');
 
 model.transitionTask(taskId, 'done');
-taskBlock = blockById(dir, 'tasks.jsonl', taskId);
+taskBlock = blockById(scratch, 'tasks.jsonl', taskId);
 assert.equal(taskBlock.status, 'done');
 assert.equal(taskBlock.blockedReason, undefined, 'reason leaves with the blocked status');
 
@@ -111,7 +111,7 @@ assert.equal(model.missionForRoom('room_0e74e755'), 'mission_alpha');
 assert.equal(model.missionForRoom('room_unlinked'), null);
 
 const artifactId = model.recordArtifact({ title: 'Tree screenshot', path: 'evidence/tree.png', missionId: 'mission_alpha', taskId });
-assert.equal(blockById(dir, 'artifacts.jsonl', artifactId).path, 'evidence/tree.png');
+assert.equal(blockById(scratch, 'artifacts.jsonl', artifactId).path, 'evidence/tree.png');
 assert.throws(
   () => model.recordArtifact({ title: 'Nowhere', path: 'x.md' }),
   ObjectModelError,
@@ -123,5 +123,5 @@ const roster = model.missionAgents('mission_alpha');
 assert.deepEqual(roster.map((block) => block.id).sort(), [agentId, doomedId].sort(), 'membership derives from Agent refs');
 console.log('thread/artifact/read tests passed');
 
-rmSync(dir, { recursive: true, force: true });
+rmSync(scratch, { recursive: true, force: true });
 console.log('object-model module tests passed');

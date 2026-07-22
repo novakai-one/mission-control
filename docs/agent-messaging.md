@@ -57,18 +57,23 @@ Envelope (the extensible object; permissions/metadata land here later):
 ```ts
 interface MessageEnvelope {
   id: string;            // msg_<uuid>
-  from: string;          // sender agent name
-  to: string;            // agent name or '#team'
+  from: string;          // sender agent name (presentation)
+  to: string;            // agent name or '#team' (presentation)
   delivery: 'normal' | 'interrupt';
   body: string;
   threadId?: string;     // optional conversation grouping
   createdAt: string;     // ISO
-  status: 'queued' | 'delivered' | 'failed';
+  // 'accepted' = bytes written; interrupts claim 'delivered' only with proof (§8)
+  status: 'queued' | 'accepted' | 'delivered' | 'partial' | 'failed';
+  outcome?: DeliveryOutcome;      // §8 evidence (acceptedAt/confirmedAt/…)
+  senderAgentId?: string;         // durable ids, server-derived (§1.5 of the
+  recipientAgentId?: string;      // object-model plan) — renames never sever
+  missionId?: string;             // message→Agent history
 }
 
 interface SendMessage   { to: string; delivery: 'normal' | 'interrupt'; body: string; }
 interface DeliveryReceipt { messageId: string; deliveredAt: string; mode: string; }
-interface AgentAddress  { agentId: string; name: string; provider: 'claude' | 'codex'; }
+interface AgentAddress  { agentId: string; name: string; provider: 'claude' | 'codex' | 'kimi'; }
 interface MessageQuery  { withAgent?: string; threadId?: string; since?: string; limit?: number; }
 interface ChannelQuery  { since?: string; limit?: number; }
 ```

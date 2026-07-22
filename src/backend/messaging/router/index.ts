@@ -211,19 +211,18 @@ export class MessageRouter {
       this.amend(envelope, envelope.status, { note: `${prefix}effect unverifiable — no confirmer or no sessionId for ${address.name}` });
       return;
     }
-    void this.confirmer
-      .confirm(
-        { provider: address.provider, sessionId: presence.sessionId, projectDir: presence.projectDir },
-        formatInboundMarker(envelope),
-        { timeoutMs: this.confirmTimeoutMs },
-      )
-      .then((proof) => {
-        if (proof) this.amend(envelope, 'delivered', { confirmedAt: proof.confirmedAt, transcriptEvent: proof.transcriptEvent });
-        else this.amend(envelope, envelope.status, { note: `${prefix}effect unverified within ${this.confirmTimeoutMs}ms` });
-      })
+    const target = { provider: address.provider, sessionId: presence.sessionId, projectDir: presence.projectDir };
+    void this.confirmer.confirm(target, formatInboundMarker(envelope), { timeoutMs: this.confirmTimeoutMs })
+      .then((proof) => this.recordProof(envelope, proof, prefix))
       .catch((error: unknown) => {
         this.amend(envelope, envelope.status, { note: `${prefix}confirmation error: ${error instanceof Error ? error.message : String(error)}` });
       });
+  }
+
+  /** Every confirmation outcome amends the audit record — proof or honest timeout. */
+  private recordProof(envelope: MessageEnvelope, proof: { confirmedAt: string; transcriptEvent: string } | null, prefix: string): void {
+    if (proof) this.amend(envelope, 'delivered', { confirmedAt: proof.confirmedAt, transcriptEvent: proof.transcriptEvent });
+    else this.amend(envelope, envelope.status, { note: `${prefix}effect unverified within ${this.confirmTimeoutMs}ms` });
   }
 
   /**

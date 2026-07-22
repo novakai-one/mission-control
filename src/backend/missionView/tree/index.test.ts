@@ -16,10 +16,10 @@ function storesOf(partials: Partial<Record<StoreName, RawRecord[]>>): Record<Sto
   };
 }
 
-const ref = (kind: string, value: string) => ({ kind, value });
+const makeRef = (kind: string, value: string) => ({ kind, value });
 const mission = record('missions', 1, {
-  id: 'mission_m', kind: 'mission', ts: 't', title: 'M', owner: 'chief',
-  refs: [ref('project', 'proj_p')],
+  id: 'mission_m', kind: 'mission', 'ts': 't', title: 'M', owner: 'chief',
+  refs: [makeRef('project', 'proj_p')],
 });
 
 // --- full chain --------------------------------------------------------------
@@ -27,29 +27,29 @@ const mission = record('missions', 1, {
 {
   const stores = storesOf({
     missions: [mission],
-    projects: [record('projects', 1, { id: 'proj_p', kind: 'project', title: 'Command', refs: [ref('objective', 'okr_o')] })],
+    projects: [record('projects', 1, { id: 'proj_p', kind: 'project', title: 'Command', refs: [makeRef('objective', 'okr_o')] })],
     okrs: [
       record('okrs', 1, { id: 'okr_o', kind: 'objective', title: 'Number one agent app' }),
       record('okrs', 2, { id: 'kr_1', kind: 'kr', objective: 'okr_o', body: 'Ship the tree' }),
       record('okrs', 3, { id: 'kr_other', kind: 'kr', objective: 'okr_zzz', body: 'Unrelated' }),
     ],
-    teams: [record('teams', 1, { id: 'team_t', kind: 'team', name: 'Crew', refs: [ref('mission', 'mission_m')] })],
+    teams: [record('teams', 1, { id: 'team_t', kind: 'team', name: 'Crew', refs: [makeRef('mission', 'mission_m')] })],
     agents: [
-      record('agents', 1, { id: 'agent_b', kind: 'agent', name: 'beta', provider: 'kimi', status: 'live', sessionId: 's2', refs: [ref('team', 'team_t'), ref('mission', 'mission_m')] }),
-      record('agents', 2, { id: 'agent_a', kind: 'agent', name: 'alpha', provider: 'claude', status: 'live', sessionId: 's1', refs: [ref('team', 'team_t'), ref('mission', 'mission_m')] }),
+      record('agents', 1, { id: 'agent_b', kind: 'agent', name: 'beta', provider: 'kimi', status: 'live', sessionId: 's2', refs: [makeRef('team', 'team_t'), makeRef('mission', 'mission_m')] }),
+      record('agents', 2, { id: 'agent_a', kind: 'agent', name: 'alpha', provider: 'claude', status: 'live', sessionId: 's1', refs: [makeRef('team', 'team_t'), makeRef('mission', 'mission_m')] }),
     ],
     tasks: [
-      record('tasks', 1, { id: 'task_1', kind: 'task', title: 'One', status: 'done', updated: '2026-07-22T01:00:00Z', refs: [ref('mission', 'mission_m'), ref('agent', 'agent_a')] }),
-      record('tasks', 2, { id: 'task_2', kind: 'task', title: 'Two', status: 'blocked', blockedReason: 'gate pending', updated: '2026-07-22T02:00:00Z', refs: [ref('mission', 'mission_m'), ref('agent', 'agent_a')] }),
-      record('tasks', 3, { id: 'task_3', kind: 'task', title: 'Free', status: 'todo', updated: '2026-07-22T03:00:00Z', refs: [ref('mission', 'mission_m')] }),
-      record('tasks', 4, { id: 'task_other', kind: 'task', title: 'Elsewhere', status: 'todo', refs: [ref('mission', 'mission_zzz'), ref('agent', 'agent_a')] }),
+      record('tasks', 1, { id: 'task_1', kind: 'task', title: 'One', status: 'done', updated: '2026-07-22T01:00:00Z', refs: [makeRef('mission', 'mission_m'), makeRef('agent', 'agent_a')] }),
+      record('tasks', 2, { id: 'task_2', kind: 'task', title: 'Two', status: 'blocked', blockedReason: 'gate pending', updated: '2026-07-22T02:00:00Z', refs: [makeRef('mission', 'mission_m'), makeRef('agent', 'agent_a')] }),
+      record('tasks', 3, { id: 'task_3', kind: 'task', title: 'Free', status: 'todo', updated: '2026-07-22T03:00:00Z', refs: [makeRef('mission', 'mission_m')] }),
+      record('tasks', 4, { id: 'task_other', kind: 'task', title: 'Elsewhere', status: 'todo', refs: [makeRef('mission', 'mission_zzz'), makeRef('agent', 'agent_a')] }),
     ],
     artifacts: [
-      record('artifacts', 1, { id: 'artifact_1', kind: 'artifact', title: 'Shot', path: 'e/shot.png', refs: [ref('task', 'task_2')] }),
-      record('artifacts', 2, { id: 'artifact_2', kind: 'artifact', title: 'Doc', url: 'https://x', refs: [ref('mission', 'mission_m')] }),
-      record('artifacts', 3, { id: 'artifact_far', kind: 'artifact', title: 'Far', path: 'y', refs: [ref('mission', 'mission_zzz')] }),
+      record('artifacts', 1, { id: 'artifact_1', kind: 'artifact', title: 'Shot', path: 'e/shot.png', refs: [makeRef('task', 'task_2')] }),
+      record('artifacts', 2, { id: 'artifact_2', kind: 'artifact', title: 'Doc', 'url': 'https://x', refs: [makeRef('mission', 'mission_m')] }),
+      record('artifacts', 3, { id: 'artifact_far', kind: 'artifact', title: 'Far', path: 'y', refs: [makeRef('mission', 'mission_zzz')] }),
     ],
-    threads: [record('threads', 1, { id: 'thread_1', kind: 'thread', roomId: 'room_r', refs: [ref('mission', 'mission_m')] })],
+    threads: [record('threads', 1, { id: 'thread_1', kind: 'thread', roomId: 'room_r', refs: [makeRef('mission', 'mission_m')] })],
   });
 
   const tree = buildTree('mission_m', mission, stores);
@@ -70,8 +70,9 @@ const mission = record('missions', 1, {
 
   assert.deepEqual(tree.unassignedTasks.map((task) => task.id), ['task_3'], 'mission tasks without an agent are the gap group');
 
-  assert.deepEqual(tree.artifacts.map((artifact) => artifact.id).sort(), ['artifact_1', 'artifact_2']);
-  assert.equal(tree.artifacts.find((artifact) => artifact.id === 'artifact_1')?.taskId, 'task_2', 'task-anchored artifact keeps its task');
+  assert.deepEqual(tree.artifacts.map((artifact) => artifact.id), ['artifact_2'], 'mission level holds mission-anchored artifacts only (C3)');
+  const blockedTask = alpha.tasks.find((task) => task.id === 'task_2');
+  assert.deepEqual(blockedTask?.artifacts.map((artifact) => artifact.id), ['artifact_1'], 'task-anchored artifact nests under its task (C3)');
   assert.deepEqual(tree.threads.map((thread) => thread.roomId), ['room_r']);
   console.log('full-chain tree test passed');
 }
@@ -79,7 +80,7 @@ const mission = record('missions', 1, {
 // --- gap states: absences stay absent ----------------------------------------
 
 {
-  const bare = record('missions', 1, { id: 'mission_bare', kind: 'mission', ts: 't', title: 'Bare', owner: 'chief' });
+  const bare = record('missions', 1, { id: 'mission_bare', kind: 'mission', 'ts': 't', title: 'Bare', owner: 'chief' });
   const tree = buildTree('mission_bare', bare, storesOf({ missions: [bare] }));
   assert.equal(tree.team, null, 'no team → null, not invented');
   assert.deepEqual(tree.ancestry, [], 'no project/objective link → empty ancestry');
@@ -94,7 +95,7 @@ const mission = record('missions', 1, {
 
 {
   const legacy = record('missions', 1, {
-    id: 'mission_l', kind: 'mission', ts: 't', title: 'L', owner: 'chief', refs: [ref('objective', 'okr_o')],
+    id: 'mission_l', kind: 'mission', 'ts': 't', title: 'L', owner: 'chief', refs: [makeRef('objective', 'okr_o')],
   });
   const stores = storesOf({
     missions: [legacy],

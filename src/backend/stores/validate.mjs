@@ -173,6 +173,31 @@ function validateRefCardinality(block, rules, addViolation) {
   }
 }
 
+/**
+ * Conditional task authority (correction M1), WRITE-STRICT ONLY: a NEW task
+ * that refs a mission must name exactly one agent, and that agent's mission
+ * must agree. Legacy agentless mission-tasks in the stores stay valid (the
+ * unassigned bucket renders them) — audits never gain findings from this.
+ */
+function validateTaskAuthority(block, index, addViolation) {
+  const refs = Array.isArray(block.refs) ? block.refs : [];
+  const refValue = (kind) => refs.find((entry) => entry !== null && typeof entry === 'object' && entry.kind === kind)?.value;
+  const missionId = refValue('mission');
+  if (typeof missionId !== 'string') return;
+  const agentId = refValue('agent');
+  if (typeof agentId !== 'string') {
+    addViolation('REF-CARDINALITY', 'a new mission task must ref exactly one agent (authority table, M1) — legacy records are exempt');
+    return;
+  }
+  const occurrences = index.get(agentId);
+  if (!occurrences || occurrences.length !== 1 || occurrences[0].block.kind !== 'agent') return; // dangling/ambiguous already violates
+  const agentRefs = Array.isArray(occurrences[0].block.refs) ? occurrences[0].block.refs : [];
+  const agentMission = agentRefs.find((entry) => entry !== null && typeof entry === 'object' && entry.kind === 'mission')?.value;
+  if (agentMission !== undefined && agentMission !== missionId) {
+    addViolation('RELATION-INCONSISTENT', `task refs mission "${missionId}" but its agent "${agentId}" refs mission "${agentMission}" — they must agree`);
+  }
+}
+
 /** blockedReason iff blocked (plan v2 §1.1) — both directions are violations. */
 function validateBlockedReason(block, addViolation) {
   const blocked = block.status === 'blocked';
@@ -233,7 +258,7 @@ function validateNestedKrs(block, addViolation) {
  * Duplicate-id detection is contextual (audit/candidate), not part of this check.
  * @returns {Violation[]}
  */
-export function validateBlock(block, { storeFile, index = new Map() }) {
+export function validateBlock(block, { storeFile, index = new Map(), mode = 'audit' }) {
   const violations = [];
   const recordId = typeof block.id === 'string' && block.id !== '' ? block.id : undefined;
   const addViolation = (code, message) => violations.push({ code, message, storeFile, recordId });
@@ -303,6 +328,15 @@ export function validateBlock(block, { storeFile, index = new Map() }) {
   }
   if (kind === 'objective') validateNestedKrs(block, addViolation);
   if (kind === 'task') validateBlockedReason(block, addViolation);
+  if (kind === 'task' && mode === 'candidate') validateTaskAuthority(block, index, addViolation);
+  if (kind === 'mission' && mode === 'candidate') {
+    // M1/M10: a mission names at most one project (write-strict; legacy audits exempt).
+    const projectRefs = (Array.isArray(block.refs) ? block.refs : [])
+      .filter((entry) => entry !== null && typeof entry === 'object' && entry.kind === 'project');
+    if (projectRefs.length > 1) {
+      addViolation('REF-CARDINALITY', `kind "mission" allows at most 1 ref of kind "project", found ${projectRefs.length}`);
+    }
+  }
   if (kind === 'artifact') validateArtifactShape(block, addViolation);
   if (kind === 'agent') validateAgentTeamConsistency(block, index, addViolation);
 
@@ -336,7 +370,7 @@ export function validateCandidate(rawLine, { storeFile, snapshot }) {
     return { violations: [{ code: 'PARSE', message: 'candidate is not a single JSON object', storeFile }] };
   }
   const index = buildIndex(snapshot);
-  const violations = validateBlock(block, { storeFile, index });
+  const violations = validateBlock(block, { storeFile, index, mode: 'candidate' });
   if (typeof block.id === 'string' && index.has(block.id)) {
     violations.push({
       code: 'DUP-ID',

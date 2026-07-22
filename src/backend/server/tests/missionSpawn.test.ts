@@ -15,21 +15,17 @@ import { readStoreDir } from '../../stores/store.mjs';
 import type { AgentInfo, CreateAgentOptions } from '../../terminal/manager.js';
 import type { TerminalRuntime } from '../../terminal/runtime/index.js';
 
-const TS = '2026-07-22T10:00:00+10:00';
-const STORE_FILES = [
-  'decisions.jsonl', 'requests.jsonl', 'missions.jsonl', 'tasks.jsonl', 'captains-log.jsonl',
-  'learnings.jsonl', 'okrs.jsonl', 'projects.jsonl', 'issues.jsonl',
-  'teams.jsonl', 'agents.jsonl', 'artifacts.jsonl', 'threads.jsonl',
-];
+const STAMP = '2026-07-22T10:00:00+10:00';
 
 function scratchStores(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), 'nvk-spawn-'));
-  for (const name of STORE_FILES) writeFileSync(path.join(dir, name), '');
-  writeFileSync(path.join(dir, 'missions.jsonl'),
-    JSON.stringify({ id: 'mission_alpha', kind: 'mission', ts: TS, title: 'Alpha', owner: 'chief' }) + '\n');
-  writeFileSync(path.join(dir, 'teams.jsonl'),
-    JSON.stringify({ id: 'team_alpha', kind: 'team', ts: TS, name: 'Alpha Crew', refs: [{ kind: 'mission', value: 'mission_alpha' }] }) + '\n');
-  return dir;
+  // C1: NO pre-created store files — ObjectModel provisions them at
+  // composition; only the seed records are written here.
+  const storesDir = mkdtempSync(path.join(tmpdir(), 'nvk-spawn-'));
+  writeFileSync(path.join(storesDir, 'missions.jsonl'),
+    JSON.stringify({ id: 'mission_alpha', kind: 'mission', 'ts': STAMP, title: 'Alpha', owner: 'chief' }) + '\n');
+  writeFileSync(path.join(storesDir, 'teams.jsonl'),
+    JSON.stringify({ id: 'team_alpha', kind: 'team', 'ts': STAMP, name: 'Alpha Crew', refs: [{ kind: 'mission', value: 'mission_alpha' }] }) + '\n');
+  return storesDir;
 }
 
 function agentInfo(overrides: Partial<AgentInfo>): AgentInfo {
@@ -42,28 +38,29 @@ function agentInfo(overrides: Partial<AgentInfo>): AgentInfo {
 
 interface Harness {
   base: string;
-  dir: string;
+  storesDir: string;
   createdOptions: CreateAgentOptions[];
   recordExistedAtLaunch: boolean[];
   fireSession: (info: AgentInfo) => void;
   close: () => void;
 }
 
-async function startHarness({ failLaunch = false } = {}): Promise<Harness> {
-  const dir = scratchStores();
-  const model = new ObjectModel({ storesDir: dir });
-  const createdOptions: CreateAgentOptions[] = [];
-  const recordExistedAtLaunch: boolean[] = [];
-  let sessionCallback: (info: AgentInfo) => void = () => {};
-  const terminals: TerminalRuntime = {
+interface FakeTerminalsState {
+  createdOptions: CreateAgentOptions[];
+  recordExistedAtLaunch: boolean[];
+  fireSession: (info: AgentInfo) => void;
+}
+
+function makeTerminals(model: ObjectModel, failLaunch: boolean, state: FakeTerminalsState): TerminalRuntime {
+  return {
     create: (options: CreateAgentOptions) => {
-      createdOptions.push(options);
+      state.createdOptions.push(options);
       // The S4 ordering proof: at the moment the runtime is asked to launch,
       // the durable record must already exist.
-      recordExistedAtLaunch.push(Boolean(options.agentId && model.agentRecord(options.agentId)));
+      state.recordExistedAtLaunch.push(Boolean(options.agentId && model.agentRecord(options.agentId)));
       if (failLaunch) return Promise.reject(new Error('PTY launch refused'));
       return Promise.resolve(agentInfo({
-        agentId: options.agentId ?? `agent_fake_${createdOptions.length}`,
+        agentId: options.agentId ?? `agent_fake_${state.createdOptions.length}`,
         title: options.title ?? 'agent',
         provider: options.provider ?? 'claude',
         cwd: options.cwd,
@@ -72,19 +69,31 @@ async function startHarness({ failLaunch = false } = {}): Promise<Harness> {
     write: () => true, submit: () => true, resize: () => true, rename: () => true, kill: () => true, archive: () => true,
     snapshot: () => '', list: () => [],
     onData: () => {}, onExit: () => {},
-    onSession: (callback) => { sessionCallback = callback; },
+    onSession: (callback) => { state.fireSession = callback; },
   };
-  const hub = new AgentsHub(new Set(), terminals, undefined, model);
-  const application = express();
-  application.use(express.json());
-  hub.registerRoutes(application);
-  const server: Server = await new Promise((resolve) => {
+}
+
+async function listen(application: express.Express): Promise<Server> {
+  return new Promise((resolve) => {
     const listening = application.listen(0, '127.0.0.1', () => resolve(listening));
   });
+}
+
+async function startHarness({ failLaunch = false } = {}): Promise<Harness> {
+  const storesDir = scratchStores();
+  const model = new ObjectModel({ storesDir: storesDir });
+  const state: FakeTerminalsState = { createdOptions: [], recordExistedAtLaunch: [], fireSession: () => {} };
+  const agentsHub = new AgentsHub(new Set(), makeTerminals(model, failLaunch, state), undefined, model);
+  const application = express();
+  application.use(express.json());
+  agentsHub.registerRoutes(application);
+  const server = await listen(application);
   return {
     base: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
-    dir, createdOptions, recordExistedAtLaunch,
-    fireSession: (info) => sessionCallback(info),
+    storesDir,
+    createdOptions: state.createdOptions,
+    recordExistedAtLaunch: state.recordExistedAtLaunch,
+    fireSession: (info) => state.fireSession(info),
     close: () => server.close(),
   };
 }
@@ -96,8 +105,8 @@ async function postAgent(base: string, body: unknown): Promise<{ status: number;
   return { status: response.status, json: await response.json() as Record<string, unknown> };
 }
 
-function durableAgents(dir: string): Array<Record<string, unknown>> {
-  return readStoreDir(dir).files['agents.jsonl'].records.map((record) => record.block);
+function durableAgents(storesDir: string): Array<Record<string, unknown>> {
+  return readStoreDir(storesDir).files['agents.jsonl'].records.map((record) => record.block);
 }
 
 // --- happy path: one id, record-before-Presence, session attach --------------
@@ -111,20 +120,20 @@ function durableAgents(dir: string): Array<Record<string, unknown>> {
   assert.equal(status, 201);
   const runtimeId = json.agentId as string;
 
-  const blocks = durableAgents(harness.dir);
+  const blocks = durableAgents(harness.storesDir);
   assert.equal(blocks.length, 1);
   assert.equal(blocks[0].id, runtimeId, 'durable id IS the runtime id — one mint, no fork');
   assert.equal(blocks[0].status, 'spawning');
   assert.deepEqual(harness.recordExistedAtLaunch, [true], 'record persisted BEFORE the runtime launch');
 
   harness.fireSession(agentInfo({ agentId: runtimeId, sessionId: 'session-abc' }));
-  const attached = durableAgents(harness.dir)[0];
+  const attached = durableAgents(harness.storesDir)[0];
   assert.equal(attached.sessionId, 'session-abc');
   assert.equal(attached.status, 'live');
 
   // Replayed callback (host restart re-emits) stays a no-op.
   harness.fireSession(agentInfo({ agentId: runtimeId, sessionId: 'session-abc' }));
-  assert.equal(durableAgents(harness.dir).length, 1);
+  assert.equal(durableAgents(harness.storesDir).length, 1);
 
   const identity = await fetch(`${harness.base}/api/agents/${runtimeId}/identity`);
   assert.equal(identity.status, 200);
@@ -132,7 +141,7 @@ function durableAgents(dir: string): Array<Record<string, unknown>> {
   assert.equal(identityBody.durable?.sessionId, 'session-abc', 'projection serves the durable record');
 
   harness.close();
-  rmSync(harness.dir, { recursive: true, force: true });
+  rmSync(harness.storesDir, { recursive: true, force: true });
   console.log('mission spawn happy-path tests passed');
 }
 
@@ -145,12 +154,12 @@ function durableAgents(dir: string): Array<Record<string, unknown>> {
     missionId: 'mission_alpha', teamId: 'team_alpha',
   });
   assert.equal(status, 500);
-  const blocks = durableAgents(harness.dir);
+  const blocks = durableAgents(harness.storesDir);
   assert.equal(blocks.length, 1);
   assert.equal(blocks[0].status, 'failed', 'no silent orphan — the failure is recorded');
   assert.equal(blocks[0].failureReason, 'PTY launch refused');
   harness.close();
-  rmSync(harness.dir, { recursive: true, force: true });
+  rmSync(harness.storesDir, { recursive: true, force: true });
   console.log('mission spawn failure-record test passed');
 }
 
@@ -165,9 +174,9 @@ function durableAgents(dir: string): Array<Record<string, unknown>> {
   assert.equal(harness.createdOptions.length, 0, 'no invalid spawn ever reached the runtime');
   // A plain spawn without mission context stays exactly as before.
   assert.equal((await postAgent(harness.base, { title: 'Plain', cwd: '/tmp/p' })).status, 201);
-  assert.equal(durableAgents(harness.dir).length, 0, 'plain spawns write no durable record');
+  assert.equal(durableAgents(harness.storesDir).length, 0, 'plain spawns write no durable record');
   harness.close();
-  rmSync(harness.dir, { recursive: true, force: true });
+  rmSync(harness.storesDir, { recursive: true, force: true });
   console.log('mission spawn guard tests passed');
 }
 

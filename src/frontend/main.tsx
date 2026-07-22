@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { DashboardShell } from './components/index.js';
+import './main.css';
 
 // Reveal scrollbar thumbs only while their container is actively scrolling
 // (css/index.css hides them otherwise). A data attribute, not a class, so

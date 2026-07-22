@@ -12,7 +12,7 @@
 // Presence history.
 import { randomUUID } from 'node:crypto';
 import {
-  appendLine, replaceLine, readStoreDir,
+  appendLine, ensureStoreFiles, replaceLine, readStoreDir,
   StoreConflictError, StoreRefusalError, StoreValidationError,
 } from '../stores/store.mjs';
 
@@ -44,9 +44,9 @@ export class ObjectModelError extends Error {
   }
 }
 
-const ref = (kind: string, value: string) => ({ kind, value });
+const makeRef = (kind: string, value: string) => ({ kind, value });
 
-function now(): string {
+function timestampNow(): string {
   return new Date().toISOString();
 }
 
@@ -57,13 +57,19 @@ function nextUpdated(previous: unknown): string {
 }
 
 export class ObjectModel {
-  constructor(private readonly roots: ObjectModelRoots) {}
+  constructor(private readonly roots: ObjectModelRoots) {
+    // C1: provision recognized store files once at composition — a fresh
+    // stores dir needs no manual touch step, and the CLI's missing-file
+    // refusal stays intact for everyone else.
+    const created = ensureStoreFiles(roots.storesDir);
+    if (created.length > 0) console.log(`[objectModel] provisioned store files in ${roots.storesDir}: ${created.join(', ')}`);
+  }
 
   createTeam(input: { name: string; missionId: string; teamId?: string }): string {
     const id = input.teamId ?? `team_${randomUUID()}`;
     this.append('teams.jsonl', {
-      id, kind: 'team', ts: now(), name: input.name,
-      refs: [ref('mission', input.missionId)],
+      id, kind: 'team', 'ts': timestampNow(), name: input.name,
+      refs: [makeRef('mission', input.missionId)],
     });
     return id;
   }
@@ -77,9 +83,9 @@ export class ObjectModel {
   createAgent(input: { agentId?: string; name: string; provider: string; teamId: string; missionId: string }): string {
     const id = input.agentId ?? `agent_${randomUUID()}`;
     this.append('agents.jsonl', {
-      id, kind: 'agent', ts: now(), name: input.name, provider: input.provider,
+      id, kind: 'agent', 'ts': timestampNow(), name: input.name, provider: input.provider,
       status: 'spawning',
-      refs: [ref('team', input.teamId), ref('mission', input.missionId)],
+      refs: [makeRef('team', input.teamId), makeRef('mission', input.missionId)],
     });
     return id;
   }
@@ -118,10 +124,10 @@ export class ObjectModel {
 
   createTask(input: { title: string; missionId: string; agentId?: string; taskId?: string }): string {
     const id = input.taskId ?? `task_${randomUUID().slice(0, 8)}`;
-    const timestamp = now();
+    const timestamp = timestampNow();
     this.append('tasks.jsonl', {
-      id, kind: 'task', ts: timestamp, title: input.title, status: 'todo', updated: timestamp,
-      refs: [ref('mission', input.missionId), ...(input.agentId ? [ref('agent', input.agentId)] : [])],
+      id, kind: 'task', 'ts': timestamp, title: input.title, status: 'todo', updated: timestamp,
+      refs: [makeRef('mission', input.missionId), ...(input.agentId ? [makeRef('agent', input.agentId)] : [])],
     });
     return id;
   }
@@ -139,8 +145,8 @@ export class ObjectModel {
   createThread(input: { roomId: string; missionId: string; threadId?: string }): string {
     const id = input.threadId ?? `thread_${randomUUID().slice(0, 8)}`;
     this.append('threads.jsonl', {
-      id, kind: 'thread', ts: now(), roomId: input.roomId,
-      refs: [ref('mission', input.missionId)],
+      id, kind: 'thread', 'ts': timestampNow(), roomId: input.roomId,
+      refs: [makeRef('mission', input.missionId)],
     });
     return id;
   }
@@ -148,12 +154,12 @@ export class ObjectModel {
   recordArtifact(input: { title: string; path?: string; url?: string; missionId?: string; taskId?: string; artifactId?: string }): string {
     const id = input.artifactId ?? `artifact_${randomUUID().slice(0, 8)}`;
     this.append('artifacts.jsonl', {
-      id, kind: 'artifact', ts: now(), title: input.title,
+      id, kind: 'artifact', 'ts': timestampNow(), title: input.title,
       ...(input.path !== undefined ? { path: input.path } : {}),
-      ...(input.url !== undefined ? { url: input.url } : {}),
+      ...(input.url !== undefined ? { 'url': input.url } : {}),
       refs: [
-        ...(input.missionId ? [ref('mission', input.missionId)] : []),
-        ...(input.taskId ? [ref('task', input.taskId)] : []),
+        ...(input.missionId ? [makeRef('mission', input.missionId)] : []),
+        ...(input.taskId ? [makeRef('task', input.taskId)] : []),
       ],
     });
     return id;
@@ -215,7 +221,7 @@ export class ObjectModel {
 
   private record(storeFile: string, id: string): { raw: string; block: Record<string, unknown> } | null {
     const entry = this.storeRecords(storeFile).find((candidate) => (candidate.block as { id?: string }).id === id);
-    return entry ? { raw: entry.raw, block: entry.block as Record<string, unknown> } : null;
+    return entry ? { 'raw': entry.raw, block: entry.block as Record<string, unknown> } : null;
   }
 
   private storeRecords(storeFile: string): Array<{ raw: string; block: unknown }> {

@@ -67,7 +67,7 @@ const LEFT_WIDTH_KEY = 'novakai.mission.leftRailWidth';
 const RIGHT_WIDTH_KEY = 'novakai.mission.rightRailWidth';
 
 /** Pinned read-only Mission Room entry, always first in the mission rooms list. */
-const MISSION_ROOM_ENTRY: Conversation = { id: MISSION_ROOM_CONVERSATION_ID, kind: 'room', title: 'Mission Room — Store Validator', members: [] };
+const MISSION_ROOM_ENTRY: Conversation = { id: MISSION_ROOM_CONVERSATION_ID, kind: 'room', title: 'Mission Room', members: [] };
 
 function restoredBoolean(storageKey: string, fallback: boolean): boolean {
   const stored = localStorage.getItem(storageKey);
