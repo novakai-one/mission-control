@@ -14,13 +14,14 @@ import { buildTargets } from '../../../lib/mentions/index.js';
 import {
   buildConversations,
   messagesFor,
-  registeredRoster,
   useTunnelFeed,
   useTunnelRooms,
   type Conversation,
   type ConversationId,
   type TunnelEnvelope,
 } from '../../../lib/tunnelModel/index.js';
+import { usePeople } from '../../../lib/tunnelModel/people/index.js';
+import { buildPanelLanes } from '../../../lib/tunnelModel/panel/index.js';
 import {
   advanceCursor,
   saveLane,
@@ -89,14 +90,23 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
   const widthsRef = useRef(widths);
   widthsRef.current = widths;
 
-  // registeredRoster (not liveRoster) so exited teammates' empty DM lanes
-  // materialize; visibleLanesFor (C3) then prunes to lanes Chris is party
-  // to — the ONE list every consumer below sees (rail, unread, restore).
-  const roster = useMemo(() => registeredRoster(agents), [agents]);
-  const conversations = useMemo(
-    () => visibleLanesFor(buildConversations(feed, rooms, roster), feed, agents),
-    [feed, rooms, roster, agents],
+  // Durable-first people directory (ruling S3): the roster that materializes
+  // DM lanes is the PeopleHub union — durable agents (incl. registered
+  // external sessions) plus runtime-only PTYs. visibleLanesFor (C3) then
+  // prunes to lanes Chris is party to — "registered" now means "known to the
+  // people directory", so the external chief's empty lane survives the prune.
+  const { people, archivedLaneIds, loaded: peopleLoaded, stale: peopleStale } = usePeople();
+  const roster = useMemo(
+    () => people.map((person) => ({ name: person.name, provider: person.provider as AgentInfo['provider'] })),
+    [people],
   );
+  const peopleTitles = useMemo(() => people.map((person) => ({ title: person.name })), [people]);
+  const conversations = useMemo(
+    () => visibleLanesFor(buildConversations(feed, rooms, roster), feed, peopleTitles),
+    [feed, rooms, roster, peopleTitles],
+  );
+  // The ONE row set both rails render (Task 2.3) — agentId-keyed buckets.
+  const panel = useMemo(() => buildPanelLanes(conversations, people, feed, archivedLaneIds), [conversations, people, feed, archivedLaneIds]);
   // Collision-suffixed labels (C2) — computed over the visible set so the
   // rail rows and the thread topbar always agree.
   const labels = useMemo(() => distinctRailLabels(conversations), [conversations]);
@@ -183,10 +193,12 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
       selectedId,
       remembered: savedLane() ?? null,
       conversationIds: conversations.map((lane) => lane.id),
-      feedLoaded, roomsLoaded, agentsLoaded,
+      // People joined the lane derivation (S3) — the restore machine waits on
+      // the directory settling too, same S7 rule as the other three sources.
+      feedLoaded, roomsLoaded, agentsLoaded: agentsLoaded && peopleLoaded,
     });
     if (decision.kind === 'restore' || decision.kind === 'fallback') setSelectedId(decision.id);
-  }, [selectedId, conversations, feedLoaded, roomsLoaded, agentsLoaded]);
+  }, [selectedId, conversations, feedLoaded, roomsLoaded, agentsLoaded, peopleLoaded]);
 
   useEffect(() => {
     if (!openRequest || !conversations.some((lane) => lane.id === openRequest.id)) return;
@@ -291,6 +303,9 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
     <section className={viewClass} ref={rootRef} aria-label="Messages">
       <RoomsRail
         conversations={conversations}
+        panel={panel}
+        archivedLaneIds={archivedLaneIds}
+        peopleStale={peopleStale}
         labels={labels}
         unread={unread}
         selectedId={selectedId}

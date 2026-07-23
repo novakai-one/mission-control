@@ -12,13 +12,14 @@ import type {
   Conversation,
   ConversationId,
 } from '../../../../lib/tunnelModel/index.js';
+import type { ArchivedLane } from '../../../../../shared/people/schema.js';
+import { mergeArchive, type PanelLanes, type PanelPersonRow } from '../../../../lib/tunnelModel/panel/index.js';
+import { useArchive } from '../../../../lib/tunnelModel/people/index.js';
+import { ArchivedRow, PersonRow } from './rows/index.js';
 import {
   MESSAGING_SETTINGS,
-  PRESENCE_LABEL,
   capRailLanes,
   filterRailLanes,
-  initialFor,
-  presenceToneFor,
   roomLabelFor,
   splitRailSections,
   type KnownAgent,
@@ -30,6 +31,14 @@ import './index.css';
 
 interface RoomsRailProps {
   conversations: Conversation[];
+  /** The shared agentId-keyed row set both rails render (Task 2.3). */
+  panel: PanelLanes;
+  /** Archived room-lane ids (S1): absent from the default rooms section; the
+   * lanes stay in `conversations` so selecting one from the disclosure (or
+   * search) still resolves. */
+  archivedLaneIds: string[];
+  /** Newest people read failed — list shown is the last good one (M2). */
+  peopleStale: boolean;
   /** Rendered label per lane — collision-suffixed by the model (C2). */
   labels: Map<ConversationId, string>;
   unread: Record<ConversationId, number>;
@@ -68,41 +77,12 @@ function RoomRow(props: {
   );
 }
 
-function PersonRow(props: {
-  lane: Conversation;
-  label: string;
-  agents: AgentInfo[];
-  count: number;
-  selected: boolean;
-  onSelect(conversation: Conversation): void;
-}) {
-  const agent = props.agents.find((entry) => entry.title === props.lane.title);
-  const tone = presenceToneFor(props.count, agent?.status ?? null);
-  const role = agent?.provider ?? 'agent';
-  const label = `${props.label}, ${role}, ${PRESENCE_LABEL[tone]}`;
-  const classes = props.selected ? 'msg-person is-selected' : 'msg-person';
-  return (
-    <button
-      type="button"
-      className={classes}
-      aria-label={label}
-      aria-current={props.selected ? 'true' : undefined}
-      onClick={() => props.onSelect(props.lane)}
-    >
-      <span className="msg-person-av" aria-hidden="true">{initialFor(props.lane.title)}</span>
-      <span className="msg-person-meta">
-        <strong title={props.label}>{props.label}</strong>
-        <small title={role}>{role}</small>
-      </span>
-      <span className={`msg-dot msg-dot-${tone}`} aria-hidden="true" />
-    </button>
-  );
-}
-
 type NewFlow = 'room' | 'dm' | 'agent';
 
 export function RoomsRail(props: RoomsRailProps) {
   const [flow, setFlow] = useState<NewFlow | null>(null);
+  // Archive disclosure (S1): the endpoint is read only once opened.
+  const [archivedOpen, setArchivedOpen] = useState(false);
   // Rail search (M8c): one substring query filters both sections through the
   // model derivation — the old rail's search box, restored without the tabs.
   const [query, setQuery] = useState('');
@@ -112,7 +92,29 @@ export function RoomsRail(props: RoomsRailProps) {
   const [visibleCount, setVisibleCount] = useState(MESSAGING_SETTINGS.rail.cap);
   const capped = capRailLanes(filterRailLanes(props.conversations, query), visibleCount);
   const sections = splitRailSections(capped.lanes);
+  // S1 default view: archived rooms leave the section unless the query names
+  // them (search reaches archived lanes, same rule as beyond-the-cap lanes).
+  const archivedRoomIds = new Set(props.archivedLaneIds);
+  const defaultRooms = query.trim()
+    ? sections.rooms
+    : sections.rooms.filter((lane) => !archivedRoomIds.has(lane.id));
   const atCeiling = visibleCount >= MESSAGING_SETTINGS.rail.ceiling;
+  // Person rows (Task 2.4): the shared buckets, windowed by the SAME search
+  // + cap chrome as lanes (M1 — chrome windows, never reorders). A row with
+  // no derived lane is identity-only (registered, nothing said) and passes
+  // the cap — the cap bounds journal-derived lanes, not the directory.
+  const needle = query.trim().toLowerCase();
+  const cappedDmIds = new Set(sections.directs.map((lane) => lane.id));
+  const matchesQuery = (personRow: PanelPersonRow): boolean =>
+    !needle || (personRow.person?.name ?? personRow.lane?.title ?? '').toLowerCase().includes(needle);
+  const inWindow = (personRow: PanelPersonRow): boolean =>
+    matchesQuery(personRow) && (personRow.lane === null || cappedDmIds.has(personRow.lane.id));
+  const liveRows = props.panel.live.filter(inWindow);
+  const quietRows = props.panel.quiet.filter(inWindow);
+  const archivedRows = props.panel.archived.filter(matchesQuery);
+  const archive = useArchive(archivedOpen);
+  const archivedLanes = mergeArchive(archive.lanes, archivedRows)
+    .filter((lane) => !needle || lane.title.toLowerCase().includes(needle));
 
   function toggleFlow(next: NewFlow): void {
     setFlow((current) => (current === next ? null : next));
@@ -200,12 +202,12 @@ export function RoomsRail(props: RoomsRailProps) {
               onClose={() => setFlow(null)}
             />
           )}
-          {(!query.trim() || sections.rooms.length > 0) && <div className="msg-section">Mission rooms</div>}
-          {sections.rooms.length === 0 && sections.directs.length === 0 && query.trim() !== '' && (
+          {(!query.trim() || defaultRooms.length > 0) && <div className="msg-section">Mission rooms</div>}
+          {defaultRooms.length === 0 && sections.directs.length === 0 && query.trim() !== '' && (
             <div className="msg-rail-quiet">No lanes match “{query.trim()}”.</div>
           )}
           <div className="msg-rail-stack">
-            {sections.rooms.map((lane) => (
+            {defaultRooms.map((lane) => (
               <RoomRow
                 key={lane.id}
                 lane={lane}
@@ -216,21 +218,40 @@ export function RoomsRail(props: RoomsRailProps) {
               />
             ))}
           </div>
-          {(!query.trim() || sections.directs.length > 0) && <div className="msg-section">Direct messages</div>}
+          {(!query.trim() || liveRows.length + quietRows.length > 0) && <div className="msg-section">Direct messages</div>}
+          {props.peopleStale && <div className="msg-rail-quiet">People directory stale — reconnecting…</div>}
           <div className="msg-rail-stack">
-            {sections.directs.map((lane) => (
+            {[...liveRows, ...quietRows].map((personRow) => (
               <PersonRow
-                key={lane.id}
-                lane={lane}
-                label={props.labels.get(lane.id) ?? lane.title}
-                agents={props.agents}
-                count={props.unread[lane.id] ?? 0}
-                selected={lane.id === props.selectedId}
+                key={personRow.rowId}
+                row={personRow}
+                label={props.labels.get(personRow.conversationId) ?? personRow.person?.name ?? personRow.lane?.title ?? personRow.conversationId}
+                count={props.unread[personRow.conversationId] ?? 0}
+                selected={personRow.conversationId === props.selectedId}
                 onSelect={props.onSelect}
               />
             ))}
-            {sections.directs.length === 0 && !query.trim() && <div className="msg-rail-quiet">No agents yet</div>}
+            {liveRows.length + quietRows.length === 0 && !query.trim() && <div className="msg-rail-quiet">No agents yet</div>}
           </div>
+          <details className="msg-archived" onToggle={(toggle) => setArchivedOpen((toggle.target as HTMLDetailsElement).open)}>
+            <summary className="msg-section msg-archived-summary">
+              Archived{archivedOpen && archive.loaded ? ` · ${archivedLanes.length}` : archivedRows.length > 0 ? ` · ${archivedRows.length}+` : ''}
+            </summary>
+            <div className="msg-rail-stack">
+              {archive.failed && <div className="msg-rail-quiet">Archive unavailable right now.</div>}
+              {archivedOpen && archive.loaded && archivedLanes.length === 0 && !archive.failed && (
+                <div className="msg-rail-quiet">Nothing archived.</div>
+              )}
+              {archivedLanes.map((lane) => (
+                <ArchivedRow
+                  key={lane.id}
+                  lane={lane}
+                  selected={lane.conversationId === props.selectedId}
+                  onSelect={props.onSelect}
+                />
+              ))}
+            </div>
+          </details>
           {capped.hiddenCount > 0 && !atCeiling && (
             <button
               type="button"

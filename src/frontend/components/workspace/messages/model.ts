@@ -236,44 +236,10 @@ export function roomLabelFor(conversation: Conversation): string {
 }
 
 /* ---------- Lane pruning (C3, audit S2) --------------------------------------
-   Chris sees only lanes he is party to. Precedence RULED by the audit —
-   history dominates registration:
-     (a) DM lane WITH history → visible ONLY if Chris is a party to that
-         history; a registered agent whose lane holds nothing but
-         agent↔agent traffic stays hidden.
-     (b) EMPTY DM lane → kept iff its agent is registered, ANY status —
-         Chris can start a DM with any teammate, running or exited.
-     (c) the #team channel → always visible.
-     (d) rooms → visible only when Chris is a member.
-   Pure presentation-layer filter: conversationIdsFor is untouched and its
-   fan-out semantics stay intact for attention/readCursor/review consumers. */
-function dmLaneStanding(feed: TunnelEnvelope[]): { hasHistory: Set<ConversationId>; chrisParty: Set<ConversationId> } {
-  const hasHistory = new Set<ConversationId>();
-  const chrisParty = new Set<ConversationId>();
-  for (const message of feed) {
-    for (const laneId of conversationIdsFor(message)) {
-      if (!laneId.startsWith('dm:')) continue;
-      hasHistory.add(laneId);
-      if (message.from === CHRIS || message.to === CHRIS) chrisParty.add(laneId);
-    }
-  }
-  return { hasHistory, chrisParty };
-}
-
-export function visibleLanesFor(
-  lanes: Conversation[],
-  feed: TunnelEnvelope[],
-  agents: Pick<AgentInfo, 'title'>[],
-): Conversation[] {
-  const registered = new Set(agents.map((agent) => agent.title));
-  const { hasHistory, chrisParty } = dmLaneStanding(feed);
-  return lanes.filter((entry) => {
-    if (entry.kind === 'channel') return true;
-    if (entry.kind === 'room') return entry.members?.includes(CHRIS) ?? false;
-    if (hasHistory.has(entry.id)) return chrisParty.has(entry.id);
-    return registered.has(entry.title);
-  });
-}
+   Moved to the shared model (Task 2.4): both rails prune now (ruling D2), so
+   the rule lives in tunnelModel/people.ts. Re-exported here so this module's
+   existing consumers and tests keep their import surface. */
+export { visibleLanesFor } from '../../../lib/tunnelModel/people/index.js';
 
 /* ---------- Distinct rail labels (C2, audit M1) ------------------------------
    Presentation-layer disambiguation ONLY — no identity or envelope change.

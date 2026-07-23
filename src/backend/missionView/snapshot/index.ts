@@ -5,7 +5,9 @@ import type {
   AttentionItem,
   ArtifactView,
   CurrentActivityView,
+  DeclaredRoleView,
   MissionAssignmentView,
+  MissionMemberView,
   MissionPulse,
   MissionSnapshot,
   PresenceView,
@@ -18,6 +20,8 @@ import type { MessageEnvelope } from '../../messaging/types.js';
 import type { MissionLinkage, RefValue } from '../linkage/index.js';
 import type { PacketFile, RawRecord, RegistryEntry, RoomRecord, StoreName } from '../sources/index.js';
 import { buildTree } from '../tree/index.js';
+import { joinTeam, refOf, stringOrNull } from './team/index.js';
+import type { TeamJoin } from './team/index.js';
 
 /** Everything deriveSnapshot needs: linkage output plus the other source reads. */
 export interface MissionFacts {
@@ -42,21 +46,20 @@ const CLOSED_STATUSES = new Set(['done', 'closed', 'refiled']);
 /** The deep derive: one mission, joined read-only, uncertainty preserved. */
 export function deriveSnapshot(facts: MissionFacts): MissionSnapshot {
   const rooms = linkedRooms(facts);
-  const attention = buildAttention(facts, rooms);
-  const issues = [...facts.linkage.problems, ...facts.readProblems];
+  const team = joinTeam(facts);
+  const attention = buildAttention(facts, rooms, team);
+  const issues = [...facts.linkage.problems, ...facts.readProblems, ...team.problems];
   return {
     mission: buildMission(facts.linkage.mission),
     pulse: buildPulse(facts, attention, issues),
     objective: buildObjective(facts.linkage),
-    assignments: buildAssignments(facts.linkage.mission),
-    presences: buildPresences(),
-    currentActivity: buildActivity(),
+    members: team.members, assignments: team.assignments,
+    declaredRoles: buildDeclaredRoles(facts.linkage.mission),
+    presences: team.presences, currentActivity: team.currentActivity,
     timeline: buildTimeline(facts, rooms),
     artifacts: buildArtifacts(facts),
     tree: buildTree(facts.missionId, facts.linkage.mission, facts.stores),
-    attention,
-    asOf: facts.asOf,
-    issues,
+    attention, asOf: facts.asOf, issues,
   };
 }
 
@@ -70,6 +73,7 @@ function buildMission(record: RawRecord): MissionSnapshot['mission'] {
     owner: text('owner'),
     stage: text('stage'),
     priority: text('priority'),
+    notes: text('notes'),
   };
 }
 
@@ -121,8 +125,10 @@ function buildObjective(linkage: MissionLinkage): Sourced<string> | null {
   return { value, sourceRefs: [refOf(record)] };
 }
 
-/** Mission-explicit assignments only (S4); the scalar owner is never promoted. */
-function buildAssignments(record: RawRecord): MissionAssignmentView[] {
+/** Legacy mission-explicit declared roles (S4); the scalar owner is never
+ * promoted. The typed team join above supersedes this as the real team
+ * source — this field only preserves the old lawful shape, unchanged. */
+function buildDeclaredRoles(record: RawRecord): DeclaredRoleView[] {
   const rawList = record.block.assignments;
   if (!Array.isArray(rawList)) return [];
   return rawList.filter(isAssignment).map((entry) => ({
@@ -130,22 +136,6 @@ function buildAssignments(record: RawRecord): MissionAssignmentView[] {
     role: entry.role,
     sourceRefs: [refOf(record)],
   }));
-}
-
-/**
- * Mission-explicit bound presences (S4/C2/R1): today's registry CANNOT express
- * a mission binding — projectId/threadId name a project or a Thread, never a
- * Mission, and no typed binding field exists on canonical AgentInfo. So this
- * is unconditionally empty; the attention item states that honest fact. The
- * future sanctioned binding is recorded as follow-up work (result.md risks).
- */
-function buildPresences(): PresenceView[] {
-  return [];
-}
-
-/** Explicit current work (S3/C2): availability is never converted into work — empty until an explicit current-work source exists. */
-function buildActivity(): CurrentActivityView[] {
-  return [];
 }
 
 /** Chronological — never causal — timeline: mission + linked records + linked rooms (M4/C1). */
@@ -211,33 +201,35 @@ function artifactView(entry: RefValue, facts: MissionFacts): ArtifactView {
   };
 }
 
-/** The trust feature: every gap, labeled, with the refs that prove it. */
-function buildAttention(facts: MissionFacts, rooms: RoomRecord[]): AttentionItem[] {
+/** The trust feature: every gap, labeled, with the refs that prove it.
+ * Each Team fact clears its item ONLY when that fact is proven (S2.5). */
+function buildAttention(facts: MissionFacts, rooms: RoomRecord[], team: TeamJoin): AttentionItem[] {
   return [
-    ...assignmentAttention(facts),
-    ...presenceAttention(facts),
-    ...activityAttention(facts),
+    ...assignmentAttention(facts, team),
+    ...presenceAttention(facts, team),
+    ...activityAttention(facts, team),
     ...unresolvableAttention(facts),
     ...evidenceAttention(facts),
     ...communicationAttention(facts, rooms),
   ];
 }
 
-function assignmentAttention(facts: MissionFacts): AttentionItem[] {
-  if (buildAssignments(facts.linkage.mission).length > 0) return [];
+function assignmentAttention(facts: MissionFacts, team: TeamJoin): AttentionItem[] {
+  if (team.assignments.length > 0 || buildDeclaredRoles(facts.linkage.mission).length > 0) return [];
   return [{
     id: 'attention:no-assignments',
-    label: 'no explicit role assignments stored',
-    detail: 'No record stores a role assignment for this mission; the scalar mission owner renders as a raw sourced field, never a role (S4).',
+    label: 'no task assignments recorded',
+    detail: 'No task block refs both this mission and an agent, and the mission record declares no roles; the scalar mission owner renders as a raw sourced field, never a role (S4).',
     sourceRefs: [refOf(facts.linkage.mission)],
   }];
 }
 
-function presenceAttention(facts: MissionFacts): AttentionItem[] {
+function presenceAttention(facts: MissionFacts, team: TeamJoin): AttentionItem[] {
+  if (team.presences.length > 0) return projectOnlyAttention(facts);
   const items: AttentionItem[] = [{
     id: 'attention:no-presences',
-    label: 'no mission-explicit bound presence',
-    detail: 'The agent registry has no mission binding; projectId/threadId bind to a project or thread, not a mission — no explicitly linked active session exists.',
+    label: 'no mission-linked presence',
+    detail: 'No live durable agent with a session pointer refs this mission, and the runtime registry has no mission binding — no explicitly linked active session exists.',
     sourceRefs: [{ store: 'registry', path: facts.registryPath }],
   }];
   return items.concat(projectOnlyAttention(facts));
@@ -256,11 +248,12 @@ function projectOnlyAttention(facts: MissionFacts): AttentionItem[] {
     }));
 }
 
-function activityAttention(facts: MissionFacts): AttentionItem[] {
+function activityAttention(facts: MissionFacts, team: TeamJoin): AttentionItem[] {
+  if (team.currentActivity.length > 0) return [];
   return [{
     id: 'attention:no-current-activity',
     label: 'no explicitly linked current activity',
-    detail: 'No source records current work for this mission, and registry availability is never converted into work (S3) — so nothing can be honestly attributed.',
+    detail: 'No `doing` task refs both this mission and an agent, and registry availability is never converted into work (S3) — so nothing can be honestly attributed.',
     sourceRefs: [{ store: 'registry', path: facts.registryPath }],
   }];
 }
@@ -356,16 +349,8 @@ function summarize(record: RawRecord): string {
   return body.length > 140 ? `${body.slice(0, 140)}…` : body;
 }
 
-function refOf(record: RawRecord): SourceRef {
-  return { store: record.store, recordId: String(record.block.id ?? ''), path: record.path, line: record.line };
-}
-
 function basenameOf(location: string): string {
   return location.split('/').pop() ?? location;
-}
-
-function stringOrNull(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
 
 function isAssignment(value: unknown): value is { personId: string; role: string } {

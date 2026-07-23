@@ -21,7 +21,6 @@ import {
   buildConversations,
   dmId,
   latestChrisQuestion,
-  liveRoster,
   messagesFor,
   useTunnelFeed,
   useTunnelRooms,
@@ -30,6 +29,8 @@ import {
   type TunnelEnvelope,
   type TunnelRoom,
 } from '../../../lib/tunnelModel/index.js';
+import { usePeople, visibleLanesFor } from '../../../lib/tunnelModel/people/index.js';
+import { buildPanelLanes } from '../../../lib/tunnelModel/panel/index.js';
 import { MessengerComposer, Transcript } from '../../studio/chat/tunnel/transcript/index.js';
 import { MISSION_ROOM_CONVERSATION_ID, MISSION_ROOM_V1_TARGET, useMissionSnapshot } from '../../../lib/missionRoom/index.js';
 import { MissionRoom, MissionRoomHero } from './room/index.js';
@@ -38,7 +39,7 @@ import {
   liveMissionAgents,
   missionHealth,
 } from './model.js';
-import { MissionEvidence, MissionHealthBar, MissionLiveHero, MissionRail, MissionStageStrip } from './panels/index.js';
+import { MissionEvidence, MissionHealthBar, MissionLiveHero, MissionRail } from './panels/index.js';
 import './index.css';
 
 export interface MissionConfidence {
@@ -107,13 +108,25 @@ export function MissionControl(props: MissionControlProps) {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const { feed, loadConversation } = useTunnelFeed();
   const { rooms, ingestRoom } = useTunnelRooms();
-  const roster = useMemo(() => liveRoster(props.agents), [props.agents]);
-  const conversations = useMemo(
-    () => buildConversations(feed, rooms, roster),
-    [feed, rooms, roster],
+  // Durable-first people directory (rulings S3 + D1/D2): the same source and
+  // the same C3 pruning the Messages tab uses — one lane set, two chromes.
+  const { people, archivedLaneIds, stale: peopleStale } = usePeople();
+  const peopleRoster = useMemo(
+    () => people.map((person) => ({ name: person.name, provider: person.provider as AgentInfo['provider'] })),
+    [people],
   );
-  const missionRooms = [MISSION_ROOM_ENTRY, ...conversations.filter((conversation) => conversation.kind !== 'dm')];
-  const directMessages = conversations.filter((conversation) => conversation.kind === 'dm');
+  const peopleTitles = useMemo(() => people.map((person) => ({ title: person.name })), [people]);
+  const conversations = useMemo(
+    () => visibleLanesFor(buildConversations(feed, rooms, peopleRoster), feed, peopleTitles),
+    [feed, rooms, peopleRoster, peopleTitles],
+  );
+  const panel = useMemo(() => buildPanelLanes(conversations, people, feed, archivedLaneIds), [conversations, people, feed, archivedLaneIds]);
+  // Room-composer roster: live people (the external chief is invitable too).
+  const roster = useMemo(
+    () => panel.live.map((laneRow) => ({ name: laneRow.person?.name ?? laneRow.conversationId, provider: (laneRow.person?.provider ?? 'claude') as AgentInfo['provider'] })),
+    [panel.live],
+  );
+  const missionRooms = [MISSION_ROOM_ENTRY, ...panel.rooms];
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
   // S2 hard boundary: while the pinned room is selected the whole mission
   // surface renders from the snapshot — no live squad, transcript, composer.
@@ -251,7 +264,10 @@ export function MissionControl(props: MissionControlProps) {
         roster={roster}
         agents={props.agents}
         missionRooms={missionRooms}
-        directMessages={directMessages}
+        livePeople={panel.live}
+        quietPeople={panel.quiet}
+        archivedPeople={panel.archived}
+        peopleStale={peopleStale}
         selectedId={selectedId}
         onToggle={() => toggleRail('left')}
         onSelectConversation={selectConversation}
@@ -278,8 +294,10 @@ export function MissionControl(props: MissionControlProps) {
               confidence={props.confidence ?? null}
             />
 
-            <MissionStageStrip />
-
+            {/* MissionStageStrip hidden by ruling M4/D6 (2026-07-23): it
+                rendered hardcoded local state, and the non-snapshot surface
+                has no real mission-task input to derive it from yet. The
+                component remains exported for the future derivation. */}
             <section className="mc-panel mc-activity">
               <header>
                 <div>

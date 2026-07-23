@@ -401,3 +401,27 @@
 .msg-rail-more:hover {
   color: var(--msg-text);
 }
+
+/* Archived disclosure (#7): closed people leave the default view; the
+   collapsed summary is the only trace until Chris asks. */
+.msg-archived {
+  margin-top: var(--msg-sp-2);
+}
+
+.msg-archived-summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.msg-archived-summary::-webkit-details-marker {
+  display: none;
+}
+
+.msg-archived-summary::after {
+  content: ' ▸';
+  opacity: 0.5;
+}
+
+.msg-archived[open] .msg-archived-summary::after {
+  content: ' ▾';
+}

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
-import type { Conversation } from '../../../../lib/tunnelModel/index.js';
+import type { PanelPersonRow } from '../../../../lib/tunnelModel/panel/index.js';
 
 function initials(title: string): string {
   return title
@@ -38,18 +38,30 @@ export function AgentRow({ agent, selected, onSelect }: AgentRowProps) {
 }
 
 interface DirectMessageRowProps {
-  lane: Conversation;
-  /** The live agent behind the lane, when one is registered. History-only
-   * lanes (exited or never-registered agents) render without one — dropping
-   * the row instead would hide conversations the feed proves exist. */
-  agent: AgentInfo | undefined;
+  /** The shared agentId-keyed row (Task 2.3) — identity from the durable
+   * directory; history-only lanes render with person null (never dropped:
+   * the feed proves the conversation exists). */
+  personRow: PanelPersonRow;
   selected: boolean;
   onSelect?(): void;
 }
 
-/** One DIRECT MESSAGES lane row; renders from feed history even when no
- *  live agent is registered for the lane (M6). */
-export function DirectMessageRow({ lane, agent, selected, onSelect }: DirectMessageRowProps) {
+/** Presence: running PTY or live durable identity (an external chief with no
+ * PTY IS online — absence of runtime is not absence). */
+function rowOnline(personRow: PanelPersonRow): boolean {
+  return personRow.person?.runtime?.status === 'running'
+    || personRow.person?.durableStatus === 'live' || personRow.person?.durableStatus === 'spawning';
+}
+
+function rowStatusLine(personRow: PanelPersonRow): string {
+  if (!personRow.person) return personRow.lane?.lastMessageAt ? 'Recent activity' : 'No messages yet';
+  const status = personRow.person.runtime?.status ?? personRow.person.durableStatus ?? 'unregistered';
+  return `${personRow.person.provider} · ${status}`;
+}
+
+/** One DIRECT MESSAGES person row, keyed by durable agentId (ruling v2.1). */
+export function DirectMessageRow({ personRow, selected, onSelect }: DirectMessageRowProps) {
+  const name = personRow.person?.name ?? personRow.lane?.title ?? personRow.conversationId;
   return (
     <button
       type="button"
@@ -57,16 +69,12 @@ export function DirectMessageRow({ lane, agent, selected, onSelect }: DirectMess
       onClick={onSelect}
       disabled={!onSelect}
     >
-      <span className="mc-avatar">{initials(lane.title)}</span>
+      <span className="mc-avatar">{initials(name)}</span>
       <span className="mc-agent-copy">
-        <strong>{lane.title}</strong>
-        <small>
-          {agent
-            ? `${agent.provider} · ${agent.status}`
-            : lane.lastMessageAt ? 'Recent activity' : 'No messages yet'}
-        </small>
+        <strong>{name}</strong>
+        <small>{rowStatusLine(personRow)}</small>
       </span>
-      <span className={agent?.status === 'running' ? 'mc-status mc-status-live' : 'mc-status'} />
+      <span className={rowOnline(personRow) ? 'mc-status mc-status-live' : 'mc-status'} />
     </button>
   );
 }

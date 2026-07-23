@@ -36,10 +36,14 @@ function resolveActiveMissionId(records: Record<string, Array<{ block: Record<st
   }
   const freshness = (block: Record<string, unknown>): string =>
     (typeof block.updated === 'string' ? block.updated : typeof block.ts === 'string' ? block.ts : '');
-  const newestFirst = [...missions].sort((left, right) => freshness(right.block).localeCompare(freshness(left.block)));
-  const withTeam = newestFirst.find((mission) => typeof mission.block.id === 'string' && teamLinked.has(mission.block.id));
+  // S1 (mission_mission-control-ux): closed missions are excluded BEFORE any
+  // pick — a signed-off team-linked mission must never stay pinned as active.
+  const openNewestFirst = [...missions]
+    .filter((mission) => !CLOSED_MISSION_STATUSES.has(String(mission.block.status ?? '')))
+    .sort((left, right) => freshness(right.block).localeCompare(freshness(left.block)));
+  const withTeam = openNewestFirst.find((mission) => typeof mission.block.id === 'string' && teamLinked.has(mission.block.id));
   if (withTeam) return withTeam.block.id as string;
-  const open = newestFirst.find((mission) => !CLOSED_MISSION_STATUSES.has(String(mission.block.status ?? '')));
+  const open = openNewestFirst[0];
   return typeof open?.block.id === 'string' ? open.block.id : null;
 }
 

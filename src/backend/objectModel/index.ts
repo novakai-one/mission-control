@@ -195,6 +195,17 @@ export class ObjectModel {
     return refs?.find((entry) => entry.kind === 'mission')?.value ?? null;
   }
 
+  /** Every durable Agent, folded by id — a replayed/amended line never yields
+   * two people (same last-wins law as the store fold). */
+  listAgents(): AgentBlock[] {
+    const folded = new Map<string, AgentBlock>();
+    for (const entry of this.storeRecords('agents.jsonl')) {
+      const block = entry.block as AgentBlock;
+      if (typeof block?.id === 'string') folded.set(block.id, block);
+    }
+    return [...folded.values()];
+  }
+
   /** Every durable agent on a mission (membership derives from Agent refs — single authority). */
   missionAgents(missionId: string): AgentBlock[] {
     return this.storeRecords('agents.jsonl')

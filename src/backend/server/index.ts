@@ -23,6 +23,7 @@ import { MailboxRegistry, MessagingHub, rosterFromAgents } from '../messaging/in
 import { MissionViewHub } from '../missionView/index.js';
 import { ObjectModel } from '../objectModel/index.js';
 import { ExternalSessionsHub } from '../externalSessions/index.js';
+import { PeopleHub } from '../people/index.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
@@ -291,6 +292,7 @@ export class ServerController {
     this.messagingHub.registerRoutes(this.app);
     this.missionViewHub.registerRoutes(this.app);
     this.externalSessionsHub.registerRoutes(this.app);
+    new PeopleHub(this.objectModel, () => this.agentsHub.terminals.list(), process.env.NVK_MISSION_ROOMS ?? path.resolve('.novakai-command/rooms.jsonl')).registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {
       res.json(ConfigManager.load());

@@ -97,9 +97,11 @@ function testPulse(snapshot: MissionSnapshot): void {
 function testMissionAndObjective(snapshot: MissionSnapshot): void {
   assert.equal(snapshot.mission.owner.value, 'chief-kimi', 'owner stays a raw sourced field');
   assert.deepEqual(snapshot.assignments, [], 'owner is never promoted into assignments (S4)');
+  assert.deepEqual(snapshot.declaredRoles, [], 'no declared roles on the fixture mission');
+  assert.deepEqual(snapshot.members, [], 'no durable agent refs this mission');
   assert.equal(snapshot.objective?.value, 'O10 truth integrity');
   assert.equal(snapshot.objective?.sourceRefs[0].store, 'okrs');
-  assert.deepEqual(snapshot.presences, [], 'no mission-explicit bound presence exists');
+  assert.deepEqual(snapshot.presences, [], 'no mission-linked presence exists');
   assert.deepEqual(snapshot.currentActivity, []);
 }
 
