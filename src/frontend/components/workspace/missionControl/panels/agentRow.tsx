@@ -41,7 +41,7 @@ interface DirectMessageRowProps {
   /** The shared agentId-keyed row (Task 2.3) — identity from the durable
    * directory; history-only lanes render with person null (never dropped:
    * the feed proves the conversation exists). */
-  row: PanelPersonRow;
+  personRow: PanelPersonRow;
   selected: boolean;
   onSelect?(): void;
 }
@@ -60,8 +60,7 @@ function rowStatusLine(personRow: PanelPersonRow): string {
 }
 
 /** One DIRECT MESSAGES person row, keyed by durable agentId (ruling v2.1). */
-export function DirectMessageRow({ row, selected, onSelect }: DirectMessageRowProps) {
-  const personRow = row;
+export function DirectMessageRow({ personRow, selected, onSelect }: DirectMessageRowProps) {
   const name = personRow.person?.name ?? personRow.lane?.title ?? personRow.conversationId;
   return (
     <button

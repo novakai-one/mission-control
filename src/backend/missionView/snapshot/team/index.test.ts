@@ -67,8 +67,9 @@ function teamStores(): Record<StoreName, RawRecord[]> {
 }
 
 /** Durable-only external Chief + runtime-backed worker + member with no task
- * + assigned todo/doing/blocked + retired member — every fact separate. */
-function testTeamJoin(): void {
+ * + assigned todo/doing/blocked + retired member — every fact separate.
+ * Membership half of the composed case (same fixture). */
+function testTeamJoinMembership(): void {
   const registryWorker = { ...agentEntry('agent_worker'), title: 'Worker Fable UX' } as unknown as RegistryEntry;
   const snapshot = deriveSnapshot(makeFacts(linked('mission_a', teamStores()), {
     stores: teamStores(),
@@ -82,7 +83,17 @@ function testTeamJoin(): void {
   assert.deepEqual(snapshot.members.map((member) => member.agentId),
     ['agent_chief', 'agent_idle', 'agent_worker', 'agent_retired'],
     'membership from typed refs — live first then name, retired still a member');
+}
 
+/** Presence half of the composed case: external chief honest, runtime-backed
+ * worker carries the registry's word, no-session members stay out. */
+function testTeamJoinPresence(): void {
+  const registryWorker = { ...agentEntry('agent_worker'), title: 'Worker Fable UX' } as unknown as RegistryEntry;
+  const snapshot = deriveSnapshot(makeFacts(linked('mission_a', teamStores()), {
+    stores: teamStores(),
+    registry: [registryWorker],
+    registryObservedAt: '2026-07-21T12:30:00.000Z',
+  }));
   // Presence: external chief (no registry entry) is an HONEST external row.
   const chief = snapshot.presences.find((presence) => presence.agentId === 'agent_chief');
   assert.equal(chief?.status, 'external', 'no PTY claim — external session');
@@ -96,7 +107,6 @@ function testTeamJoin(): void {
   // Idle member has no session pointer → member, not presence; retired → never.
   assert.ok(!snapshot.presences.some((presence) => presence.agentId === 'agent_idle'));
   assert.ok(!snapshot.presences.some((presence) => presence.agentId === 'agent_retired'));
-
 }
 
 /** Assignments/activity half of the composed case (same fixture). */
@@ -172,7 +182,8 @@ function testTeamJoinWidth(): void {
 }
 
 
-testTeamJoin();
+testTeamJoinMembership();
+testTeamJoinPresence();
 testTeamJoinAssignments();
 testAttentionClearsPerFact();
 testTeamJoinProblems();

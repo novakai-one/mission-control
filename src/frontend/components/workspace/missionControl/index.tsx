@@ -123,7 +123,7 @@ export function MissionControl(props: MissionControlProps) {
   const panel = useMemo(() => buildPanelLanes(conversations, people, feed, archivedLaneIds), [conversations, people, feed, archivedLaneIds]);
   // Room-composer roster: live people (the external chief is invitable too).
   const roster = useMemo(
-    () => panel.live.map((row) => ({ name: row.person?.name ?? row.conversationId, provider: (row.person?.provider ?? 'claude') as AgentInfo['provider'] })),
+    () => panel.live.map((laneRow) => ({ name: laneRow.person?.name ?? laneRow.conversationId, provider: (laneRow.person?.provider ?? 'claude') as AgentInfo['provider'] })),
     [panel.live],
   );
   const missionRooms = [MISSION_ROOM_ENTRY, ...panel.rooms];

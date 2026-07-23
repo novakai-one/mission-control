@@ -191,7 +191,7 @@ export function MissionRail(props: MissionRailProps) {
         {[...props.livePeople, ...props.quietPeople].map((personRow) => (
           <DirectMessageRow
             key={personRow.rowId}
-            row={personRow}
+            personRow={personRow}
             selected={personRow.conversationId === props.selectedId}
             onSelect={() => selectRow(personRow, props)}
           />
