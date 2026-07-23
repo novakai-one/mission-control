@@ -117,4 +117,21 @@ const provingConfirmer: EffectConfirmer = {
   console.log('normal unverified-note test passed');
 }
 
+// --- mailbox recipient: the append IS the record — exactly one queued row ----
+
+{
+  const harness = makeHarness(provingConfirmer);
+  const message = envelope({ 'to': 'kimi', delivery: 'normal', body: 'for the orchestrator inbox' });
+  const receipt = await harness.router.route(message);
+  assert.equal(receipt.mode, 'mailbox');
+
+  await settle(20);
+  const trail = trailFor(harness.storePath, message.id);
+  assert.deepEqual(trail.map((entry) => entry.status), ['queued'],
+    'mailbox trail is exactly one queued row — zero amendments (ruling R1/A2)');
+  assert.equal(trail[0]?.outcome, undefined, 'no outcome is claimed for an effect nobody can prove');
+  assert.equal(harness.writes.length + harness.submits.length, 0, 'nothing typed into any PTY');
+  console.log('mailbox honest-queued test passed');
+}
+
 console.log('normal-send honesty tests passed');
