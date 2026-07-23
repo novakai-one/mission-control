@@ -67,7 +67,7 @@ function makeTerminals(model: ObjectModel, failLaunch: boolean, state: FakeTermi
       }));
     },
     write: () => true, submit: () => true, resize: () => true, rename: () => true, kill: () => true, archive: () => true,
-    snapshot: () => '', list: () => [],
+    snapshot: () => '', activity: () => null, list: () => [],
     onData: () => {}, onExit: () => {},
     onSession: (callback) => { state.fireSession = callback; },
   };

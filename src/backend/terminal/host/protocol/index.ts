@@ -1,4 +1,4 @@
-import type { AgentInfo, CreateAgentOptions } from '../../manager.js';
+import type { AgentActivity, AgentInfo, CreateAgentOptions } from '../../manager.js';
 
 export const TERMINAL_HOST_PROTOCOL = 1;
 
@@ -6,6 +6,11 @@ export interface AgentSnapshot {
   info: AgentInfo;
   data: string;
   cursor: number;
+  /** PTY-owner activity stamp; absent on hosts that predate stall detection.
+   * Optional-additive on purpose — protocol stays v1: an old host omitting it
+   * makes the client fall back to a conservative connect-time clock, an old
+   * client ignores it. */
+  activity?: AgentActivity;
 }
 
 /** One timed provider submission (type → settle → \r → optional flush \r),
