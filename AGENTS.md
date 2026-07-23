@@ -81,7 +81,9 @@ Refs are typed. Allowed kinds are `task`, `mission`, `project`, `doc`,
 `decision`, `log`, `exp`, `objective`, `request`, `issue`, `session`,
 `learning`, `team`, `agent`, `artifact`, and `thread`.
 
-For append-only writes, use `scripts/nvk-store.mjs append`. For state
+For append-only writes, use `scripts/nvk-store.mjs append`. For filing a
+whole mission (mission + team + optional task rows in one validated call),
+use `scripts/nvk-mission.mjs create`. For state
 transitions (task status, agent session attach), use the intent-named
 transition path (`scripts/nvk-store.mjs transition-task`, or the backend
 object-model module) — a locked, CAS-guarded, fully validated atomic
