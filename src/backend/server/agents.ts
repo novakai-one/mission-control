@@ -17,6 +17,8 @@ import { SessionWatcher, CLAUDE_DIR, listSessions } from '../transcript/parser.j
 import { SubagentWatcher } from '../transcript/subagents/index.js';
 import type { SessionControlIntent } from '../../shared/sessionControl.js';
 import { SessionControl } from '../terminal/control/index.js';
+import { deriveHealth, thresholdsFromEnv, type AgentHealth, type HealthThresholds } from '../terminal/health/index.js';
+import { NudgeAction } from '../terminal/nudge/index.js';
 import { ObjectModel } from '../objectModel/index.js';
 import { resolveMissionSpawn } from './missionSpawn/index.js';
 
@@ -50,6 +52,9 @@ export class AgentsHub {
   private readonly sessionListeners: Array<(info: AgentInfo) => void> = [];
   private readonly launchListeners: Array<(info: AgentInfo) => void> = [];
   private readonly sessionControl: SessionControl;
+  private readonly nudge: NudgeAction;
+  /** Ruled stall thresholds, read once at composition (env overrides are rig-only). */
+  private readonly thresholds: HealthThresholds = thresholdsFromEnv();
 
   constructor(
     private readonly sockets: Set<WebSocket>,
@@ -58,8 +63,11 @@ export class AgentsHub {
     private readonly mailboxLookup: MailboxLookup = mailboxIdentityFor,
     /** The durable mission graph — absent in setups without stores (tests). */
     private readonly objectModel?: ObjectModel,
+    /** Injectable nudge record path (tests); defaults inside NudgeAction. */
+    nudgeRecordPath?: string,
   ) {
     this.sessionControl = new SessionControl(this.manager);
+    this.nudge = new NudgeAction(this.manager, nudgeRecordPath);
     this.manager.onData((agentId, data) => {
       this.sendToSubscribers(agentId, { type: 'agent-data', agentId, data });
     });
@@ -115,7 +123,9 @@ export class AgentsHub {
 
   registerRoutes(application: Express): void {
     application.post('/api/agents', (request, response) => this.createAgent(request, response));
-    application.get('/api/agents', (_request, response) => response.json({ agents: this.manager.list() }));
+    application.get('/api/agents', (_request, response) => response.json({ agents: this.listWithHealth() }));
+    application.get('/api/agents/:agentId/health', (request, response) => this.agentHealth(request, response));
+    application.post('/api/agents/:agentId/nudge', (request, response) => this.nudgeAgent(request, response));
     application.get('/api/agents/:agentId/identity', (request, response) => this.agentIdentity(request, response));
     application.patch('/api/agents/:agentId', (request, response) => this.renameAgent(request, response));
     application.post('/api/agents/:agentId/kill', (request, response) => this.killAgent(request, response));
@@ -128,6 +138,42 @@ export class AgentsHub {
     this.broadcastAgentsChanged();
     for (const listener of this.launchListeners) listener(info);
     return info;
+  }
+
+  /** Health is derived at read time — never stored, never broadcast stale.
+   * The agents-changed ws frames stay plain AgentInfo on purpose: a pushed
+   * health snapshot silently ages; consumers poll the REST surface instead. */
+  private healthFor(info: AgentInfo): AgentHealth | null {
+    return deriveHealth(info.status, this.manager.activity(info.agentId), Date.now(), this.thresholds);
+  }
+
+  private listWithHealth(): Array<AgentInfo & { health: AgentHealth | null }> {
+    return this.manager.list().map((info) => ({ ...info, health: this.healthFor(info) }));
+  }
+
+  private agentHealth(request: Request, response: Response): void {
+    const info = this.manager.list().find((agent) => agent.agentId === request.params.agentId);
+    if (!info) {
+      response.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    response.json({ agentId: info.agentId, status: info.status, health: this.healthFor(info) });
+  }
+
+  private nudgeAgent(request: Request, response: Response): void {
+    const agentId = request.params.agentId;
+    const info = this.manager.list().find((agent) => agent.agentId === agentId);
+    if (!info) {
+      response.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    const healthBefore = this.healthFor(info);
+    const result = this.nudge.execute(agentId, healthBefore);
+    if (result.status === 'rejected') {
+      response.status(409).json({ error: result.reason });
+      return;
+    }
+    response.status(202).json({ agentId, nudgeId: result.nudgeId, healthBefore });
   }
 
   private handleExit(agentId: string, exitCode: number | null): void {
