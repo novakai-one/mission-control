@@ -32,9 +32,19 @@ authority, `AGENTS.md` teams.jsonl entry).
 
 ## 1. File the mission and team
 
-Both are plain append-only blocks; there is no dedicated CLI verb or API
-route for either (verified: `ObjectModel.createTeam` has zero callers outside
-the class — no route, no script). Use the generic sanctioned append:
+Preferred path: one verb files the whole mission (mission + team + optional
+task rows, validated refs, baseline enrollment) through the engine:
+
+```bash
+node scripts/nvk-mission.mjs create --dir .novakai/stores --id mission_<slug> \
+  --title "…" --owner <chief> --project proj_<slug> --team-name "Team <Name>"
+```
+
+(`--task "<title>" --agent agent_<id>` adds task rows — only possible once the
+mission's agents exist, see §3; `--dry-run` prints the exact rows first.)
+
+Both rows are plain append-only blocks; the generic sanctioned append remains
+valid as the row-at-a-time reference:
 
 ```bash
 node scripts/nvk-store.mjs append --dir .novakai/stores --store missions.jsonl \
@@ -102,7 +112,11 @@ zero external callers) — use the generic append. Transitions have a
 sanctioned, intent-named CLI verb — never hand-edit:
 
 ```bash
-# create (generic append; refs: mission required, agent when assigned)
+# create (generic append; refs: mission required, and M1 write-strict law makes
+# the agent ref REQUIRED on every NEW mission task — the agent's own mission ref
+# must agree (validate.mjs validateTaskAuthority; legacy agentless rows are
+# audit-exempt). Corollary: tasks for a brand-new mission can only be filed
+# AFTER its agents exist — file mission + team, spawn agents, then file tasks.)
 node scripts/nvk-store.mjs append --dir .novakai/stores --store tasks.jsonl \
   --line '{"id":"task_<slug>","kind":"task","ts":"<ISO>","title":"…","status":"todo","updated":"<ISO>","refs":[{"kind":"mission","value":"mission_<slug>"},{"kind":"agent","value":"agent_<uuid>"}]}'
 
@@ -171,7 +185,7 @@ npm run stores:gate
 
 | Domain intent | Sanctioned surface today | Evidence |
 |---|---|---|
-| Create mission / team | generic `nvk-store.mjs append` | zero callers of `createTeam`; nvk-store.mjs:5 |
+| Create mission / team | `nvk-mission.mjs create` (one verb, whole filing) | scripts/nvk-mission.mjs:2; generic append remains the row-at-a-time fallback |
 | Spawn agent w/ refs | `POST /api/agents` + missionId/teamId | missionSpawn/index.ts:24-31 |
 | Attach session | automatic | agents.ts:80 |
 | Mark launch failure | automatic | agents.ts:306 |
