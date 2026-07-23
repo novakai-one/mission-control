@@ -41,6 +41,9 @@ const messagingHub = new MessagingHub(
     roomsStorePath: join(root, 'rooms.jsonl'),
     mailboxRegistry: MailboxRegistry.inMemory(),
     timings: { interruptSettleMs: 0, submitDelayMs: 0 },
+    // Fake sessionIds — the real transcript confirmer would poll for files
+    // that never exist. null disables confirmation; sends note it honestly.
+    effectConfirmer: null,
   },
 );
 const application = express();
@@ -69,7 +72,7 @@ async function testWorkerCanDeliverToKimiMailbox(): Promise<void> {
   writes.length = 0;
   const reply = await post({ from: 'codex-1', 'to': 'kimi', body: 'done' });
   assert.equal(reply.status, 201);
-  assert.equal(reply.json.envelope.status, 'delivered');
+  assert.equal(reply.json.envelope.status, 'queued', 'mailbox honesty: the record IS the delivery (R1)');
   assert.equal(writes.length, 0, 'mailbox delivery writes no PTY bytes');
   assert.equal((await history('kimi')).at(-1)?.body, 'done');
 }
@@ -100,7 +103,7 @@ async function testCliDeliveryAndDiscovery(): Promise<void> {
     'scripts/nvk-msg.mjs', 'send', '--from', 'codex-1', '--to', 'kimi', 'cli done',
   ], options);
   assert.equal(send.stderr, '');
-  assert.match(send.stdout, /→ kimi \(delivered\)/);
+  assert.match(send.stdout, /→ kimi \(queued\)/, 'the CLI honestly reports the mailbox terminal state — zero script changes (A4)');
   assert.equal((await history('kimi')).at(-1)?.body, 'cli done');
 
   const names = await execFileAsync(process.execPath, ['scripts/nvk-msg.mjs', 'names'], options);

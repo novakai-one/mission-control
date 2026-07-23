@@ -144,13 +144,15 @@ Interfaces (as drawn on the canvas):
 
 States: `queued` (journaled, nothing written) → `accepted` (bytes written to
 the PTY) → `delivered` (effect proven). Rooms keep `partial`; any error path
-settles `failed`. For **interrupts**, `delivered` is claimed ONLY when the
-recipient's own transcript shows the inbound marker (`[nvk-msg from <name>
-id <msgId>]`) as a new user turn; the amendment carries the evidence
-(`outcome`: acceptedAt/confirmedAt, agentId, sessionId, provider, transcript
-event). No proof within the window → the envelope honestly stays `accepted`
-with a note. **Normal** sends keep write-claimed `delivered` (documented
-receipt semantics — the D1 MUST covers interrupts).
+settles `failed`. For **every direct PTY send — normal and interrupt —**
+`delivered` is claimed ONLY when the recipient's own transcript shows the
+inbound marker (`[nvk-msg from <name> id <msgId>]`) as a new user turn; the
+amendment carries the evidence (`outcome`: acceptedAt/confirmedAt, agentId,
+sessionId, provider, transcript event). No proof within the window → the
+envelope honestly stays `accepted` with a note. **Mailbox** recipients (no
+PTY, no transcript) settle at `queued` — the append is the record, and
+reconciliation never re-routes them
+(mission_transcript-proof-normal-sends).
 
 The timed type→settle→submit→flush sequence is ONE job owned by the
 PTY-hosting process (`submit` in the host protocol), keyed by message id and

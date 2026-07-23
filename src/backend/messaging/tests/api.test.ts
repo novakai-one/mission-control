@@ -40,6 +40,9 @@ const messagingHub = new MessagingHub(
     timings: { interruptSettleMs: 0, submitDelayMs: 0 },
     spawnBriefingDelayMs: 5,
     serverPort: 3031,
+    // Fake sessionIds — the real transcript confirmer would poll for files
+    // that never exist. null disables confirmation; sends note it honestly.
+    effectConfirmer: null,
   },
 );
 
@@ -70,18 +73,19 @@ async function getMessages(query: string): Promise<MessageEnvelope[]> {
   return (await response.json()).messages;
 }
 
-async function testSendDeliversAndBroadcasts(): Promise<void> {
+async function testSendAcceptsAndBroadcasts(): Promise<void> {
   const { status, json } = await post({ from: 'claude-1', 'to': 'codex-1', body: 'ship it' });
   assert.equal(status, 201);
-  assert.equal(json.envelope.status, 'delivered');
+  assert.equal(json.envelope.status, 'accepted', 'bytes written claim accepted, never delivered (D1 honesty)');
+  assert.match(String(json.envelope.outcome?.note), /effect unverifiable/, 'no confirmer in this rig — noted honestly');
   assert.match(json.envelope.id, /^msg_/);
   assert.equal(writes[0]?.agentId, 'agent_2');
   assert.equal(writes[0]?.data, `[nvk-msg from claude-1 id ${json.envelope.id}] ship it`);
   assert.equal(writes[1]?.data, '\r');
   assert.deepEqual(
     broadcasts.map((entry) => `${entry.event}:${entry.payload.status}`),
-    ['message-envelope:queued', 'message-envelope:delivered'],
-    'every appended envelope reaches the ws broadcast',
+    ['message-envelope:queued', 'message-envelope:accepted', 'message-envelope:accepted'],
+    'every appended envelope reaches the ws broadcast (accepted + honest note amendment)',
   );
 }
 
@@ -140,17 +144,17 @@ async function testDeadAgentIsNeverBriefed(): Promise<void> {
   assert.equal(writes.length, 0, 'no briefing typed for an agent missing from the roster');
 }
 
-async function testChrisDirectMessageDeliveredViaUi(): Promise<void> {
+async function testChrisDirectMessageQueuedViaUi(): Promise<void> {
   writes.length = 0;
   broadcasts.length = 0;
   const { status, json } = await post({ from: 'claude-1', 'to': 'chris', body: 'boss ping' });
   assert.equal(status, 201, 'DM to chris is a first-class send');
-  assert.equal(json.envelope.status, 'delivered');
+  assert.equal(json.envelope.status, 'queued', 'mailbox recipients honestly stay queued — the record IS the delivery (R1)');
   assert.equal(writes.length, 0, 'nothing is typed into a PTY for the human');
   assert.deepEqual(
     broadcasts.map((entry) => `${entry.event}:${entry.payload.status}`),
-    ['message-envelope:queued', 'message-envelope:delivered'],
-    'chris DM rides the ws broadcast like any envelope',
+    ['message-envelope:queued'],
+    'one append, one broadcast — no status amendment claims an unprovable effect',
   );
   const inbox = await getMessages('?withAgent=chris');
   assert.equal(inbox[0]?.body, 'boss ping', 'chris reads his inbox from the log');
@@ -271,7 +275,7 @@ async function testOwnerTeamPostReachesEveryLiveAgent(): Promise<void> {
 async function testAgentsCanReplyToUserInbox(): Promise<void> {
   const reply = await post({ from: 'codex-1', 'to': 'chris', body: 'Reply visible in Mission Control.' });
   assert.equal(reply.status, 201, 'Chris is a registered recipient even though he has no PTY');
-  assert.equal(reply.json.envelope.status, 'delivered');
+  assert.equal(reply.json.envelope.status, 'queued', 'mailbox honesty: queued is the terminal state (R1)');
 }
 
 async function testOpenBrowserTabsUpgradeToRegisteredIdentity(): Promise<void> {
@@ -295,13 +299,13 @@ async function testOpenBrowserTabsUpgradeToRegisteredIdentity(): Promise<void> {
 }
 
 try {
-  await testSendDeliversAndBroadcasts();
+  await testSendAcceptsAndBroadcasts();
   await testHistoryQueryFilters();
   await testInvalidSendsRejectedBeforeRecording();
   await testFailureStatusCodes();
   await testSpawnBriefingTypedIntoNewAgentPty();
   await testDeadAgentIsNeverBriefed();
-  await testChrisDirectMessageDeliveredViaUi();
+  await testChrisDirectMessageQueuedViaUi();
   await testReservedNamesRejected();
   await testProviderValidation();
   await testRegisteredUserIdentityOwnsBrowserSends();
