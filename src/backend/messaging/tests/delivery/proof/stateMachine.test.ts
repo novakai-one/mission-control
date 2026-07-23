@@ -2,17 +2,17 @@
 // accepted→delivered with transcript proof persisted as evidence; honest
 // timeout note; per-agent serialization; host-submission dedupe making the
 // reconciliation retry idempotent; accepted-never-retyped on reconcile.
-// Run with `npx tsx src/backend/messaging/tests/delivery/stateMachine.test.ts`.
+// Run with `npx tsx src/backend/messaging/tests/delivery/proof/stateMachine.test.ts`.
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MessageStore } from '../../store/index.js';
-import { RoomStore } from '../../rooms/index.js';
-import { PtyDelivery } from '../../delivery/index.js';
-import { MessageRouter, InterruptRateLimiter } from '../../router/index.js';
-import type { EffectConfirmer } from '../../confirm/index.js';
-import type { AgentAddress, MessageEnvelope } from '../../types.js';
+import { MessageStore } from '../../../store/index.js';
+import { RoomStore } from '../../../rooms/index.js';
+import { PtyDelivery } from '../../../delivery/index.js';
+import { MessageRouter, InterruptRateLimiter } from '../../../router/index.js';
+import type { EffectConfirmer } from '../../../confirm/index.js';
+import type { AgentAddress, MessageEnvelope } from '../../../types.js';
 
 const roster: AgentAddress[] = [
   { agentId: 'agent_r1', name: 'worker-1', provider: 'claude' },

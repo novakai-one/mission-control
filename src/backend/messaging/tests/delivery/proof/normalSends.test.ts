@@ -6,17 +6,17 @@
 // Channel and room fan-out semantics are unchanged (R3).
 // Every assertion reads the PERSISTED trail from the JSONL store file —
 // confirmation is fire-and-record, so in-memory reads race the amendment.
-// Run with `npx tsx src/backend/messaging/tests/delivery/normalSends.test.ts`.
+// Run with `npx tsx src/backend/messaging/tests/delivery/proof/normalSends.test.ts`.
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MessageStore } from '../../store/index.js';
-import { RoomStore } from '../../rooms/index.js';
-import { PtyDelivery } from '../../delivery/index.js';
-import { MessageRouter, InterruptRateLimiter } from '../../router/index.js';
-import type { EffectConfirmer } from '../../confirm/index.js';
-import type { AgentAddress, MessageEnvelope } from '../../types.js';
+import { MessageStore } from '../../../store/index.js';
+import { RoomStore } from '../../../rooms/index.js';
+import { PtyDelivery } from '../../../delivery/index.js';
+import { MessageRouter, InterruptRateLimiter } from '../../../router/index.js';
+import type { EffectConfirmer } from '../../../confirm/index.js';
+import type { AgentAddress, MessageEnvelope } from '../../../types.js';
 
 const roster: AgentAddress[] = [
   { agentId: 'agent_n1', name: 'worker-1', provider: 'claude' },
