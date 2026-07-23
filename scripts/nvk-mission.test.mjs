@@ -114,4 +114,65 @@ const audit = (dir) => spawnSync('node', [STORE_CLI, 'audit', '--dir', dir], { e
   rmSync(dir, { recursive: true, force: true });
 }
 
+// T5 — duplicate mission id (fixture has mission_fixture-prime): exit 1, nothing written
+{
+  const dir = freshDir();
+  const before = readFileSync(path.join(dir, 'missions.jsonl'));
+  const result = run(['create', '--dir', dir, '--id', 'mission_fixture-prime', '--title', 'dup', '--owner', 'x']);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /already exists/);
+  assert.ok(readFileSync(path.join(dir, 'missions.jsonl')).equals(before));
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// T6 — later-row collision caught BEFORE byte one: --team-id colliding with an
+// existing task id must leave missions.jsonl untouched (preflight, not partial)
+{
+  const dir = freshDir();
+  const before = readFileSync(path.join(dir, 'missions.jsonl'));
+  const result = run(['create', '--dir', dir, '--id', 'mission_t6', '--title', 'T6', '--owner', 'x',
+    '--team-name', 'T6', '--team-id', 'task_fixture-alpha']);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /task_fixture-alpha.*already exists/);
+  assert.ok(readFileSync(path.join(dir, 'missions.jsonl')).equals(before), 'preflight must refuse before the first append');
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// T7 — unresolvable project ref: engine rejects the FIRST append, zero rows written
+{
+  const dir = freshDir();
+  const before = readFileSync(path.join(dir, 'missions.jsonl'));
+  const result = run(['create', '--dir', dir, '--id', 'mission_t7', '--title', 'T7', '--owner', 'x', '--project', 'proj_nope']);
+  assert.equal(result.status, 1);
+  assert.ok(readFileSync(path.join(dir, 'missions.jsonl')).equals(before));
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// T9 — dry-run: full plan printed, nothing written anywhere
+{
+  const dir = freshDir();
+  const snapshotBefore = ['missions.jsonl', 'teams.jsonl', 'tasks.jsonl'].map((name) => readFileSync(path.join(dir, name)));
+  const result = run(['create', '--dir', dir, '--id', 'mission_t9', '--title', 'T9', '--owner', 'x',
+    '--team-name', 'Team T9', '--dry-run']);
+  assert.equal(result.status, 0, result.stderr);
+  const out = result.stdout.trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(out.map((row) => row.wouldAppend), ['mission_t9', 'team_t9']);
+  for (const row of out) assert.doesNotThrow(() => JSON.parse(row.line));
+  ['missions.jsonl', 'teams.jsonl', 'tasks.jsonl'].forEach((name, index) => {
+    assert.ok(readFileSync(path.join(dir, name)).equals(snapshotBefore[index]), `${name} must be untouched by --dry-run`);
+  });
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// T10 — R1: --task without --agent is a usage refusal (M1), nothing written
+{
+  const dir = freshDir();
+  const before = readFileSync(path.join(dir, 'missions.jsonl'));
+  const result = run(['create', '--dir', dir, '--id', 'mission_t10', '--title', 'T10', '--owner', 'x', '--task', 'orphan task']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--task requires --agent/);
+  assert.ok(readFileSync(path.join(dir, 'missions.jsonl')).equals(before));
+  rmSync(dir, { recursive: true, force: true });
+}
+
 console.log('nvk-mission tests passed');
