@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Visual Phrasebook — Chris's Reference</title>
+<style>
+  :root{
+    --bg:#FAF7F2; --card:#FFFFFF; --ink:#2E3238; --ink-soft:#5A6068;
+    --line:#E3DED6; --slate:#5B7A99; --sage:#7A9B76; --mauve:#9B8299;
+    --terra:#B0816A; --grey:#8B8FA3; --cream:#F3EFE7;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth; scroll-padding-top:70px;}
+  body{font-family:Georgia,'Times New Roman',serif; background:var(--bg); color:var(--ink); line-height:1.5;}
+  code,.mono{font-family:'Courier New',monospace;}
+
+  /* sticky nav */
+  nav{position:sticky; top:0; z-index:50; background:rgba(250,247,242,.95); backdrop-filter:blur(4px);
+      border-bottom:1px solid var(--line); padding:10px 20px; display:flex; flex-wrap:wrap; gap:6px 16px;
+      font-size:13px; align-items:center;}
+  nav .brand{font-weight:bold; margin-right:12px; color:var(--slate);}
+  nav a{color:var(--ink-soft); text-decoration:none; padding:2px 6px; border-radius:4px;}
+  nav a:hover{background:var(--cream); color:var(--ink);}
+
+  header.hero{max-width:1100px; margin:0 auto; padding:56px 24px 24px; text-align:center;}
+  header.hero h1{font-size:42px; color:var(--slate); letter-spacing:-0.5px;}
+  header.hero p.sub{font-size:18px; color:var(--ink-soft); margin-top:10px;}
+  header.hero p.date{font-size:13px; color:var(--grey); margin-top:8px;}
+
+  main{max-width:1100px; margin:0 auto; padding:0 24px 60px;}
+
+  /* chooser */
+  #chooser{background:var(--card); border:2px solid var(--slate); border-radius:12px;
+           padding:28px; margin:20px 0 48px; box-shadow:0 4px 14px rgba(46,50,56,.08);}
+  #chooser h2{font-size:24px; color:var(--slate); margin-bottom:6px;}
+  #chooser p.lead{color:var(--ink-soft); margin-bottom:18px;}
+  .desires{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px;}
+  .desires a{display:block; background:var(--cream); border:1px solid var(--line); border-radius:8px;
+             padding:12px 14px; text-decoration:none; color:var(--ink); font-size:15px;
+             transition:transform .12s ease, box-shadow .12s ease;}
+  .desires a:hover{transform:translateY(-2px); box-shadow:0 4px 10px rgba(46,50,56,.10); border-color:var(--slate);}
+  .desires a .go{color:var(--slate); font-size:12px; display:block; margin-top:3px;}
+
+  /* family sections */
+  section.family{margin-bottom:56px;}
+  section.family h2{font-size:28px; margin-bottom:4px; color:var(--ink);}
+  section.family p.fam-desc{color:var(--ink-soft); margin-bottom:20px; font-size:15px;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:18px;}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px;
+        box-shadow:0 2px 6px rgba(46,50,56,.05); display:flex; flex-direction:column; gap:10px;}
+  .card h3{font-size:17px; color:var(--slate);}
+  .card p.what{font-size:13.5px; color:var(--ink-soft);}
+  .card svg{width:100%; height:auto; background:var(--cream); border:1px solid var(--line); border-radius:6px;}
+  .card .when{font-size:13px;}
+  .card .when b{color:var(--terra);}
+  .card .say{font-size:13px; background:var(--cream); border-left:3px solid var(--sage);
+             padding:8px 10px; border-radius:0 6px 6px 0; font-style:italic; color:var(--ink-soft);}
+
+  table.cmp{width:100%; border-collapse:collapse; font-size:13px; background:#fff;}
+  table.cmp th, table.cmp td{border:1px solid var(--line); padding:6px 8px; text-align:left;}
+  table.cmp th{background:var(--cream); color:var(--ink);}
+
+  footer{max-width:1100px; margin:0 auto; padding:30px 24px 50px; text-align:center;
+         color:var(--grey); font-size:12.5px; border-top:1px solid var(--line);}
+
+  @media print{
+    nav{display:none;} html{scroll-behavior:auto;}
+    .card{break-inside:avoid; box-shadow:none;}
+    .desires a{transform:none; box-shadow:none;}
+  }
+  @media (max-width:760px){ header.hero h1{font-size:30px;} }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">📖 Visual Phrasebook</span>
+  <a href="#chooser">🎯 Chooser</a>
+  <a href="#flow">🔀 Flow</a>
+  <a href="#structure">🏗️ Structure</a>
+  <a href="#time">📅 Time</a>
+  <a href="#data">📈 Data</a>
+  <a href="#relationships">🧮 Relationships</a>
+  <a href="#people">👤 People</a>
+  <a href="#product">🖥️ Product</a>
+</nav>
+
+<header class="hero">
+  <h1>The Visual Phrasebook</h1>
+  <p class="sub">What to ask for, and what you'll get — a personal reference for Chris</p>
+  <p class="date">Novakai Command · 2026-07-27</p>
+</header>
+
+<main>
+
+<!-- ============ CHOOSER ============ -->
+<section id="chooser">
+  <h2>🎯 Start with what you want</h2>
+  <p class="lead">Don't know the name of the diagram? Start from the desire — click through to the family that delivers it.</p>
+  <div class="desires">
+    <a href="#flow">“I want to see what happens next.”<span class="go">→ 🔀 Flow &amp; Process</span></a>
+    <a href="#relationships">“I want to compare options.”<span class="go">→ 🧮 Relationships &amp; Comparison</span></a>
+    <a href="#data">“I want to see who's overloaded.”<span class="go">→ 📈 Data &amp; Quantity (bar / heatmap)</span></a>
+    <a href="#structure">“I want to see how things connect.”<span class="go">→ 🏗️ Structure &amp; Architecture</span></a>
+    <a href="#time">“I want to track time / deadlines.”<span class="go">→ 📅 Time &amp; Planning</span></a>
+    <a href="#funnel">“I want to see where things drop off.”<span class="go">→ 📈 Funnel</span></a>
+    <a href="#structure">“I want to see the big-picture structure.”<span class="go">→ 🏗️ Structure &amp; Architecture</span></a>
+    <a href="#data">“I want to see trends / amounts.”<span class="go">→ 📈 Data &amp; Quantity</span></a>
+    <a href="#people">“I want to see what the user experiences.”<span class="go">→ 👤 People &amp; Experience</span></a>
+  </div>
+</section>
+
+<!-- ============ 1. FLOW & PROCESS ============ -->
+<section class="family" id="flow">
+  <h2>🔀 Flow &amp; Process</h2>
+  <p class="fam-desc">How work moves — steps, decisions, handoffs, and who-does-what over time.</p>
+  <div class="grid">
+
+    <div class="card" id="flowchart">
+      <h3>Flowchart</h3>
+      <p class="what">Boxes and arrows showing steps and decision branches in a process.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="110" y="8" width="100" height="26" rx="13" fill="#5B7A99"/>
+        <text x="160" y="25" fill="#fff" font-size="10" text-anchor="middle">New request</text>
+        <line x1="160" y1="34" x2="160" y2="52" stroke="#8B8FA3" stroke-width="1.5"/>
+        <polygon points="160,52 230,80 160,108 90,80" fill="#F3EFE7" stroke="#B0816A" stroke-width="1.5"/>
+        <text x="160" y="84" font-size="10" text-anchor="middle" fill="#2E3238">Needs review?</text>
+        <line x1="230" y1="80" x2="270" y2="80" stroke="#8B8FA3" stroke-width="1.5"/>
+        <text x="248" y="74" font-size="9" fill="#5A6068">yes</text>
+        <rect x="238" y="98" width="70" height="24" rx="4" fill="#9B8299"/>
+        <text x="273" y="113" fill="#fff" font-size="9" text-anchor="middle">Chris decides</text>
+        <line x1="273" y1="122" x2="273" y2="140" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="273" y1="140" x2="160" y2="140" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="160" y1="108" x2="160" y2="132" stroke="#8B8FA3" stroke-width="1.5"/>
+        <text x="168" y="124" font-size="9" fill="#5A6068">no</text>
+        <rect x="110" y="148" width="100" height="24" rx="4" fill="#7A9B76"/>
+        <text x="160" y="164" fill="#fff" font-size="10" text-anchor="middle">Auto-approve</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you need to nail down “what happens after what, and where can it branch?”</p>
+      <p class="say">Say to Kimi: “Draw me a flowchart of how a new store entry gets reviewed and approved.”</p>
+    </div>
+
+    <div class="card" id="sequence">
+      <h3>Sequence diagram</h3>
+      <p class="what">Vertical lifelines with arrows showing who messages whom, in time order.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="9" text-anchor="middle" fill="#2E3238">
+          <text x="40" y="18">Chris</text><text x="120" y="18">Chief</text>
+          <text x="200" y="18">Manager</text><text x="280" y="18">Worker</text>
+        </g>
+        <g stroke="#B9BEC9" stroke-dasharray="3 3" stroke-width="1">
+          <line x1="40" y1="24" x2="40" y2="170"/><line x1="120" y1="24" x2="120" y2="170"/>
+          <line x1="200" y1="24" x2="200" y2="170"/><line x1="280" y1="24" x2="280" y2="170"/>
+        </g>
+        <g stroke-width="2">
+          <line x1="40" y1="45" x2="117" y2="45" stroke="#5B7A99"/><polygon points="120,45 113,42 113,48" fill="#5B7A99"/>
+          <line x1="120" y1="75" x2="197" y2="75" stroke="#9B8299"/><polygon points="200,75 193,72 193,78" fill="#9B8299"/>
+          <line x1="200" y1="105" x2="277" y2="105" stroke="#B0816A"/><polygon points="280,105 273,102 273,108" fill="#B0816A"/>
+          <line x1="280" y1="135" x2="203" y2="135" stroke="#7A9B76"/><polygon points="200,135 207,132 207,138" fill="#7A9B76"/>
+          <line x1="200" y1="158" x2="123" y2="158" stroke="#7A9B76"/><polygon points="120,158 127,155 127,161" fill="#7A9B76"/>
+        </g>
+        <g font-size="8" fill="#5A6068">
+          <text x="78" y="40">brief</text><text x="160" y="70">mission</text>
+          <text x="240" y="100">task</text><text x="240" y="130">done ✅</text>
+          <text x="160" y="153">report</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want to trace a conversation or message flow between agents step by step.</p>
+      <p class="say">Say to Kimi: “Sequence diagram of a mission: Chris briefs Chief, Chief spawns a Manager, Manager delegates to a Worker, results flow back.”</p>
+    </div>
+
+    <div class="card" id="swimlane">
+      <h3>Swimlane diagram</h3>
+      <p class="what">A flowchart split into horizontal lanes — one per person or role — so handoffs are visible.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="8" width="320" height="52" fill="#F3EFE7" stroke="#E3DED6"/>
+        <rect x="0" y="60" width="320" height="52" fill="#FBF9F4" stroke="#E3DED6"/>
+        <rect x="0" y="112" width="320" height="52" fill="#F3EFE7" stroke="#E3DED6"/>
+        <g font-size="9" fill="#5A6068"><text x="6" y="22">Chief</text><text x="6" y="74">Manager</text><text x="6" y="126">Worker</text></g>
+        <rect x="70" y="24" width="70" height="22" rx="4" fill="#5B7A99"/>
+        <text x="105" y="38" font-size="9" fill="#fff" text-anchor="middle">compile brief</text>
+        <line x1="105" y1="46" x2="105" y2="74" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="105,80 101,73 109,73" fill="#8B8FA3"/>
+        <rect x="70" y="80" width="70" height="22" rx="4" fill="#9B8299"/>
+        <text x="105" y="94" font-size="9" fill="#fff" text-anchor="middle">split tasks</text>
+        <line x1="105" y1="102" x2="105" y2="128" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="105,134 101,127 109,127" fill="#8B8FA3"/>
+        <rect x="70" y="134" width="70" height="22" rx="4" fill="#B0816A"/>
+        <text x="105" y="148" font-size="9" fill="#fff" text-anchor="middle">do task</text>
+        <rect x="190" y="134" width="70" height="22" rx="4" fill="#7A9B76"/>
+        <text x="225" y="148" font-size="9" fill="#fff" text-anchor="middle">report back</text>
+        <line x1="140" y1="145" x2="184" y2="145" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="190,145 183,141 183,149" fill="#8B8FA3"/>
+        <line x1="225" y1="134" x2="225" y2="35" stroke="#8B8FA3" stroke-width="1.5" stroke-dasharray="4 3"/><polygon points="225,29 221,36 229,36" fill="#8B8FA3"/>
+        <text x="230" y="90" font-size="8" fill="#5A6068">summary ↑</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> a process crosses roles and you want to see exactly where the baton passes.</p>
+      <p class="say">Say to Kimi: “Swimlane diagram of a mission lifecycle across Chief, Manager, and Worker lanes.”</p>
+    </div>
+
+    <div class="card" id="state-machine">
+      <h3>State machine</h3>
+      <p class="what">Rounded nodes = states; arrows = events that move a thing from one state to another.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="70" width="80" height="32" rx="16" fill="#5B7A99"/>
+        <text x="60" y="90" font-size="10" fill="#fff" text-anchor="middle">queued</text>
+        <rect x="150" y="30" width="90" height="32" rx="16" fill="#7A9B76"/>
+        <text x="195" y="50" font-size="10" fill="#fff" text-anchor="middle">delivered</text>
+        <rect x="150" y="120" width="90" height="32" rx="16" fill="#B0816A"/>
+        <text x="195" y="140" font-size="10" fill="#fff" text-anchor="middle">failed</text>
+        <path d="M100,80 Q130,50 148,48" stroke="#8B8FA3" stroke-width="1.5" fill="none"/>
+        <polygon points="150,48 142,45 143,52" fill="#8B8FA3"/>
+        <text x="118" y="52" font-size="8" fill="#5A6068">agent acks</text>
+        <path d="M100,95 Q130,130 148,134" stroke="#8B8FA3" stroke-width="1.5" fill="none"/>
+        <polygon points="150,134 142,132 143,139" fill="#8B8FA3"/>
+        <text x="118" y="122" font-size="8" fill="#5A6068">timeout</text>
+        <path d="M195,120 Q195,85 195,66" stroke="#8B8FA3" stroke-width="1.5" fill="none" stroke-dasharray="4 3"/>
+        <polygon points="195,62 191,70 199,70" fill="#8B8FA3"/>
+        <text x="203" y="95" font-size="8" fill="#5A6068">retry</text>
+        <circle cx="14" cy="86" r="6" fill="#2E3238"/>
+        <line x1="20" y1="86" x2="20" y2="86" stroke="#2E3238"/>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> something has a lifecycle (message, task, agent) and you care about every state and transition.</p>
+      <p class="say">Say to Kimi: “State machine for a DM: queued → delivered, or queued → failed on timeout, with retry back to delivered.”</p>
+    </div>
+
+    <div class="card" id="bpmn">
+      <h3>BPMN diagram</h3>
+      <p class="what">Business-process notation: circles for events, rounded boxes for tasks, diamonds for gateways, pools for orgs.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="20" width="312" height="140" fill="#F3EFE7" stroke="#8B8FA3" stroke-width="1.5"/>
+        <text x="12" y="36" font-size="9" fill="#5A6068">Pool: Novakai Command</text>
+        <circle cx="40" cy="90" r="12" fill="none" stroke="#7A9B76" stroke-width="2.5"/>
+        <line x1="52" y1="90" x2="78" y2="90" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="84,90 77,86 77,94" fill="#8B8FA3"/>
+        <rect x="84" y="72" width="72" height="36" rx="8" fill="#fff" stroke="#5B7A99" stroke-width="2"/>
+        <text x="120" y="94" font-size="9" text-anchor="middle" fill="#2E3238">Triage request</text>
+        <line x1="156" y1="90" x2="180" y2="90" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="186,90 179,86 179,94" fill="#8B8FA3"/>
+        <polygon points="208,72 226,90 208,108 190,90" fill="#fff" stroke="#B0816A" stroke-width="2"/>
+        <text x="208" y="94" font-size="9" text-anchor="middle" fill="#2E3238">✕</text>
+        <line x1="226" y1="90" x2="252" y2="90" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="258,90 251,86 251,94" fill="#8B8FA3"/>
+        <circle cx="276" cy="90" r="12" fill="none" stroke="#B0816A" stroke-width="4"/>
+        <text x="208" y="126" font-size="8" fill="#5A6068" text-anchor="middle">gateway: escalate?</text>
+        <path d="M208,108 Q208,140 250,140" stroke="#8B8FA3" stroke-width="1.5" fill="none" stroke-dasharray="4 3"/>
+        <rect x="250" y="128" width="58" height="24" rx="6" fill="#fff" stroke="#9B8299" stroke-width="2"/>
+        <text x="279" y="144" font-size="8" text-anchor="middle" fill="#2E3238">Ping Chris</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you're formalizing an operational process others (or other agents) must follow exactly.</p>
+      <p class="say">Say to Kimi: “BPMN of request triage: start event, triage task, escalate gateway, end event — in a Novakai pool.”</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 2. STRUCTURE & ARCHITECTURE ============ -->
+<section class="family" id="structure">
+  <h2>🏗️ Structure &amp; Architecture</h2>
+  <p class="fam-desc">How the system is built — boxes, layers, tables, and the wires between them.</p>
+  <div class="grid">
+
+    <div class="card" id="class-diagram">
+      <h3>Class diagram (UML)</h3>
+      <p class="what">Boxes with name / fields / methods, linked by inheritance and association lines.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="8.5" fill="#2E3238">
+          <rect x="30" y="10" width="110" height="58" fill="#fff" stroke="#5B7A99" stroke-width="1.5"/>
+          <rect x="30" y="10" width="110" height="18" fill="#5B7A99"/>
+          <text x="85" y="23" fill="#fff" text-anchor="middle" font-weight="bold">Agent</text>
+          <text x="36" y="42">+ id: string</text><text x="36" y="54">+ role: Role</text>
+          <text x="36" y="66">+ send(msg)</text>
+          <rect x="180" y="10" width="110" height="58" fill="#fff" stroke="#9B8299" stroke-width="1.5"/>
+          <rect x="180" y="10" width="110" height="18" fill="#9B8299"/>
+          <text x="235" y="23" fill="#fff" text-anchor="middle" font-weight="bold">Mission</text>
+          <text x="186" y="42">+ status: string</text>
+          <text x="186" y="54">+ tasks: Task[]</text>
+          <rect x="100" y="110" width="120" height="58" fill="#fff" stroke="#7A9B76" stroke-width="1.5"/>
+          <rect x="100" y="110" width="120" height="18" fill="#7A9B76"/>
+          <text x="160" y="123" fill="#fff" text-anchor="middle" font-weight="bold">Task</text>
+          <text x="106" y="142">+ updated: ts</text>
+          <text x="106" y="154">+ status: todo|done</text>
+        </g>
+        <line x1="140" y1="39" x2="180" y2="39" stroke="#8B8FA3" stroke-width="1.5"/>
+        <text x="160" y="34" font-size="8" fill="#5A6068" text-anchor="middle">owns</text>
+        <line x1="235" y1="68" x2="170" y2="110" stroke="#8B8FA3" stroke-width="1.5"/>
+        <polygon points="235,68 229,73 232,66" fill="#fff" stroke="#8B8FA3"/>
+        <text x="215" y="95" font-size="8" fill="#5A6068">has many</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you're designing or documenting a data model in code.</p>
+      <p class="say">Say to Kimi: “UML class diagram of Agent, Mission, and Task with their key fields and relationships.”</p>
+    </div>
+
+    <div class="card" id="component">
+      <h3>Component / architecture diagram</h3>
+      <p class="what">Big boxes for systems or services, arrows for how they talk. The classic whiteboard picture.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="16" y="20" width="90" height="46" rx="6" fill="#5B7A99"/>
+        <text x="61" y="40" font-size="10" fill="#fff" text-anchor="middle">App :3030</text>
+        <text x="61" y="54" font-size="8" fill="#DCE4EC" text-anchor="middle">frontend</text>
+        <rect x="180" y="20" width="110" height="46" rx="6" fill="#9B8299"/>
+        <text x="235" y="40" font-size="10" fill="#fff" text-anchor="middle">Backend :3031</text>
+        <text x="235" y="54" font-size="8" fill="#EFE6EE" text-anchor="middle">agent registry + PTYs</text>
+        <line x1="106" y1="43" x2="174" y2="43" stroke="#8B8FA3" stroke-width="2"/>
+        <polygon points="180,43 172,39 172,47" fill="#8B8FA3"/><polygon points="106,43 114,39 114,47" fill="#8B8FA3"/>
+        <text x="143" y="36" font-size="8" fill="#5A6068" text-anchor="middle">HTTP API</text>
+        <rect x="16" y="120" width="90" height="42" rx="6" fill="#7A9B76"/>
+        <text x="61" y="138" font-size="9" fill="#fff" text-anchor="middle">Workers</text>
+        <text x="61" y="152" font-size="8" fill="#E4EDE3" text-anchor="middle">kimi PTYs</text>
+        <rect x="180" y="120" width="110" height="42" rx="6" fill="#B0816A"/>
+        <text x="235" y="138" font-size="9" fill="#fff" text-anchor="middle">.novakai/stores</text>
+        <text x="235" y="152" font-size="8" fill="#F2E6DD" text-anchor="middle">JSONL files</text>
+        <line x1="220" y1="66" x2="100" y2="120" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="96,123 104,121 101,116" fill="#8B8FA3"/>
+        <line x1="250" y1="66" x2="242" y2="114" stroke="#8B8FA3" stroke-width="1.5"/><polygon points="241,120 245,113 238,114" fill="#8B8FA3"/>
+        <text x="262" y="95" font-size="8" fill="#5A6068">reads/writes</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> someone new needs the whole system in one picture.</p>
+      <p class="say">Say to Kimi: “Architecture diagram of Novakai: app on 3030, backend on 3031, worker PTYs, and the JSONL stores.”</p>
+    </div>
+
+    <div class="card" id="er-diagram">
+      <h3>ER diagram</h3>
+      <p class="what">Entities as tables with their fields, crow's-foot lines showing one-to-many relationships.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="8" fill="#2E3238">
+          <rect x="16" y="30" width="90" height="70" fill="#fff" stroke="#5B7A99" stroke-width="1.5"/>
+          <rect x="16" y="30" width="90" height="16" fill="#5B7A99"/>
+          <text x="61" y="42" fill="#fff" text-anchor="middle">MISSION</text>
+          <text x="22" y="60">PK id</text><text x="22" y="74">status</text><text x="22" y="88">owner</text>
+          <rect x="214" y="30" width="90" height="70" fill="#fff" stroke="#9B8299" stroke-width="1.5"/>
+          <rect x="214" y="30" width="90" height="16" fill="#9B8299"/>
+          <text x="259" y="42" fill="#fff" text-anchor="middle">TASK</text>
+          <text x="220" y="60">PK id</text><text x="220" y="74">FK mission</text><text x="220" y="88">status</text>
+          <rect x="115" y="120" width="90" height="52" fill="#fff" stroke="#7A9B76" stroke-width="1.5"/>
+          <rect x="115" y="120" width="90" height="16" fill="#7A9B76"/>
+          <text x="160" y="132" fill="#fff" text-anchor="middle">DECISION</text>
+          <text x="121" y="150">PK id (DEC-…)</text><text x="121" y="164">date</text>
+        </g>
+        <line x1="106" y1="65" x2="214" y2="65" stroke="#8B8FA3" stroke-width="1.5"/>
+        <text x="112" y="60" font-size="9" fill="#5A6068">1</text>
+        <text x="196" y="60" font-size="9" fill="#5A6068">∞</text>
+        <line x1="61" y1="100" x2="140" y2="120" stroke="#8B8FA3" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="80" y="118" font-size="8" fill="#5A6068">refs</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you're designing the JSONL stores or a database schema.</p>
+      <p class="say">Say to Kimi: “ER diagram of missions, tasks, and decisions with primary keys and the one-to-many links.”</p>
+    </div>
+
+    <div class="card" id="network">
+      <h3>Network diagram</h3>
+      <p class="what">Nodes and edges showing what's connected to what on a network or mesh.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g stroke="#B9BEC9" stroke-width="1.5">
+          <line x1="160" y1="90" x2="60" y2="40"/><line x1="160" y1="90" x2="260" y2="40"/>
+          <line x1="160" y1="90" x2="50" y2="140"/><line x1="160" y1="90" x2="160" y2="160"/>
+          <line x1="160" y1="90" x2="270" y2="140"/>
+        </g>
+        <circle cx="160" cy="90" r="26" fill="#5B7A99"/>
+        <text x="160" y="87" font-size="8" fill="#fff" text-anchor="middle">backend</text>
+        <text x="160" y="97" font-size="8" fill="#DCE4EC" text-anchor="middle">:3031</text>
+        <circle cx="60" cy="40" r="18" fill="#9B8299"/>
+        <text x="60" y="37" font-size="7.5" fill="#fff" text-anchor="middle">app</text>
+        <text x="60" y="46" font-size="7" fill="#EFE6EE" text-anchor="middle">:3030</text>
+        <circle cx="260" cy="40" r="18" fill="#B0816A"/>
+        <text x="260" y="37" font-size="7.5" fill="#fff" text-anchor="middle">dev be</text>
+        <text x="260" y="46" font-size="7" fill="#F2E6DD" text-anchor="middle">:3131</text>
+        <circle cx="50" cy="140" r="14" fill="#7A9B76"/><text x="50" y="143" font-size="7" fill="#fff" text-anchor="middle">w1</text>
+        <circle cx="160" cy="160" r="14" fill="#7A9B76"/><text x="160" y="163" font-size="7" fill="#fff" text-anchor="middle">w2</text>
+        <circle cx="270" cy="140" r="14" fill="#7A9B76"/><text x="270" y="143" font-size="7" fill="#fff" text-anchor="middle">w3</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want to see every running thing and what it can reach.</p>
+      <p class="say">Say to Kimi: “Network diagram of my two lanes: live 3030/3031, dev 3130/3131, and the worker agents hanging off the live backend.”</p>
+    </div>
+
+    <div class="card" id="mind-map">
+      <h3>Mind map</h3>
+      <p class="what">A central idea with branches radiating outward — great for brainstorming structure.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g stroke-width="2" fill="none">
+          <path d="M160,90 C120,90 100,50 70,40" stroke="#5B7A99"/>
+          <path d="M160,90 C200,88 220,45 250,38" stroke="#7A9B76"/>
+          <path d="M160,90 C115,105 95,140 70,148" stroke="#9B8299"/>
+          <path d="M160,90 C205,105 225,140 250,148" stroke="#B0816A"/>
+        </g>
+        <ellipse cx="160" cy="90" rx="44" ry="20" fill="#5B7A99"/>
+        <text x="160" y="94" font-size="9" fill="#fff" text-anchor="middle">Novakai</text>
+        <rect x="28" y="28" width="52" height="20" rx="10" fill="#fff" stroke="#5B7A99"/>
+        <text x="54" y="41" font-size="8" text-anchor="middle" fill="#2E3238">Agents</text>
+        <rect x="242" y="26" width="52" height="20" rx="10" fill="#fff" stroke="#7A9B76"/>
+        <text x="268" y="39" font-size="8" text-anchor="middle" fill="#2E3238">Stores</text>
+        <rect x="26" y="140" width="60" height="20" rx="10" fill="#fff" stroke="#9B8299"/>
+        <text x="56" y="153" font-size="8" text-anchor="middle" fill="#2E3238">Missions</text>
+        <rect x="240" y="140" width="60" height="20" rx="10" fill="#fff" stroke="#B0816A"/>
+        <text x="270" y="153" font-size="8" text-anchor="middle" fill="#2E3238">Messages</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you're at the fuzzy start of an idea and need branches, not order.</p>
+      <p class="say">Say to Kimi: “Mind map of everything Novakai Command touches: agents, stores, missions, messaging.”</p>
+    </div>
+
+    <div class="card" id="org-chart">
+      <h3>Org chart</h3>
+      <p class="what">Hierarchy of people or agents — who reports to whom, top-down boxes.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="130" y="10" width="60" height="26" rx="5" fill="#5B7A99"/>
+        <text x="160" y="27" font-size="10" fill="#fff" text-anchor="middle">Chris 👑</text>
+        <line x1="160" y1="36" x2="160" y2="52" stroke="#8B8FA3" stroke-width="1.5"/>
+        <rect x="128" y="52" width="64" height="26" rx="5" fill="#9B8299"/>
+        <text x="160" y="69" font-size="10" fill="#fff" text-anchor="middle">Chief</text>
+        <line x1="160" y1="78" x2="160" y2="90" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="70" y1="90" x2="250" y2="90" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="70" y1="90" x2="70" y2="100" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="160" y1="90" x2="160" y2="100" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="250" y1="90" x2="250" y2="100" stroke="#8B8FA3" stroke-width="1.5"/>
+        <rect x="38" y="100" width="64" height="24" rx="5" fill="#B0816A"/>
+        <text x="70" y="116" font-size="9" fill="#fff" text-anchor="middle">Manager A</text>
+        <rect x="128" y="100" width="64" height="24" rx="5" fill="#B0816A"/>
+        <text x="160" y="116" font-size="9" fill="#fff" text-anchor="middle">Manager B</text>
+        <rect x="218" y="100" width="64" height="24" rx="5" fill="#B0816A"/>
+        <text x="250" y="116" font-size="9" fill="#fff" text-anchor="middle">Manager C</text>
+        <line x1="70" y1="124" x2="70" y2="140" stroke="#8B8FA3" stroke-width="1.5"/>
+        <rect x="20" y="140" width="44" height="20" rx="4" fill="#7A9B76"/><text x="42" y="154" font-size="8" fill="#fff" text-anchor="middle">W1</text>
+        <rect x="76" y="140" width="44" height="20" rx="4" fill="#7A9B76"/><text x="98" y="154" font-size="8" fill="#fff" text-anchor="middle">W2</text>
+        <line x1="70" y1="140" x2="42" y2="140" stroke="#8B8FA3"/><line x1="70" y1="140" x2="98" y2="140" stroke="#8B8FA3"/>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you need to show reporting lines or the agent hierarchy at a glance.</p>
+      <p class="say">Say to Kimi: “Org chart of the team: Chris → Chief → three Managers, with Workers under Manager A.”</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 3. TIME & PLANNING ============ -->
+<section class="family" id="time">
+  <h2>📅 Time &amp; Planning</h2>
+  <p class="fam-desc">When things happen — deadlines, phases, and the shape of a week or a quarter.</p>
+  <div class="grid">
+
+    <div class="card" id="timeline">
+      <h3>Timeline</h3>
+      <p class="what">A line with dated milestones — the story of what happened (or will) in order.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <line x1="30" y1="90" x2="290" y2="90" stroke="#8B8FA3" stroke-width="2"/>
+        <g font-size="8" fill="#5A6068" text-anchor="middle">
+          <circle cx="60" cy="90" r="7" fill="#5B7A99"/>
+          <text x="60" y="72">Jul 19</text><text x="60" y="112">orchestrator</text><text x="60" y="122">plan</text>
+          <circle cx="130" cy="90" r="7" fill="#9B8299"/>
+          <text x="130" y="72">Jul 20</text><text x="130" y="112">stores +</text><text x="130" y="122">standards</text>
+          <circle cx="200" cy="90" r="7" fill="#B0816A"/>
+          <text x="200" y="72">Jul 22</text><text x="200" y="112">first live</text><text x="200" y="122">missions</text>
+          <circle cx="265" cy="90" r="7" fill="#7A9B76"/>
+          <text x="265" y="72">Jul 27</text><text x="265" y="112">phrasebook</text><text x="265" y="122">🎯</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want the narrative of a project or incident in date order.</p>
+      <p class="say">Say to Kimi: “Timeline of Novakai milestones from the orchestrator plan to today.”</p>
+    </div>
+
+    <div class="card" id="gantt">
+      <h3>Gantt chart</h3>
+      <p class="what">Horizontal bars: one row per task, bar spans its start→end dates. Shows overlap and duration.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="8" fill="#5A6068">
+          <text x="6" y="34">Brief</text><text x="6" y="64">Build M1</text>
+          <text x="6" y="94">Review</text><text x="6" y="124">Ship</text><text x="6" y="154">Retro</text>
+        </g>
+        <g stroke="#E3DED6"><line x1="80" y1="16" x2="80" y2="168"/><line x1="140" y1="16" x2="140" y2="168"/><line x1="200" y1="16" x2="200" y2="168"/><line x1="260" y1="16" x2="260" y2="168"/></g>
+        <g font-size="7" fill="#8B8FA3" text-anchor="middle"><text x="80" y="12">Mon</text><text x="140" y="12">Tue</text><text x="200" y="12">Wed</text><text x="260" y="12">Thu</text></g>
+        <rect x="80" y="22" width="60" height="14" rx="4" fill="#5B7A99"/>
+        <rect x="110" y="52" width="120" height="14" rx="4" fill="#9B8299"/>
+        <rect x="200" y="82" width="60" height="14" rx="4" fill="#B0816A"/>
+        <rect x="230" y="112" width="50" height="14" rx="4" fill="#7A9B76"/>
+        <rect x="280" y="142" width="26" height="14" rx="4" fill="#8B8FA3"/>
+        <line x1="140" y1="29" x2="110" y2="59" stroke="#8B8FA3" stroke-dasharray="3 2"/>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> a mission has parallel tasks and you need to see who finishes when.</p>
+      <p class="say">Say to Kimi: “Gantt chart of this mission: brief Mon, build Mon–Wed, review Wed–Thu, ship Thu, retro Fri.”</p>
+    </div>
+
+    <div class="card" id="roadmap">
+      <h3>Roadmap (now / next / later)</h3>
+      <p class="what">Three columns of intent — no fake dates, just priority horizons. Novakai OKRs use exactly this.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g>
+          <rect x="10" y="14" width="95" height="150" rx="8" fill="#F3EFE7" stroke="#5B7A99"/>
+          <text x="57" y="34" font-size="10" text-anchor="middle" fill="#5B7A99" font-weight="bold">NOW</text>
+          <rect x="18" y="44" width="79" height="30" rx="4" fill="#5B7A99"/><text x="57" y="62" font-size="8" fill="#fff" text-anchor="middle">live missions</text>
+          <rect x="18" y="80" width="79" height="30" rx="4" fill="#5B7A99" opacity=".75"/><text x="57" y="98" font-size="8" fill="#fff" text-anchor="middle">store writer</text>
+          <rect x="112" y="14" width="95" height="150" rx="8" fill="#F3EFE7" stroke="#9B8299"/>
+          <text x="159" y="34" font-size="10" text-anchor="middle" fill="#9B8299" font-weight="bold">NEXT</text>
+          <rect x="120" y="44" width="79" height="30" rx="4" fill="#9B8299"/><text x="159" y="62" font-size="8" fill="#fff" text-anchor="middle">dashboards</text>
+          <rect x="120" y="80" width="79" height="30" rx="4" fill="#9B8299" opacity=".75"/><text x="159" y="98" font-size="8" fill="#fff" text-anchor="middle">auto-retro</text>
+          <rect x="214" y="14" width="95" height="150" rx="8" fill="#F3EFE7" stroke="#B0816A"/>
+          <text x="261" y="34" font-size="10" text-anchor="middle" fill="#B0816A" font-weight="bold">LATER</text>
+          <rect x="222" y="44" width="79" height="30" rx="4" fill="#B0816A"/><text x="261" y="62" font-size="8" fill="#fff" text-anchor="middle">mobile app</text>
+          <rect x="222" y="80" width="79" height="30" rx="4" fill="#B0816A" opacity=".75"/><text x="261" y="98" font-size="8" fill="#fff" text-anchor="middle">voice briefs</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want direction without committing to dates you don't believe in.</p>
+      <p class="say">Say to Kimi: “Now/next/later roadmap for Novakai based on the current OKRs.”</p>
+    </div>
+
+    <div class="card" id="calendar-heatmap">
+      <h3>Calendar heatmap</h3>
+      <p class="what">GitHub-style grid of days; darker = more activity. Spot streaks and dead zones instantly.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="8" fill="#8B8FA3"><text x="40" y="18">W1</text><text x="90" y="18">W2</text><text x="140" y="18">W3</text><text x="190" y="18">W4</text><text x="240" y="18">W5</text></g>
+        <g>
+          <rect x="30" y="26" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="50" y="26" width="16" height="16" rx="3" fill="#BFD2BC"/><rect x="70" y="26" width="16" height="16" rx="3" fill="#7A9B76"/><rect x="90" y="26" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="110" y="26" width="16" height="16" rx="3" fill="#98B595"/><rect x="130" y="26" width="16" height="16" rx="3" fill="#5E8159"/><rect x="150" y="26" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="170" y="26" width="16" height="16" rx="3" fill="#BFD2BC"/><rect x="190" y="26" width="16" height="16" rx="3" fill="#7A9B76"/><rect x="210" y="26" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="230" y="26" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="250" y="26" width="16" height="16" rx="3" fill="#98B595"/><rect x="270" y="26" width="16" height="16" rx="3" fill="#7A9B76"/>
+          <rect x="30" y="46" width="16" height="16" rx="3" fill="#98B595"/><rect x="50" y="46" width="16" height="16" rx="3" fill="#7A9B76"/><rect x="70" y="46" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="90" y="46" width="16" height="16" rx="3" fill="#5E8159"/><rect x="110" y="46" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="130" y="46" width="16" height="16" rx="3" fill="#BFD2BC"/><rect x="150" y="46" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="170" y="46" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="190" y="46" width="16" height="16" rx="3" fill="#98B595"/><rect x="210" y="46" width="16" height="16" rx="3" fill="#5E8159"/><rect x="230" y="46" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="250" y="46" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="270" y="46" width="16" height="16" rx="3" fill="#BFD2BC"/>
+          <rect x="30" y="66" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="50" y="66" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="70" y="66" width="16" height="16" rx="3" fill="#BFD2BC"/><rect x="90" y="66" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="110" y="66" width="16" height="16" rx="3" fill="#7A9B76"/><rect x="130" y="66" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="150" y="66" width="16" height="16" rx="3" fill="#98B595"/><rect x="170" y="66" width="16" height="16" rx="3" fill="#5E8159"/><rect x="190" y="66" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="210" y="66" width="16" height="16" rx="3" fill="#BFD2BC"/><rect x="230" y="66" width="16" height="16" rx="3" fill="#7A9B76"/><rect x="250" y="66" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="270" y="66" width="16" height="16" rx="3" fill="#98B595"/>
+          <rect x="30" y="86" width="16" height="16" rx="3" fill="#BFD2BC"/><rect x="50" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="70" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="90" y="86" width="16" height="16" rx="3" fill="#98B595"/><rect x="110" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="130" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="150" y="86" width="16" height="16" rx="3" fill="#7A9B76"/><rect x="170" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="190" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="210" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/><rect x="230" y="86" width="16" height="16" rx="3" fill="#5E8159"/><rect x="250" y="86" width="16" height="16" rx="3" fill="#BFD2BC"/><rect x="270" y="86" width="16" height="16" rx="3" fill="#EDF2EA"/>
+        </g>
+        <text x="30" y="150" font-size="8" fill="#5A6068">less</text>
+        <rect x="55" y="142" width="12" height="12" rx="2" fill="#EDF2EA"/><rect x="70" y="142" width="12" height="12" rx="2" fill="#BFD2BC"/><rect x="85" y="142" width="12" height="12" rx="2" fill="#98B595"/><rect x="100" y="142" width="12" height="12" rx="2" fill="#7A9B76"/><rect x="115" y="142" width="12" height="12" rx="2" fill="#5E8159"/>
+        <text x="133" y="150" font-size="8" fill="#5A6068">more · commits / agent activity per day</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want a feel for rhythm and consistency over weeks.</p>
+      <p class="say">Say to Kimi: “Calendar heatmap of agent activity across the stores for the last month.”</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 4. DATA & QUANTITY ============ -->
+<section class="family" id="data">
+  <h2>📈 Data &amp; Quantity</h2>
+  <p class="fam-desc">Numbers with shape — comparisons, trends, distributions, and flows of volume.</p>
+  <div class="grid">
+
+    <div class="card" id="bar-line-pie">
+      <h3>Bar / line / pie — the classics</h3>
+      <p class="what">Bars compare categories, lines show trends over time, pies show share of a whole.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <!-- mini bar -->
+        <g>
+          <text x="55" y="16" font-size="8" text-anchor="middle" fill="#5A6068">tasks/agent</text>
+          <rect x="20" y="60" width="16" height="40" fill="#5B7A99"/><rect x="42" y="40" width="16" height="60" fill="#9B8299"/><rect x="64" y="72" width="16" height="28" fill="#B0816A"/><rect x="86" y="52" width="16" height="48" fill="#7A9B76"/>
+          <line x1="16" y1="100" x2="106" y2="100" stroke="#8B8FA3"/>
+        </g>
+        <!-- mini line -->
+        <g>
+          <text x="200" y="16" font-size="8" text-anchor="middle" fill="#5A6068">missions/week</text>
+          <polyline points="130,90 155,70 180,78 205,45 230,55 260,30" fill="none" stroke="#5B7A99" stroke-width="2"/>
+          <circle cx="155" cy="70" r="3" fill="#5B7A99"/><circle cx="205" cy="45" r="3" fill="#B0816A"/><circle cx="260" cy="30" r="3" fill="#7A9B76"/>
+          <line x1="128" y1="100" x2="266" y2="100" stroke="#8B8FA3"/>
+        </g>
+        <!-- mini pie -->
+        <g>
+          <text x="160" y="120" font-size="8" text-anchor="middle" fill="#5A6068">store share</text>
+          <circle cx="160" cy="146" r="24" fill="#5B7A99"/>
+          <path d="M160,146 L160,122 A24,24 0 0 1 181,158 Z" fill="#B0816A"/>
+          <path d="M160,146 L181,158 A24,24 0 0 1 148,168 Z" fill="#7A9B76"/>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you have plain numbers and just want the obvious chart — don't overthink it.</p>
+      <p class="say">Say to Kimi: “Bar chart of open tasks per agent, and a line of missions completed per week.”</p>
+    </div>
+
+    <div class="card" id="scatter">
+      <h3>Scatter plot</h3>
+      <p class="what">Dots on an X/Y grid — reveals correlation (or lack of it) between two variables.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <line x1="40" y1="150" x2="300" y2="150" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="40" y1="150" x2="40" y2="16" stroke="#8B8FA3" stroke-width="1.5"/>
+        <g fill="#5B7A99">
+          <circle cx="70" cy="130" r="5"/><circle cx="95" cy="118" r="5"/><circle cx="120" cy="122" r="5"/>
+          <circle cx="140" cy="95" r="5"/><circle cx="165" cy="88" r="5"/><circle cx="185" cy="78" r="5"/>
+        </g>
+        <g fill="#B0816A">
+          <circle cx="110" cy="135" r="5"/><circle cx="205" cy="60" r="5"/><circle cx="230" cy="52" r="5"/><circle cx="255" cy="38" r="5"/>
+        </g>
+        <line x1="60" y1="138" x2="265" y2="34" stroke="#7A9B76" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text x="170" y="168" font-size="9" text-anchor="middle" fill="#5A6068">brief size → time to done</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you suspect two things move together and want proof.</p>
+      <p class="say">Say to Kimi: “Scatter plot of brief length vs. mission completion time — is there a pattern?”</p>
+    </div>
+
+    <div class="card" id="histogram">
+      <h3>Histogram</h3>
+      <p class="what">Bars of binned ranges — shows the shape of a distribution, not categories.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <line x1="40" y1="150" x2="300" y2="150" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="40" y1="150" x2="40" y2="16" stroke="#8B8FA3" stroke-width="1.5"/>
+        <g fill="#7A9B76">
+          <rect x="60" y="130" width="26" height="20"/><rect x="88" y="105" width="26" height="45"/>
+          <rect x="116" y="70" width="26" height="80" fill="#5B7A99"/><rect x="144" y="45" width="26" height="105" fill="#5B7A99"/>
+          <rect x="172" y="75" width="26" height="75"/><rect x="200" y="110" width="26" height="40"/>
+          <rect x="228" y="132" width="26" height="18"/><rect x="256" y="142" width="26" height="8"/>
+        </g>
+        <text x="170" y="168" font-size="9" text-anchor="middle" fill="#5A6068">message length (chars)</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want to know what's “normal” and what's an outlier in one number.</p>
+      <p class="say">Say to Kimi: “Histogram of DM message lengths in the journal — where's the bulge?”</p>
+    </div>
+
+    <div class="card" id="heatmap">
+      <h3>Heatmap (matrix)</h3>
+      <p class="what">A colored grid where cell intensity = value. Great for load-by-agent-by-day.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="8" fill="#5A6068">
+          <text x="66" y="20">Mon</text><text x="116" y="20">Tue</text><text x="166" y="20">Wed</text><text x="216" y="20">Thu</text><text x="266" y="20">Fri</text>
+          <text x="8" y="46">Chief</text><text x="8" y="81">Mgr A</text><text x="8" y="116">Mgr B</text><text x="8" y="151">W1</text>
+        </g>
+        <g>
+          <rect x="50" y="28" width="44" height="30" fill="#E4E9F0"/><rect x="100" y="28" width="44" height="30" fill="#8CA3BB"/><rect x="150" y="28" width="44" height="30" fill="#5B7A99"/><rect x="200" y="28" width="44" height="30" fill="#8CA3BB"/><rect x="250" y="28" width="44" height="30" fill="#E4E9F0"/>
+          <rect x="50" y="63" width="44" height="30" fill="#8CA3BB"/><rect x="100" y="63" width="44" height="30" fill="#5B7A99"/><rect x="150" y="63" width="44" height="30" fill="#C6D2DF"/><rect x="200" y="63" width="44" height="30" fill="#5B7A99"/><rect x="250" y="63" width="44" height="30" fill="#8CA3BB"/>
+          <rect x="50" y="98" width="44" height="30" fill="#C6D2DF"/><rect x="100" y="98" width="44" height="30" fill="#E4E9F0"/><rect x="150" y="98" width="44" height="30" fill="#8CA3BB"/><rect x="200" y="98" width="44" height="30" fill="#E4E9F0"/><rect x="250" y="98" width="44" height="30" fill="#C6D2DF"/>
+          <rect x="50" y="133" width="44" height="30" fill="#5B7A99"/><rect x="100" y="133" width="44" height="30" fill="#5B7A99"/><rect x="150" y="133" width="44" height="30" fill="#5B7A99"/><rect x="200" y="133" width="44" height="30" fill="#8CA3BB"/><rect x="250" y="133" width="44" height="30" fill="#E4E9F0"/>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> “who's overloaded?” is a grid question — two axes plus intensity.</p>
+      <p class="say">Say to Kimi: “Heatmap of messages handled per agent per weekday — who's hot?”</p>
+    </div>
+
+    <div class="card" id="sankey">
+      <h3>Sankey diagram</h3>
+      <p class="what">Flowing ribbons whose width = quantity, showing how a total splits and recombines.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="40" width="14" height="100" fill="#5B7A99"/>
+        <text x="17" y="34" font-size="8" text-anchor="middle" fill="#5A6068">100 reqs</text>
+        <path d="M24,55 C80,55 90,30 150,30 L150,62 C90,62 80,85 24,85 Z" fill="#9B8299" opacity=".8"/>
+        <path d="M24,90 C80,90 90,100 150,100 L150,128 C90,128 80,122 24,122 Z" fill="#B0816A" opacity=".8"/>
+        <rect x="150" y="28" width="14" height="36" fill="#9B8299"/>
+        <rect x="150" y="98" width="14" height="32" fill="#B0816A"/>
+        <text x="157" y="22" font-size="8" text-anchor="middle" fill="#5A6068">auto 60</text>
+        <text x="157" y="146" font-size="8" text-anchor="middle" fill="#5A6068">human 40</text>
+        <path d="M164,34 C210,34 220,20 270,20 L270,44 C220,44 210,58 164,58 Z" fill="#7A9B76" opacity=".8"/>
+        <path d="M164,104 C210,104 220,96 270,92 L270,120 C220,124 210,124 164,124 Z" fill="#7A9B76" opacity=".55"/>
+        <rect x="270" y="18" width="14" height="104" fill="#7A9B76"/>
+        <text x="277" y="12" font-size="8" text-anchor="middle" fill="#5A6068">done ✅</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want to follow a volume as it splits across paths.</p>
+      <p class="say">Say to Kimi: “Sankey of incoming requests splitting into auto-handled vs. escalated-to-Chris.”</p>
+    </div>
+
+    <div class="card" id="funnel">
+      <h3>Funnel</h3>
+      <p class="what">Stacked shrinking bars — each stage keeps only some of the previous one. Where do things drop off?</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g text-anchor="middle" font-size="9" fill="#fff">
+          <rect x="40" y="16" width="240" height="30" rx="4" fill="#5B7A99"/><text x="160" y="35">Signups · 1,000</text>
+          <rect x="70" y="52" width="180" height="30" rx="4" fill="#9B8299"/><text x="160" y="71">Activated · 620</text>
+          <rect x="95" y="88" width="130" height="30" rx="4" fill="#B0816A"/><text x="160" y="107">First mission · 310</text>
+          <rect x="118" y="124" width="84" height="30" rx="4" fill="#7A9B76"/><text x="160" y="143">Weekly · 140</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> users/items pass through stages and you need the leakiest stage.</p>
+      <p class="say">Say to Kimi: “Funnel from signup to weekly active — where are we losing people?”</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 5. RELATIONSHIPS & COMPARISON ============ -->
+<section class="family" id="relationships">
+  <h2>🧮 Relationships &amp; Comparison</h2>
+  <p class="fam-desc">Side-by-side thinking — overlaps, trade-offs, and structured showdowns.</p>
+  <div class="grid">
+
+    <div class="card" id="venn">
+      <h3>Venn diagram</h3>
+      <p class="what">Overlapping circles showing what sets share and what they don't.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="120" cy="85" r="60" fill="#5B7A99" opacity=".55"/>
+        <circle cx="200" cy="85" r="60" fill="#B0816A" opacity=".55"/>
+        <circle cx="160" cy="125" r="55" fill="#7A9B76" opacity=".5"/>
+        <g font-size="9" fill="#2E3238" text-anchor="middle">
+          <text x="95" y="60">Chief</text>
+          <text x="228" y="60">Manager</text>
+          <text x="160" y="170">Worker</text>
+          <text x="160" y="88" font-weight="bold">message</text>
+          <text x="130" y="120">spawn</text>
+          <text x="195" y="120">report</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> two or three roles/tools overlap and the intersection is the interesting part.</p>
+      <p class="say">Say to Kimi: “Venn of what Chief, Manager, and Worker can each do — highlight shared powers.”</p>
+    </div>
+
+    <div class="card" id="matrix-2x2">
+      <h3>2×2 matrix / quadrant</h3>
+      <p class="what">Two axes, four boxes — the classic prioritization tool (impact vs. effort, urgent vs. important).</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <line x1="40" y1="150" x2="300" y2="150" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="40" y1="150" x2="40" y2="14" stroke="#8B8FA3" stroke-width="1.5"/>
+        <line x1="170" y1="14" x2="170" y2="150" stroke="#E3DED6"/>
+        <line x1="40" y1="82" x2="300" y2="82" stroke="#E3DED6"/>
+        <text x="170" y="166" font-size="9" text-anchor="middle" fill="#5A6068">effort →</text>
+        <text x="20" y="86" font-size="9" fill="#5A6068" transform="rotate(-90 20 86)" text-anchor="middle">impact →</text>
+        <g font-size="9">
+          <circle cx="90" cy="45" r="16" fill="#7A9B76"/><text x="90" y="48" fill="#fff" text-anchor="middle">DO</text>
+          <text x="90" y="76" fill="#5A6068" text-anchor="middle" font-size="8">quick wins</text>
+          <circle cx="240" cy="40" r="16" fill="#5B7A99"/><text x="240" y="43" fill="#fff" text-anchor="middle">PLAN</text>
+          <text x="240" y="72" fill="#5A6068" text-anchor="middle" font-size="8">big bets</text>
+          <circle cx="95" cy="118" r="16" fill="#C9CDD6"/><text x="95" y="121" fill="#fff" text-anchor="middle">MEH</text>
+          <circle cx="245" cy="118" r="16" fill="#B0816A"/><text x="245" y="121" fill="#fff" text-anchor="middle">DROP</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you need to sort a pile of ideas/tasks by two competing criteria.</p>
+      <p class="say">Say to Kimi: “2×2 of these feature ideas by impact vs. effort — tell me the quick wins.”</p>
+    </div>
+
+    <div class="card" id="comparison-table">
+      <h3>Comparison table</h3>
+      <p class="what">Rows of criteria, columns of options, ✅/❌ in the cells. Boring name, unbeatable clarity.</p>
+      <table class="cmp">
+        <tr><th></th><th>Widget</th><th>Mermaid</th><th>Screenshot</th></tr>
+        <tr><td>Offline</td><td>✅</td><td>✅</td><td>✅</td></tr>
+        <tr><td>Editable later</td><td>✅</td><td>✅</td><td>❌</td></tr>
+        <tr><td>Interactive</td><td>✅</td><td>❌</td><td>❌</td></tr>
+        <tr><td>Zero setup</td><td>❌</td><td>✅</td><td>✅</td></tr>
+      </table>
+      <p class="when"><b>Ask for it when…</b> you're picking between tools, vendors, or approaches on fixed criteria.</p>
+      <p class="say">Say to Kimi: “Comparison table of widget vs. mermaid vs. screenshot for the docs.”</p>
+    </div>
+
+    <div class="card" id="radar">
+      <h3>Radar / spider chart</h3>
+      <p class="what">Axes radiating from a center; each series draws a polygon. Compares profiles across several dimensions.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g stroke="#D8D3C8" fill="none">
+          <polygon points="160,30 217,66 195,132 125,132 103,66"/>
+          <polygon points="160,60 193,82 182,116 138,116 127,82"/>
+          <line x1="160" y1="90" x2="160" y2="30"/><line x1="160" y1="90" x2="217" y2="66"/>
+          <line x1="160" y1="90" x2="195" y2="132"/><line x1="160" y1="90" x2="125" y2="132"/><line x1="160" y1="90" x2="103" y2="66"/>
+        </g>
+        <polygon points="160,42 205,70 188,120 140,124 115,72" fill="#5B7A99" opacity=".35" stroke="#5B7A99" stroke-width="2"/>
+        <polygon points="160,58 180,75 170,110 148,110 130,78" fill="#B0816A" opacity=".35" stroke="#B0816A" stroke-width="2"/>
+        <g font-size="8" fill="#5A6068" text-anchor="middle">
+          <text x="160" y="24">speed</text><text x="228" y="64">quality</text>
+          <text x="202" y="146">cost</text><text x="118" y="146">reach</text><text x="92" y="64">fun</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> two options each have a “shape” across 4–6 qualities.</p>
+      <p class="say">Say to Kimi: “Radar chart comparing approach A vs. B on speed, quality, cost, reach, fun.”</p>
+    </div>
+
+    <div class="card" id="treemap">
+      <h3>Treemap</h3>
+      <p class="what">Nested rectangles sized by value — see what dominates a whole (disk usage, budget, store sizes).</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="14" width="170" height="152" fill="#5B7A99"/>
+        <text x="95" y="94" font-size="11" fill="#fff" text-anchor="middle">missions.jsonl</text>
+        <rect x="184" y="14" width="126" height="80" fill="#9B8299"/>
+        <text x="247" y="58" font-size="10" fill="#fff" text-anchor="middle">captains-log</text>
+        <rect x="184" y="98" width="66" height="68" fill="#B0816A"/>
+        <text x="217" y="136" font-size="9" fill="#fff" text-anchor="middle">tasks</text>
+        <rect x="254" y="98" width="56" height="34" fill="#7A9B76"/>
+        <text x="282" y="118" font-size="8" fill="#fff" text-anchor="middle">decisions</text>
+        <rect x="254" y="136" width="56" height="30" fill="#8B8FA3"/>
+        <text x="282" y="155" font-size="8" fill="#fff" text-anchor="middle">okrs</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want to know what's eating the space/budget/attention.</p>
+      <p class="say">Say to Kimi: “Treemap of .novakai/stores by file size — which store is the hog?”</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 6. PEOPLE & EXPERIENCE ============ -->
+<section class="family" id="people">
+  <h2>👤 People &amp; Experience</h2>
+  <p class="fam-desc">The human side — what someone feels, does, and hits along the way.</p>
+  <div class="grid">
+
+    <div class="card" id="user-journey">
+      <h3>User journey map</h3>
+      <p class="what">Stages across the top; rows for actions, thoughts, and feelings (an emoji mood line).</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="8" fill="#5A6068" text-anchor="middle">
+          <rect x="8" y="12" width="68" height="18" rx="4" fill="#5B7A99"/><text x="42" y="24" fill="#fff">Discover</text>
+          <rect x="84" y="12" width="68" height="18" rx="4" fill="#9B8299"/><text x="118" y="24" fill="#fff">Onboard</text>
+          <rect x="160" y="12" width="68" height="18" rx="4" fill="#B0816A"/><text x="194" y="24" fill="#fff">First win</text>
+          <rect x="236" y="12" width="68" height="18" rx="4" fill="#7A9B76"/><text x="270" y="24" fill="#fff">Habit</text>
+        </g>
+        <polyline points="20,120 70,90 118,110 165,60 220,80 270,45 305,55" fill="none" stroke="#B0816A" stroke-width="2.5"/>
+        <g font-size="13" text-anchor="middle">
+          <text x="42" y="145">🙂</text><text x="118" y="145">😕</text><text x="194" y="145">🤩</text><text x="270" y="145">😌</text>
+        </g>
+        <text x="10" y="165" font-size="8" fill="#5A6068">mood ↕ across stages →</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want to find the moment users (or agents!) struggle or delight.</p>
+      <p class="say">Say to Kimi: “Journey map of a new user's first week: discover, onboard, first win, habit — with a mood line.”</p>
+    </div>
+
+    <div class="card" id="persona">
+      <h3>Persona card</h3>
+      <p class="what">A one-page profile of an archetypal user: goals, frustrations, quote, context.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="14" y="14" width="292" height="152" rx="10" fill="#fff" stroke="#E3DED6"/>
+        <circle cx="60" cy="58" r="24" fill="#9B8299"/>
+        <text x="60" y="64" font-size="18" fill="#fff" text-anchor="middle">C</text>
+        <text x="100" y="50" font-size="12" fill="#2E3238" font-weight="bold">“Chief-of-staff Chris”</text>
+        <text x="100" y="66" font-size="8.5" fill="#5A6068">Runs an agent fleet · hates status meetings</text>
+        <rect x="30" y="96" width="120" height="56" rx="6" fill="#F3EFE7"/>
+        <text x="38" y="112" font-size="8" fill="#7A9B76" font-weight="bold">GOALS</text>
+        <text x="38" y="126" font-size="8" fill="#2E3238">· see everything at a glance</text>
+        <text x="38" y="139" font-size="8" fill="#2E3238">· zero manual check-ins</text>
+        <rect x="166" y="96" width="124" height="56" rx="6" fill="#F3EFE7"/>
+        <text x="174" y="112" font-size="8" fill="#B0816A" font-weight="bold">FRUSTRATIONS</text>
+        <text x="174" y="126" font-size="8" fill="#2E3238">· agents going silent</text>
+        <text x="174" y="139" font-size="8" fill="#2E3238">· stale docs</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> a feature needs a face — someone concrete to build for.</p>
+      <p class="say">Say to Kimi: “Persona card for our target user: a solo founder orchestrating AI agents.”</p>
+    </div>
+
+    <div class="card" id="storyboard">
+      <h3>Storyboard</h3>
+      <p class="what">Comic-strip panels showing a scenario frame by frame — context, action, outcome.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g stroke="#E3DED6" fill="#fff">
+          <rect x="10" y="20" width="92" height="110" rx="6"/>
+          <rect x="114" y="20" width="92" height="110" rx="6"/>
+          <rect x="218" y="20" width="92" height="110" rx="6"/>
+        </g>
+        <circle cx="56" cy="55" r="12" fill="#5B7A99"/><rect x="42" y="70" width="28" height="24" rx="6" fill="#5B7A99"/>
+        <text x="56" y="112" font-size="8" text-anchor="middle" fill="#5A6068">Chris types</text><text x="56" y="122" font-size="8" text-anchor="middle" fill="#5A6068">a brief</text>
+        <circle cx="160" cy="55" r="12" fill="#9B8299"/><rect x="146" y="70" width="28" height="24" rx="6" fill="#9B8299"/>
+        <text x="160" y="112" font-size="8" text-anchor="middle" fill="#5A6068">Chief splits</text><text x="160" y="122" font-size="8" text-anchor="middle" fill="#5A6068">the mission</text>
+        <circle cx="264" cy="55" r="12" fill="#7A9B76"/><rect x="250" y="70" width="28" height="24" rx="6" fill="#7A9B76"/>
+        <text x="264" y="112" font-size="8" text-anchor="middle" fill="#5A6068">Work ships</text><text x="264" y="122" font-size="8" text-anchor="middle" fill="#5A6068">✅ 🎯</text>
+        <text x="56" y="152" font-size="8" text-anchor="middle" fill="#8B8FA3">1</text>
+        <text x="160" y="152" font-size="8" text-anchor="middle" fill="#8B8FA3">2</text>
+        <text x="264" y="152" font-size="8" text-anchor="middle" fill="#8B8FA3">3</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you need to sell a scenario to humans, not specify it for machines.</p>
+      <p class="say">Say to Kimi: “Three-panel storyboard: Chris writes a brief, Chief splits it, the work ships.”</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 7. PRODUCT & CODE ============ -->
+<section class="family" id="product">
+  <h2>🖥️ Product &amp; Code</h2>
+  <p class="fam-desc">Software-flavored visuals — screens, dependencies, branches, and boards.</p>
+  <div class="grid">
+
+    <div class="card" id="wireframe">
+      <h3>Wireframe / mockup</h3>
+      <p class="what">Low-fi boxes standing in for UI — layout before pixels, pixels before code.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="30" y="14" width="260" height="152" rx="8" fill="#fff" stroke="#8B8FA3" stroke-width="1.5"/>
+        <rect x="30" y="14" width="260" height="24" rx="8" fill="#5B7A99"/>
+        <circle cx="46" cy="26" r="4" fill="#fff"/><rect x="60" y="22" width="60" height="8" rx="4" fill="#DCE4EC"/>
+        <rect x="220" y="21" width="56" height="10" rx="5" fill="#B0816A"/>
+        <rect x="42" y="50" width="60" height="104" rx="4" fill="#F3EFE7" stroke="#E3DED6"/>
+        <g fill="#C9CDD6"><rect x="50" y="60" width="44" height="8" rx="3"/><rect x="50" y="74" width="44" height="8" rx="3"/><rect x="50" y="88" width="44" height="8" rx="3"/><rect x="50" y="102" width="30" height="8" rx="3"/></g>
+        <rect x="114" y="50" width="164" height="66" rx="4" fill="#F3EFE7" stroke="#E3DED6"/>
+        <polyline points="124,104 150,80 176,92 204,64 232,74 266,58" fill="none" stroke="#7A9B76" stroke-width="2"/>
+        <rect x="114" y="126" width="80" height="28" rx="4" fill="#9B8299"/>
+        <rect x="202" y="126" width="76" height="28" rx="4" fill="#B0816A"/>
+        <text x="154" y="144" font-size="8" fill="#fff" text-anchor="middle">card A</text>
+        <text x="240" y="144" font-size="8" fill="#fff" text-anchor="middle">card B</text>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want to agree on layout before anyone argues about colors.</p>
+      <p class="say">Say to Kimi: “Wireframe the dashboard: sidebar nav, big chart, two stat cards below.”</p>
+    </div>
+
+    <div class="card" id="dependency-graph">
+      <h3>Dependency graph</h3>
+      <p class="what">Directed graph of what depends on what — build order and circular-dependency hunting.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g font-size="8" text-anchor="middle">
+          <rect x="120" y="14" width="80" height="24" rx="4" fill="#5B7A99"/><text x="160" y="30" fill="#fff">app</text>
+          <rect x="40" y="70" width="80" height="24" rx="4" fill="#9B8299"/><text x="80" y="86" fill="#fff">nvk-msg</text>
+          <rect x="200" y="70" width="80" height="24" rx="4" fill="#9B8299"/><text x="240" y="86" fill="#fff">backend</text>
+          <rect x="120" y="130" width="80" height="24" rx="4" fill="#B0816A"/><text x="160" y="146" fill="#fff">stores</text>
+        </g>
+        <g stroke="#8B8FA3" stroke-width="1.5" fill="#8B8FA3">
+          <line x1="145" y1="38" x2="95" y2="66"/><polygon points="92,70 100,66 97,62"/>
+          <line x1="175" y1="38" x2="225" y2="66"/><polygon points="228,70 223,62 220,66"/>
+          <line x1="80" y1="94" x2="140" y2="126"/><polygon points="145,129 137,127 139,122"/>
+          <line x1="240" y1="94" x2="180" y2="126"/><polygon points="175,129 181,122 183,127"/>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> a change keeps breaking things and you need to see the blast radius.</p>
+      <p class="say">Say to Kimi: “Dependency graph of the scripts and backend — what breaks if I touch the stores?”</p>
+    </div>
+
+    <div class="card" id="git-graph">
+      <h3>Git graph</h3>
+      <p class="what">Commits as dots on branching lines — where main and feature branches split and merge.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g fill="none" stroke-width="2.5">
+          <path d="M30,140 L280,140" stroke="#5B7A99"/>
+          <path d="M90,140 C110,140 110,90 130,90 L230,90 C250,90 250,140 260,140" stroke="#9B8299"/>
+          <path d="M150,140 C170,140 170,45 190,45 L250,45" stroke="#7A9B76"/>
+        </g>
+        <g>
+          <circle cx="30" cy="140" r="7" fill="#5B7A99"/><circle cx="90" cy="140" r="7" fill="#5B7A99"/>
+          <circle cx="150" cy="140" r="7" fill="#5B7A99"/><circle cx="260" cy="140" r="7" fill="#5B7A99"/>
+          <circle cx="160" cy="90" r="7" fill="#9B8299"/><circle cx="215" cy="90" r="7" fill="#9B8299"/>
+          <circle cx="205" cy="45" r="7" fill="#7A9B76"/><circle cx="250" cy="45" r="7" fill="#7A9B76"/>
+        </g>
+        <g font-size="8" fill="#5A6068">
+          <text x="30" y="162">main</text><text x="160" y="80">team/stores</text><text x="205" y="35">team/dashboard</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> branch strategy gets confusing and a picture ends the argument.</p>
+      <p class="say">Say to Kimi: “Git graph of main plus the two team branches and where they merged back.”</p>
+    </div>
+
+    <div class="card" id="kanban">
+      <h3>Kanban board</h3>
+      <p class="what">Columns for status (todo / doing / done) with cards that move left to right.</p>
+      <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+        <g>
+          <rect x="8" y="14" width="96" height="152" rx="8" fill="#F3EFE7" stroke="#E3DED6"/>
+          <text x="56" y="34" font-size="10" text-anchor="middle" fill="#5B7A99" font-weight="bold">TODO</text>
+          <rect x="16" y="44" width="80" height="26" rx="4" fill="#fff" stroke="#5B7A99"/><text x="56" y="61" font-size="8" text-anchor="middle" fill="#2E3238">audit stores</text>
+          <rect x="16" y="76" width="80" height="26" rx="4" fill="#fff" stroke="#5B7A99"/><text x="56" y="93" font-size="8" text-anchor="middle" fill="#2E3238">retro notes</text>
+          <rect x="112" y="14" width="96" height="152" rx="8" fill="#F3EFE7" stroke="#E3DED6"/>
+          <text x="160" y="34" font-size="10" text-anchor="middle" fill="#B0816A" font-weight="bold">DOING</text>
+          <rect x="120" y="44" width="80" height="26" rx="4" fill="#fff" stroke="#B0816A"/><text x="160" y="61" font-size="8" text-anchor="middle" fill="#2E3238">phrasebook 🎯</text>
+          <rect x="216" y="14" width="96" height="152" rx="8" fill="#F3EFE7" stroke="#E3DED6"/>
+          <text x="264" y="34" font-size="10" text-anchor="middle" fill="#7A9B76" font-weight="bold">DONE</text>
+          <rect x="224" y="44" width="80" height="26" rx="4" fill="#fff" stroke="#7A9B76"/><text x="264" y="61" font-size="8" text-anchor="middle" fill="#2E3238">M1 nvk-agent ✅</text>
+          <rect x="224" y="76" width="80" height="26" rx="4" fill="#fff" stroke="#7A9B76"/><text x="264" y="93" font-size="8" text-anchor="middle" fill="#2E3238">tone mandate</text>
+        </g>
+      </svg>
+      <p class="when"><b>Ask for it when…</b> you want mission/task status you can read from across the room.</p>
+      <p class="say">Say to Kimi: “Kanban of the current mission's tasks from tasks.jsonl — todo, doing, done.”</p>
+    </div>
+
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Offline reference · no internet needed · ask Kimi for any of these by name 🎯<br>
+  The Visual Phrasebook · Novakai Command · 2026-07-27
+</footer>
+
+</body>
+</html>

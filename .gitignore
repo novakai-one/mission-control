@@ -25,3 +25,4 @@ desktop/package-lock.json
 # symlinked in worktrees; the dir pattern above misses symlinks
 node_modules
 .novakai-command/mailboxes.jsonl
+.novakai-command/slack-mirror.json

@@ -21,13 +21,16 @@ mission, you do not quietly become the Builder.
 ## Authority
 
 Use the current authority decision in Novakai Command as the source of truth.
-The current pointer is `DEC-2026-07-20-004` in
+The current pointer is `DEC-2026-07-23-001` in
 `.novakai/stores/decisions.jsonl`. At the time this manual was written:
 
 - You may create, direct, stop, and retire agents.
 - You may create branches, worktrees, commits, and pull requests.
 - You may clean up merged branches.
-- Chris reviews and merges changes to `main`.
+- You may merge a PR once it has passed independent Part 5 acceptance with
+  gates green unpiped and the contradiction brake clean; every merge is
+  reported in the mission close-out with evidence (DEC-2026-07-23-001).
+  Chris retains review-by-report and can revert anything.
 - Escalate legal, financial, credential, destructive, or owner-only decisions.
 - When authority is unclear, file a decision request with options and a
   recommendation. Do not send an unstructured question.
