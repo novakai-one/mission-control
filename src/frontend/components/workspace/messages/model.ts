@@ -239,7 +239,7 @@ export function roomLabelFor(conversation: Conversation): string {
    Moved to the shared model (Task 2.4): both rails prune now (ruling D2), so
    the rule lives in tunnelModel/people.ts. Re-exported here so this module's
    existing consumers and tests keep their import surface. */
-export { visibleLanesFor } from '../../../lib/tunnelModel/people.js';
+export { visibleLanesFor } from '../../../lib/tunnelModel/people/index.js';
 
 /* ---------- Distinct rail labels (C2, audit M1) ------------------------------
    Presentation-layer disambiguation ONLY — no identity or envelope change.

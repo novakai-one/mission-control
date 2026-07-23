@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
-import type { PanelPersonRow } from '../../../../lib/tunnelModel/people.js';
+import type { PanelPersonRow } from '../../../../lib/tunnelModel/panel/index.js';
 
 function initials(title: string): string {
   return title
@@ -48,20 +48,21 @@ interface DirectMessageRowProps {
 
 /** Presence: running PTY or live durable identity (an external chief with no
  * PTY IS online — absence of runtime is not absence). */
-function rowOnline(row: PanelPersonRow): boolean {
-  return row.person?.runtime?.status === 'running'
-    || row.person?.durableStatus === 'live' || row.person?.durableStatus === 'spawning';
+function rowOnline(personRow: PanelPersonRow): boolean {
+  return personRow.person?.runtime?.status === 'running'
+    || personRow.person?.durableStatus === 'live' || personRow.person?.durableStatus === 'spawning';
 }
 
-function rowStatusLine(row: PanelPersonRow): string {
-  if (!row.person) return row.lane?.lastMessageAt ? 'Recent activity' : 'No messages yet';
-  const status = row.person.runtime?.status ?? row.person.durableStatus ?? 'unregistered';
-  return `${row.person.provider} · ${status}`;
+function rowStatusLine(personRow: PanelPersonRow): string {
+  if (!personRow.person) return personRow.lane?.lastMessageAt ? 'Recent activity' : 'No messages yet';
+  const status = personRow.person.runtime?.status ?? personRow.person.durableStatus ?? 'unregistered';
+  return `${personRow.person.provider} · ${status}`;
 }
 
 /** One DIRECT MESSAGES person row, keyed by durable agentId (ruling v2.1). */
 export function DirectMessageRow({ row, selected, onSelect }: DirectMessageRowProps) {
-  const name = row.person?.name ?? row.lane?.title ?? row.conversationId;
+  const personRow = row;
+  const name = personRow.person?.name ?? personRow.lane?.title ?? personRow.conversationId;
   return (
     <button
       type="button"
@@ -72,9 +73,9 @@ export function DirectMessageRow({ row, selected, onSelect }: DirectMessageRowPr
       <span className="mc-avatar">{initials(name)}</span>
       <span className="mc-agent-copy">
         <strong>{name}</strong>
-        <small>{rowStatusLine(row)}</small>
+        <small>{rowStatusLine(personRow)}</small>
       </span>
-      <span className={rowOnline(row) ? 'mc-status mc-status-live' : 'mc-status'} />
+      <span className={rowOnline(personRow) ? 'mc-status mc-status-live' : 'mc-status'} />
     </button>
   );
 }

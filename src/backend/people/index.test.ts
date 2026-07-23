@@ -63,10 +63,10 @@ function hubOver(durable: AgentBlock[], runtime: AgentInfo[]): PeopleHub {
   const runtime = [runtimeInfo({ agentId: 'agent_dup-2', title: 'Manager Kimi Visibility', status: 'running' })];
   const { people } = hubOver([first, second], runtime).listPeople();
   assert.equal(people.length, 2, 'no name folding — two durable ids are two people');
-  const one = people.find((person) => person.agentId === 'agent_dup-1');
-  const two = people.find((person) => person.agentId === 'agent_dup-2');
-  assert.equal(one?.runtime, null, 'presence must not leak onto the same-named other person');
-  assert.deepEqual(two?.runtime, { status: 'running' });
+  const firstPerson = people.find((person) => person.agentId === 'agent_dup-1');
+  const secondPerson = people.find((person) => person.agentId === 'agent_dup-2');
+  assert.equal(firstPerson?.runtime, null, 'presence must not leak onto the same-named other person');
+  assert.deepEqual(secondPerson?.runtime, { status: 'running' });
 }
 
 // --- runtime-only row (pre-model PTY spawn) ----------------------------------
@@ -131,11 +131,11 @@ function hubOver(durable: AgentBlock[], runtime: AgentInfo[]): PeopleHub {
       '{"roomId":"room_plain","name":"plain open room","members":["chris"],"createdBy":"chris","createdAt":"2026-07-20T00:00:00Z","archived":false}',
     ].map((line) => `${line}\n`).join(''));
     const model = new ObjectModel({ storesDir: scratch });
-    const hub = new PeopleHub(model, () => [], roomsPath);
-    const { archived } = hub.listArchive();
+    const peopleHub = new PeopleHub(model, () => [], roomsPath);
+    const { archived } = peopleHub.listArchive();
 
     // S1 default view: the people read carries the archived room-lane ids.
-    assert.deepEqual(hub.listPeople().archivedLaneIds.sort(), ['room_closedmission', 'room_dead'],
+    assert.deepEqual(peopleHub.listPeople().archivedLaneIds.sort(), ['room_closedmission', 'room_dead'],
       'archived + closed-mission room ids ride the default people read');
 
     const byId = new Map(archived.map((lane) => [lane.id, lane]));

@@ -3,8 +3,8 @@
 // good list under an honest stale flag. Run with:
 //   npx tsx src/frontend/lib/tunnelModel/people.test.ts
 import assert from 'node:assert/strict';
-import type { PersonView } from '../../../shared/people/schema.js';
-import { emptyPeopleSnapshot, mountPeople, type PeopleSnapshot } from './people.js';
+import type { PersonView } from '../../../../shared/people/schema.js';
+import { emptyPeopleSnapshot, mountPeople, type PeopleSnapshot } from './index.js';
 
 function person(overrides: Partial<PersonView> & { agentId: string; name: string }): PersonView {
   return {
@@ -27,7 +27,7 @@ class FakeSocket {
 }
 (globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket;
 
-const { setBackoffForTest } = await import('../agentSocket/index.js');
+const { setBackoffForTest } = await import('../../agentSocket/index.js');
 setBackoffForTest(5, 20);
 
 let served: PersonView[] | 'fail' = [];

@@ -24,8 +24,8 @@ export interface PeopleSource {
 const DURABLE_STATUSES = new Set(['spawning', 'live', 'failed', 'retired']);
 
 function refValue(block: AgentBlock, kind: string): string | null {
-  const ref = block.refs?.find((entry) => entry.kind === kind);
-  return typeof ref?.value === 'string' ? ref.value : null;
+  const typedRef = block.refs?.find((entry) => entry.kind === kind);
+  return typeof typedRef?.value === 'string' ? typedRef.value : null;
 }
 
 function durablePerson(block: AgentBlock, runtime: AgentInfo | undefined): PersonView {
@@ -94,31 +94,46 @@ export class PeopleHub {
   /** The explicit on-demand archive read (ruling S1): archived rooms, rooms
    * whose thread-linked mission is closed, and retired durable people. */
   listArchive(): ArchiveResponse {
-    const archived: ArchivedLane[] = [];
-    for (const [roomId, block] of this.roomsPath ? foldRoomsWithArchived(this.roomsPath) : new Map<string, Record<string, unknown>>()) {
+    return { archived: [...this.archivedRoomLanes(), ...this.retiredPeopleLanes()], asOf: new Date().toISOString() };
+  }
+
+  /** ONE room scan serves both reads: full lanes here, ids for the default
+   * people payload (DRY — the classification rule lives once). */
+  private archivedRoomLanes(): ArchivedLane[] {
+    const lanes: ArchivedLane[] = [];
+    if (!this.roomsPath) return lanes;
+    for (const [roomId, block] of foldRoomsWithArchived(this.roomsPath)) {
       const title = typeof block.name === 'string' ? block.name : roomId;
       if (block.archived === true) {
-        archived.push({ id: roomId, kind: 'room', title, conversationId: roomId, reason: 'room-archived', missionId: null, sourceRefs: [{ store: 'rooms', recordId: roomId }] });
+        lanes.push({ id: roomId, kind: 'room', title, conversationId: roomId, reason: 'room-archived', missionId: null, sourceRefs: [{ store: 'rooms', recordId: roomId }] });
         continue;
       }
-      const missionId = this.source.missionForRoom?.(roomId) ?? null;
-      if (!missionId) continue;
-      const mission = this.source.missionRecord?.(missionId);
-      if (mission && CLOSED_MISSION_STATUSES.has(String(mission.status ?? ''))) {
-        archived.push({
+      const missionId = this.closedMissionFor(roomId);
+      if (missionId) {
+        lanes.push({
           id: roomId, kind: 'room', title, conversationId: roomId, reason: 'mission-closed', missionId,
           sourceRefs: [{ store: 'rooms', recordId: roomId }, { store: 'missions', recordId: missionId }],
         });
       }
     }
-    for (const block of this.source.listAgents()) {
-      if (block.status !== 'retired' && block.status !== 'failed') continue;
-      archived.push({
-        id: block.id, kind: 'person', title: block.name, conversationId: `dm:${block.name}`,
-        reason: 'person-retired', missionId: null, sourceRefs: [{ store: 'agents', recordId: block.id }],
-      });
-    }
-    return { archived, asOf: new Date().toISOString() };
+    return lanes;
+  }
+
+  /** The thread-linked mission id, only when that mission is closed. */
+  private closedMissionFor(roomId: string): string | null {
+    const missionId = this.source.missionForRoom?.(roomId) ?? null;
+    if (!missionId) return null;
+    const mission = this.source.missionRecord?.(missionId);
+    return mission && CLOSED_MISSION_STATUSES.has(String(mission.status ?? '')) ? missionId : null;
+  }
+
+  private retiredPeopleLanes(): ArchivedLane[] {
+    return this.source.listAgents()
+      .filter((block) => block.status === 'retired' || block.status === 'failed')
+      .map((block) => ({
+        id: block.id, kind: 'person' as const, title: block.name, conversationId: `dm:${block.name}`,
+        reason: 'person-retired' as const, missionId: null, sourceRefs: [{ store: 'agents', recordId: block.id }],
+      }));
   }
 
   /** The whole directory: durable people first (runtime attached by agentId),
@@ -137,19 +152,7 @@ export class PeopleHub {
   }
 
   private archivedRoomIds(): string[] {
-    if (!this.roomsPath) return [];
-    const ids: string[] = [];
-    for (const [roomId, block] of foldRoomsWithArchived(this.roomsPath)) {
-      if (block.archived === true) {
-        ids.push(roomId);
-        continue;
-      }
-      const missionId = this.source.missionForRoom?.(roomId);
-      if (!missionId) continue;
-      const mission = this.source.missionRecord?.(missionId);
-      if (mission && CLOSED_MISSION_STATUSES.has(String(mission.status ?? ''))) ids.push(roomId);
-    }
-    return ids;
+    return this.archivedRoomLanes().map((lane) => lane.id);
   }
 
   private handlePeople(_request: Request, response: Response): void {

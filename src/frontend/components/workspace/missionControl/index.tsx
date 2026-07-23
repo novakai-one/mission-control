@@ -29,7 +29,8 @@ import {
   type TunnelEnvelope,
   type TunnelRoom,
 } from '../../../lib/tunnelModel/index.js';
-import { buildPanelLanes, usePeople, visibleLanesFor } from '../../../lib/tunnelModel/people.js';
+import { usePeople, visibleLanesFor } from '../../../lib/tunnelModel/people/index.js';
+import { buildPanelLanes } from '../../../lib/tunnelModel/panel/index.js';
 import { MessengerComposer, Transcript } from '../../studio/chat/tunnel/transcript/index.js';
 import { MISSION_ROOM_CONVERSATION_ID, MISSION_ROOM_V1_TARGET, useMissionSnapshot } from '../../../lib/missionRoom/index.js';
 import { MissionRoom, MissionRoomHero } from './room/index.js';

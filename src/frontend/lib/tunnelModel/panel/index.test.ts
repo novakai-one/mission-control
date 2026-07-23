@@ -2,11 +2,11 @@
 // agentId-keyed row set both rails render. Composed duplicate-name test per
 // ruling msg_d528e320; M1 parity = same underlying set + order, chrome only
 // windows it. Run with:
-//   npx tsx src/frontend/lib/tunnelModel/panelLanes.test.ts
+//   npx tsx src/frontend/lib/tunnelModel/panel/index.test.ts
 import assert from 'node:assert/strict';
-import type { PersonView } from '../../../shared/people/schema.js';
-import { buildPanelLanes, type PanelPersonRow } from './people.js';
-import { dmId, type Conversation } from './index.js';
+import type { PersonView } from '../../../../shared/people/schema.js';
+import { buildPanelLanes, mergeArchive, type PanelPersonRow } from './index.js';
+import { dmId, type Conversation } from '../index.js';
 
 function person(overrides: Partial<PersonView> & { agentId: string; name: string }): PersonView {
   return {
@@ -37,11 +37,11 @@ const CHANNEL: Conversation = { id: '#team', kind: 'channel', title: '#team' };
   ];
   const lanes = [CHANNEL, dmLane('Accept Probe III', '2026-07-23T03:00:00Z'), dmLane('chief-kimi-4', '2026-07-23T02:00:00Z')];
   const panel = buildPanelLanes(lanes, people, []);
-  assert.deepEqual(panel.live.map((row) => row.rowId), ['agent_live-durable', 'agent_running'],
+  assert.deepEqual(panel.live.map((personRow) => personRow.rowId), ['agent_live-durable', 'agent_running'],
     'durable-live external chief and running worker are live (alpha within bucket)');
-  assert.deepEqual(panel.quiet.map((row) => row.rowId), ['rt_exited-with-lane'],
+  assert.deepEqual(panel.quiet.map((personRow) => personRow.rowId), ['rt_exited-with-lane'],
     'exited runtime with a Chris-party lane stays reachable, recency-ordered');
-  assert.deepEqual(panel.archived.map((row) => row.rowId), ['rt_exited-dead', 'agent_retired'],
+  assert.deepEqual(panel.archived.map((personRow) => personRow.rowId), ['rt_exited-dead', 'agent_retired'],
     'retired durable + dead sessions (exited, no lane) leave the default view (alpha by name)');
   assert.deepEqual(panel.rooms.map((lane) => lane.id), ['#team'], 'channel pinned in rooms');
 }
@@ -54,7 +54,7 @@ const CHANNEL: Conversation = { id: '#team', kind: 'channel', title: '#team' };
   ];
   const panel = buildPanelLanes([CHANNEL], people, []);
   const rows: PanelPersonRow[] = [...panel.live, ...panel.quiet, ...panel.archived];
-  const duplicated = rows.filter((row) => row.person?.name === 'Manager Kimi Visibility');
+  const duplicated = rows.filter((personRow) => personRow.person?.name === 'Manager Kimi Visibility');
   assert.equal(duplicated.length, 2, 'two DISTINCT rows — no name folding');
   assert.notEqual(duplicated[0].rowId, duplicated[1].rowId);
   // Known, filed transport limitation stated by the test: both rows address
@@ -87,7 +87,7 @@ const CHANNEL: Conversation = { id: '#team', kind: 'channel', title: '#team' };
   const missionControlWindow = first.rooms.slice(0, 5);
   assert.deepEqual(missionControlWindow, first.rooms.slice(0, 5));
   assert.deepEqual(messagesWindow.slice(0, 5), missionControlWindow, 'both windows are prefixes of one shared order');
-  const liveIds = first.live.map((row) => row.rowId);
+  const liveIds = first.live.map((personRow) => personRow.rowId);
   assert.deepEqual([...liveIds].sort(), liveIds, 'live bucket deterministic (alpha)');
 }
 
@@ -101,7 +101,6 @@ const CHANNEL: Conversation = { id: '#team', kind: 'channel', title: '#team' };
 
 // --- archive merge (S1/Task 5.3): fetched wins, client fills, ids stable -----
 {
-  const { mergeArchive } = await import('./people.js');
   const fetched = [
     { id: 'room_dead', kind: 'room' as const, title: 'Legacy tab room', conversationId: 'room_dead', reason: 'room-archived' as const, missionId: null, sourceRefs: [] },
     { id: 'agent_ret', kind: 'person' as const, title: 'Worker Old', conversationId: 'dm:Worker Old', reason: 'person-retired' as const, missionId: null, sourceRefs: [{ store: 'agents' }] },

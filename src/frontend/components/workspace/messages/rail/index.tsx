@@ -13,14 +13,13 @@ import type {
   ConversationId,
 } from '../../../../lib/tunnelModel/index.js';
 import type { ArchivedLane } from '../../../../../shared/people/schema.js';
-import { mergeArchive, useArchive, type PanelLanes, type PanelPersonRow } from '../../../../lib/tunnelModel/people.js';
+import { mergeArchive, type PanelLanes, type PanelPersonRow } from '../../../../lib/tunnelModel/panel/index.js';
+import { useArchive } from '../../../../lib/tunnelModel/people/index.js';
+import { ArchivedRow, PersonRow } from './rows/index.js';
 import {
   MESSAGING_SETTINGS,
-  PRESENCE_LABEL,
   capRailLanes,
   filterRailLanes,
-  initialFor,
-  presenceToneFor,
   roomLabelFor,
   splitRailSections,
   type KnownAgent,
@@ -78,85 +77,6 @@ function RoomRow(props: {
   );
 }
 
-/** Presence for a person row: unread wins, then running PTY or live durable
- * identity (an external chief with no PTY IS online), else gray. */
-function personTone(row: PanelPersonRow, count: number): ReturnType<typeof presenceToneFor> {
-  if (count > 0) return 'amber';
-  if (row.person?.runtime?.status === 'running') return 'green';
-  if (row.person?.durableStatus === 'live' || row.person?.durableStatus === 'spawning') return 'green';
-  return 'gray';
-}
-
-/** The quiet second line: provider plus the honest status word. */
-function personRole(row: PanelPersonRow): string {
-  const provider = row.person?.provider ?? 'agent';
-  const status = row.person?.runtime?.status
-    ?? (row.person ? row.person.durableStatus ?? 'unregistered' : 'history');
-  return `${provider} · ${status}`;
-}
-
-function PersonRow(props: {
-  row: PanelPersonRow;
-  label: string;
-  count: number;
-  selected: boolean;
-  onSelect(conversation: Conversation): void;
-}) {
-  const { row } = props;
-  const name = row.person?.name ?? row.lane?.title ?? props.label;
-  const lane: Conversation = row.lane ?? { id: row.conversationId, kind: 'dm', title: name };
-  const tone = personTone(row, props.count);
-  const role = personRole(row);
-  const label = `${props.label}, ${role}, ${PRESENCE_LABEL[tone]}`;
-  const classes = props.selected ? 'msg-person is-selected' : 'msg-person';
-  return (
-    <button
-      type="button"
-      className={classes}
-      aria-label={label}
-      aria-current={props.selected ? 'true' : undefined}
-      onClick={() => props.onSelect(lane)}
-    >
-      <span className="msg-person-av" aria-hidden="true">{initialFor(name)}</span>
-      <span className="msg-person-meta">
-        <strong title={props.label}>{props.label}</strong>
-        <small title={role}>{role}</small>
-      </span>
-      <span className={`msg-dot msg-dot-${tone}`} aria-hidden="true" />
-    </button>
-  );
-}
-
-/** One archived lane row (S1): room or person, out of the default view. */
-function ArchivedRow(props: {
-  lane: ArchivedLane;
-  selected: boolean;
-  onSelect(conversation: Conversation): void;
-}) {
-  const { lane } = props;
-  const target: Conversation = lane.kind === 'room'
-    ? { id: lane.conversationId, kind: 'room', title: lane.title }
-    : { id: lane.conversationId, kind: 'dm', title: lane.title };
-  const reason = lane.reason === 'room-archived' ? 'archived'
-    : lane.reason === 'mission-closed' ? `mission closed${lane.missionId ? ` · ${lane.missionId}` : ''}` : 'retired';
-  return (
-    <button
-      type="button"
-      className={props.selected ? 'msg-person is-selected' : 'msg-person'}
-      aria-label={`${lane.title}, ${reason}`}
-      onClick={() => props.onSelect(target)}
-    >
-      {lane.kind === 'room'
-        ? <span className="msg-hash" aria-hidden="true">#</span>
-        : <span className="msg-person-av" aria-hidden="true">{initialFor(lane.title)}</span>}
-      <span className="msg-person-meta">
-        <strong title={lane.title}>{lane.title}</strong>
-        <small title={reason}>{reason}</small>
-      </span>
-    </button>
-  );
-}
-
 type NewFlow = 'room' | 'dm' | 'agent';
 
 export function RoomsRail(props: RoomsRailProps) {
@@ -185,10 +105,10 @@ export function RoomsRail(props: RoomsRailProps) {
   // the cap — the cap bounds journal-derived lanes, not the directory.
   const needle = query.trim().toLowerCase();
   const cappedDmIds = new Set(sections.directs.map((lane) => lane.id));
-  const matchesQuery = (row: PanelPersonRow): boolean =>
-    !needle || (row.person?.name ?? row.lane?.title ?? '').toLowerCase().includes(needle);
-  const inWindow = (row: PanelPersonRow): boolean =>
-    matchesQuery(row) && (row.lane === null || cappedDmIds.has(row.lane.id));
+  const matchesQuery = (personRow: PanelPersonRow): boolean =>
+    !needle || (personRow.person?.name ?? personRow.lane?.title ?? '').toLowerCase().includes(needle);
+  const inWindow = (personRow: PanelPersonRow): boolean =>
+    matchesQuery(personRow) && (personRow.lane === null || cappedDmIds.has(personRow.lane.id));
   const liveRows = props.panel.live.filter(inWindow);
   const quietRows = props.panel.quiet.filter(inWindow);
   const archivedRows = props.panel.archived.filter(matchesQuery);
@@ -301,13 +221,13 @@ export function RoomsRail(props: RoomsRailProps) {
           {(!query.trim() || liveRows.length + quietRows.length > 0) && <div className="msg-section">Direct messages</div>}
           {props.peopleStale && <div className="msg-rail-quiet">People directory stale — reconnecting…</div>}
           <div className="msg-rail-stack">
-            {[...liveRows, ...quietRows].map((row) => (
+            {[...liveRows, ...quietRows].map((personRow) => (
               <PersonRow
-                key={row.rowId}
-                row={row}
-                label={props.labels.get(row.conversationId) ?? row.person?.name ?? row.lane?.title ?? row.conversationId}
-                count={props.unread[row.conversationId] ?? 0}
-                selected={row.conversationId === props.selectedId}
+                key={personRow.rowId}
+                row={personRow}
+                label={props.labels.get(personRow.conversationId) ?? personRow.person?.name ?? personRow.lane?.title ?? personRow.conversationId}
+                count={props.unread[personRow.conversationId] ?? 0}
+                selected={personRow.conversationId === props.selectedId}
                 onSelect={props.onSelect}
               />
             ))}

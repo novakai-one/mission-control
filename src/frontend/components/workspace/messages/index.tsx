@@ -20,7 +20,8 @@ import {
   type ConversationId,
   type TunnelEnvelope,
 } from '../../../lib/tunnelModel/index.js';
-import { buildPanelLanes, usePeople } from '../../../lib/tunnelModel/people.js';
+import { usePeople } from '../../../lib/tunnelModel/people/index.js';
+import { buildPanelLanes } from '../../../lib/tunnelModel/panel/index.js';
 import {
   advanceCursor,
   saveLane,
