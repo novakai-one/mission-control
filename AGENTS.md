@@ -138,6 +138,18 @@ agents and for Chris.
 - `CONTEXT.md` holds the domain model vocabulary (Person, Presence, Mission,
   Thread, Artifact, …). Use those terms in code and docs.
 
+## Provider ladder (standing policy, 2026-07-23, Chris directive)
+
+- **Chief + Managers:** kimi.
+- **Workers/builders:** claude Sonnet/Opus.
+- **Auditors:** codex — only where audit fires (material work).
+- **Fable:** senior tier only — auditor/manager level or Executive Assistant
+  to the Chief. Never a builder (expensive; credits burn fast).
+
+Reason: spread load across providers, kimi leading as Chief; keep costly
+models for judgement seats. Applies to every spawn; deviations need a
+named ruling in the mission packet.
+
 ## Workforce operations
 
 Canonical workforce procedures start at `docs/operations/START-HERE.md`.
