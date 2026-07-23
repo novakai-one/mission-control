@@ -3,10 +3,11 @@
 // are the durable agentId (rowId); the dm:<name> conversation id is TRANSPORT
 // only — two durable people sharing a display name are two rows addressing
 // one mailbox (known, filed external-envelope-id limitation). Buckets:
-//   live     — runtime running, or durable live/spawning (an external chief
-//              with no PTY is LIVE — absence of runtime is not absence).
+//   live     — liveness tier live or external-verified (Ruling 3: the tier is
+//              derived ONCE in PeopleHub; this model never re-derives truth).
 //   quiet    — not live, not archived, and reachable: a Chris-party lane
-//              exists (recency order), or identity is durable.
+//              exists (recency order), or identity is durable. Unverified
+//              externals sit here — never promoted on stale durable truth.
 //   archived — durable retired/failed, plus dead sessions (runtime-only
 //              exited with no lane): out of the default view (#6/#7).
 // Rooms pass through in buildConversations' recency order — per-view chrome
@@ -33,14 +34,13 @@ export interface PanelLanes {
 }
 
 function isLivePerson(person: PersonView): boolean {
-  return person.runtime?.status === 'running'
-    || person.durableStatus === 'live' || person.durableStatus === 'spawning';
+  return person.liveness === 'live' || person.liveness === 'external-verified';
 }
 
 function isArchivedPerson(person: PersonView, lane: Conversation | undefined): boolean {
-  if (person.durableStatus === 'retired' || person.durableStatus === 'failed') return true;
+  if (person.liveness === 'retired' || person.liveness === 'failed') return true;
   // Dead session: runtime-only exited with nothing said in any Chris-party lane.
-  return person.durableStatus === null && person.runtime?.status === 'exited' && !lane;
+  return person.durableStatus === null && person.liveness === 'exited' && !lane;
 }
 
 function byName(left: PanelPersonRow, right: PanelPersonRow): number {

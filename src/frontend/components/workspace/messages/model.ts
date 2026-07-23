@@ -6,7 +6,6 @@ import { agentObjectId, type MentionTarget } from '../../../lib/mentions/index.j
 import {
   CHRIS,
   conversationIdsFor,
-  dmId,
   isRoomId,
   type Conversation,
   type ConversationId,
@@ -383,21 +382,11 @@ export function composerTargetsFor(knownAgents: KnownAgent[]): MentionTarget[] {
    A freshly opened DM lane may not exist in `conversations` yet — the agent
    is registered but exited and history has never heard from them, so
    buildConversations derives no lane. The overlay stands in until Chris's
-   first envelope lands and the lane derives for real. */
-export function dmLaneFor(agentName: string): Conversation {
-  return { id: dmId(agentName), kind: 'dm', title: agentName };
-}
-
-/** The lane to render: the derived one when it exists, else the overlay —
- *  but only while the overlay is what is actually selected (no stale leak). */
-export function resolveSelectedLane(
-  conversations: Conversation[],
-  overlay: Conversation | null,
-  selectedId: ConversationId | null,
-): Conversation | null {
-  return conversations.find((lane) => lane.id === selectedId)
-    ?? (overlay && overlay.id === selectedId ? overlay : null);
-}
+   first envelope lands and the lane derives for real. Moved to the shared
+   tunnel model (mission_visual-truth defect 1): Mission Control consumes the
+   same derivation now — one overlay grammar, two chromes. Re-exported here so
+   this module's existing consumers and tests keep their import surface. */
+export { dmLaneFor, resolveSelectedLane } from '../../../lib/tunnelModel/index.js';
 /* ---------- Right-panel identity header (round 3 M4) -----------------------
    Rooms/channels get the same "where you are" header DMs have: name, kind,
    member count. The count only appears when the room record carries a real

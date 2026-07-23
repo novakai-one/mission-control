@@ -143,6 +143,39 @@ function testActiveAllClosed(env: Rig): void {
   assert.throws(() => view.readMissionSnapshot('active'), MissionNotFoundError, 'nothing open → honest 404, never a closed pin');
 }
 
+// Ruling 2i (mission_visual-truth): freshness compares PARSED instants, never
+// lexical strings — "2026-07-23T15:00:00+10:00" (= 05:00Z) sorts AHEAD of
+// "2026-07-23T10:07:37.099Z" as text while being the older instant. The live
+// defect: the Mission Room pinned mission_chief-operations over the genuinely
+// newer mission_visual-truth. Both team-linked so the sort is the decider.
+function testActiveMixedOffsets(env: Rig): void {
+  const olderOffset = '{"id":"mission_offset","kind":"mission","ts":"2026-07-23T15:00:00+10:00","title":"Offset mission","status":"doing"}';
+  const newerZulu = '{"id":"mission_zulu","kind":"mission","ts":"2026-07-23T10:07:37.099Z","title":"Zulu mission","status":"doing"}';
+  writeStore(env, 'missions.jsonl', [olderOffset, newerZulu]);
+  writeStore(env, 'teams.jsonl', [
+    '{"id":"team_offset","kind":"team","ts":"2026-07-23T09:00:00Z","name":"Offset Team","refs":[{"kind":"mission","value":"mission_offset"}]}',
+    '{"id":"team_zulu","kind":"team","ts":"2026-07-23T09:00:00Z","name":"Zulu Team","refs":[{"kind":"mission","value":"mission_zulu"}]}',
+  ]);
+  const view = new MissionViewHub(env.roots);
+  const snapshot = view.readMissionSnapshot('active');
+  assert.equal(snapshot.mission.id, 'mission_zulu', 'the newer INSTANT wins even when a mixed offset loses the lexical sort');
+}
+
+// Same law on the `updated` field: an +10:00 updated stamp must not outrank a
+// genuinely newer Z stamp.
+function testActiveMixedOffsetsUpdated(env: Rig): void {
+  const olderOffset = '{"id":"mission_offset","kind":"mission","ts":"2026-07-23T01:00:00Z","title":"Offset mission","status":"doing","updated":"2026-07-23T18:00:00+10:00"}';
+  const newerZulu = '{"id":"mission_zulu","kind":"mission","ts":"2026-07-23T01:00:00Z","title":"Zulu mission","status":"doing","updated":"2026-07-23T09:00:00.000Z"}';
+  writeStore(env, 'missions.jsonl', [olderOffset, newerZulu]);
+  writeStore(env, 'teams.jsonl', [
+    '{"id":"team_offset","kind":"team","ts":"2026-07-23T09:00:00Z","name":"Offset Team","refs":[{"kind":"mission","value":"mission_offset"}]}',
+    '{"id":"team_zulu","kind":"team","ts":"2026-07-23T09:00:00Z","name":"Zulu Team","refs":[{"kind":"mission","value":"mission_zulu"}]}',
+  ]);
+  const view = new MissionViewHub(env.roots);
+  const snapshot = view.readMissionSnapshot('active');
+  assert.equal(snapshot.mission.id, 'mission_zulu', 'updated: parsed compare (18:00+10:00 = 08:00Z < 09:00Z), never lexical');
+}
+
 async function main(): Promise<void> {
   testRootsRefused();
   await withRig(testHubErrors);
@@ -152,6 +185,8 @@ async function main(): Promise<void> {
   await withRig(testActiveExcludesClosedTeamLinked);
   await withRig(testActiveOpenTeamLinkedStillWins);
   await withRig(testActiveAllClosed);
+  await withRig(testActiveMixedOffsets);
+  await withRig(testActiveMixedOffsetsUpdated);
   console.log('PASS');
 }
 

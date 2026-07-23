@@ -172,6 +172,20 @@ export class ObjectModel {
     return (this.record('agents.jsonl', agentId)?.block as AgentBlock | undefined) ?? null;
   }
 
+  /** The durable Agent whose CURRENT Presence pointer is this session, or null
+   * (mission_visual-truth, Ruling 1b): external registration is idempotent per
+   * session — an already-registered session must never mint a second Agent
+   * (the chief-kimi-5 double-mint class). */
+  agentForSession(sessionId: string): { agentId: string; teamId: string | null } | null {
+    for (const entry of this.storeRecords('agents.jsonl')) {
+      const block = entry.block as AgentBlock;
+      if (block.sessionId !== sessionId) continue;
+      const teamRef = block.refs?.find((reference) => reference.kind === 'team');
+      return { agentId: block.id, teamId: typeof teamRef?.value === 'string' ? teamRef.value : null };
+    }
+    return null;
+  }
+
   /** The durable mission block, or null when the id resolves to no mission.
    * Lets write paths pre-validate a mission ref BEFORE any block is appended
    * (external-session registration) instead of discovering a dangling ref

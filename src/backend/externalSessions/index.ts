@@ -19,6 +19,10 @@ export interface ExternalSessionGraph {
   createAgent(input: { name: string; provider: string; teamId: string; missionId: string }): string;
   attachAgentSession(agentId: string, sessionId: string): 'attached' | 'noop' | 'unknown';
   markAgentFailed(agentId: string, reason: string): void;
+  /** The durable Agent already registered for this session, or null — the
+   * idempotency lookup (Ruling 1b): an already-registered session is never
+   * minted twice. */
+  agentForSession(sessionId: string): { agentId: string; teamId: string | null } | null;
 }
 
 /** The slice of the durable mailbox registry registration needs. */
@@ -130,11 +134,15 @@ export class ExternalSessionsHub {
     return { name, provider, sessionId, missionId, mailboxExists: this.mailboxes.identityFor(name) !== undefined };
   }
 
-  /** The durable writes: team → agent → Presence attach → mailbox. */
+  /** The durable writes: team → agent → Presence attach → mailbox. Idempotent
+   * per session (Ruling 1b): an already-registered session reuses its durable
+   * Agent — a redeploy/re-run never mints a second registration. */
   private persist(
     validated: ValidatedRegistration,
     teamIdInput: string | undefined,
   ): { agentId: string; teamId: string; mailbox: 'created' | 'existing' } {
+    const existing = this.graph.agentForSession(validated.sessionId);
+    if (existing) return this.reattach(validated, existing, teamIdInput);
     let agentId: string | null = null;
     try {
       const teamId = teamIdInput ?? this.graph.createTeam({ name: `${validated.name} (external)`, missionId: validated.missionId });
@@ -146,6 +154,21 @@ export class ExternalSessionsHub {
       if (agentId !== null) this.markFailedQuietly(agentId, error);
       throw error;
     }
+  }
+
+  /** The idempotent path: re-attach the session to its existing durable Agent. */
+  private reattach(
+    validated: ValidatedRegistration,
+    existing: { agentId: string; teamId: string | null },
+    teamIdInput: string | undefined,
+  ): { agentId: string; teamId: string; mailbox: 'created' | 'existing' } {
+    this.graph.attachAgentSession(existing.agentId, validated.sessionId);
+    if (!validated.mailboxExists) this.mailboxes.register({ displayName: validated.name, memberName: validated.name });
+    return {
+      agentId: existing.agentId,
+      teamId: teamIdInput ?? existing.teamId ?? '',
+      mailbox: validated.mailboxExists ? 'existing' : 'created',
+    };
   }
 
   /** The announcement materializes the DM lane (envelope-derived lanes), but

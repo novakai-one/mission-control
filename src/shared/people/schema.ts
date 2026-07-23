@@ -16,6 +16,15 @@ export interface PersonView {
   /** Status from the durable Agent block; null for runtime-only rows the
    * object model has never heard of (pre-model PTY spawns). */
   durableStatus: 'spawning' | 'live' | 'failed' | 'retired' | null;
+  /** Tiered honest liveness, derived server-side (mission_visual-truth, Ruling
+   * 3): the ONE grammar every surface renders. Ordering law
+   * live > external-verified > unverified > exited > retired/failed —
+   * unverified is NEVER green, retired/failed never promote, and no evidence
+   * never becomes green. A durable `live` record with no runtime and no fresh
+   * journal activity derives `unverified` (a killed PTY leaves stale durable
+   * truth; an idle external chief reading unverified past the TTL is honesty,
+   * not a bug). */
+  liveness: 'live' | 'external-verified' | 'unverified' | 'exited' | 'retired' | 'failed';
   /** From the Agent block's typed refs. */
   missionId: string | null;
   teamId: string | null;

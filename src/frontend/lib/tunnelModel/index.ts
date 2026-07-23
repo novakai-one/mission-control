@@ -85,6 +85,27 @@ export function dmId(agentName: string): ConversationId {
   return `dm:${agentName}`;
 }
 
+/* ---------- DM lane overlay (shared, mission_visual-truth defect 1) ----------
+   A person row whose lane isn't derivable yet (registered-but-silent agent,
+   durable-only identity, archived person) still must OPEN on click. The
+   overlay stands in until history derives a real lane. Home is the shared
+   model so Mission Control and Messages can never diverge again (the original
+   noop class: Messages had this, Mission Control didn't). */
+export function dmLaneFor(agentName: string): Conversation {
+  return { id: dmId(agentName), kind: 'dm', title: agentName };
+}
+
+/** The lane to render: the derived one when it exists, else the overlay —
+ *  but only while the overlay is what is actually selected (no stale leak). */
+export function resolveSelectedLane(
+  conversations: Conversation[],
+  overlay: Conversation | null,
+  selectedId: ConversationId | null,
+): Conversation | null {
+  return conversations.find((lane) => lane.id === selectedId)
+    ?? (overlay && overlay.id === selectedId ? overlay : null);
+}
+
 /** Every lane an envelope belongs to. A room post lives in its room, a #team
  * post in the channel; a DM lands in the lane of each non-chris party —
  * sender's lane first — so chris↔agent traffic folds into the agent's single

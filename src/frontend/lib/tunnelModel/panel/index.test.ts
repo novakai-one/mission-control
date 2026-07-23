@@ -8,12 +8,24 @@ import type { PersonView } from '../../../../shared/people/schema.js';
 import { buildPanelLanes, mergeArchive, type PanelPersonRow } from './index.js';
 import { dmId, type Conversation } from '../index.js';
 
+/** The tier the backend would derive for these inputs (Ruling 3) — fixtures
+ * default to it so tests read like the real projection. Explicit overrides win. */
+function defaultLiveness(base: { durableStatus: PersonView['durableStatus']; runtime: PersonView['runtime'] }): PersonView['liveness'] {
+  if (base.runtime?.status === 'running') return 'live';
+  if (base.durableStatus === 'retired') return 'retired';
+  if (base.durableStatus === 'failed') return 'failed';
+  if (base.runtime?.status === 'exited') return 'exited';
+  if (base.durableStatus === 'live' || base.durableStatus === 'spawning') return 'external-verified';
+  return 'exited';
+}
+
 function person(overrides: Partial<PersonView> & { agentId: string; name: string }): PersonView {
-  return {
-    provider: 'kimi', durableStatus: 'live', missionId: 'mission_x', teamId: 'team_x',
+  const base = {
+    provider: 'kimi', durableStatus: 'live' as const, missionId: 'mission_x', teamId: 'team_x',
     runtime: null, sessionId: null, updated: null,
     ...overrides,
   };
+  return { ...base, liveness: overrides.liveness ?? defaultLiveness(base) };
 }
 
 function dmLane(name: string, lastMessageAt?: string): Conversation {
@@ -44,6 +56,21 @@ const CHANNEL: Conversation = { id: '#team', kind: 'channel', title: '#team' };
   assert.deepEqual(panel.archived.map((personRow) => personRow.rowId), ['rt_exited-dead', 'agent_retired'],
     'retired durable + dead sessions (exited, no lane) leave the default view (alpha by name)');
   assert.deepEqual(panel.rooms.map((lane) => lane.id), ['#team'], 'channel pinned in rooms');
+}
+
+// --- Ruling 3: unverified ghosts leave the live bucket; ordering law --------
+{
+  const people = [
+    person({ agentId: 'agent_ghost', name: 'Worker Messages Builder', durableStatus: 'live', liveness: 'unverified' }),
+    person({ agentId: 'agent_ext', name: 'chief-kimi-7', durableStatus: 'live', liveness: 'external-verified' }),
+    person({ agentId: 'agent_split', name: 'Manager Kimi Messages', durableStatus: 'live', runtime: { status: 'exited' }, liveness: 'exited' }),
+  ];
+  const panel = buildPanelLanes([CHANNEL], people, []);
+  assert.deepEqual(panel.live.map((personRow) => personRow.rowId), ['agent_ext'],
+    'only live/external-verified sit in the live bucket — a stale durable-live ghost never does');
+  assert.deepEqual(panel.quiet.map((personRow) => personRow.rowId).sort(), ['agent_ghost', 'agent_split'],
+    'unverified + runtime-exited both read quiet — a dead agent never reads healthier than a live one');
+  assert.equal(panel.archived.length, 0);
 }
 
 // --- composed duplicate-name (ruled): two people, one mailbox, both visible --
