@@ -137,6 +137,10 @@ agents and for Chris.
   nvk-agent confirms receipt via the agent's own session transcript.
 - `CONTEXT.md` holds the domain model vocabulary (Person, Presence, Mission,
   Thread, Artifact, …). Use those terms in code and docs.
+- Teardown law (learned twice, 2026-07-22/23): never kill processes by
+  cwd pattern (`lsof`/pgrep on the worktree path) — your own CLI's cwd IS
+  the worktree, so the loop kills you. Kill by exact PID only.
+
 
 ## Provider ladder (standing policy, 2026-07-23, Chris directive)
 
