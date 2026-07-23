@@ -189,4 +189,52 @@ const provingConfirmer: EffectConfirmer = {
   console.log('reconcile queued-retry test passed');
 }
 
+// --- channel + room fan-out semantics UNCHANGED (R3) -------------------------
+
+{
+  const harness = makeHarness(provingConfirmer);
+  const post = envelope({ 'to': '#team', delivery: 'normal', body: 'status post' });
+  await harness.router.route(post);
+  await settle(20);
+  assert.deepEqual(trailFor(harness.storePath, post.id).map((entry) => entry.status), ['queued', 'delivered'],
+    'agent channel posts still settle delivered — the record is the delivery');
+  assert.equal(harness.writes.length + harness.submits.length, 0, 'agent channel posts stay pull-only');
+  console.log('channel unchanged test passed');
+}
+
+{
+  const harness = makeHarness(provingConfirmer);
+  const room = harness.rooms.create({ name: 'proof-room', members: ['worker-2', 'worker-1'], createdBy: 'worker-2' });
+  const post = envelope({ 'to': room.roomId, delivery: 'normal', body: 'room post' });
+  await harness.router.route(post);
+  await settle(20);
+  assert.deepEqual(trailFor(harness.storePath, post.id).map((entry) => entry.status), ['queued', 'delivered'],
+    'room posts to live members still settle delivered');
+  assert.equal(harness.submits.filter((submission) => submission.agentId === 'agent_n1').length, 1,
+    'the live member got the room line typed');
+  console.log('room delivered-unchanged test passed');
+}
+
+{
+  // A member whose PTY write fails still lands on the receipt and the
+  // envelope settles 'partial' — exactly as before this mission.
+  const storePath = join(mkdtempSync(join(tmpdir(), 'nvk-ns-partial-')), 'messages.jsonl');
+  const store = new MessageStore(storePath);
+  const rooms = new RoomStore(join(mkdtempSync(join(tmpdir(), 'nvk-ns-partial-rooms-')), 'rooms.jsonl'));
+  const delivery = new PtyDelivery({
+    write: () => true,
+    submit: (submission: { agentId: string }) => submission.agentId !== 'agent_n1',
+  }, { interruptSettleMs: 0, submitDelayMs: 0 });
+  const router = new MessageRouter(
+    store, delivery, rooms, () => roster, new InterruptRateLimiter(100), undefined, undefined,
+    provingConfirmer, () => null, 200,
+  );
+  const room = rooms.create({ name: 'flaky-room', members: ['worker-2', 'worker-1'], createdBy: 'worker-2' });
+  const post = envelope({ 'to': room.roomId, delivery: 'normal', body: 'room post to a dead PTY' });
+  const receipt = await router.route(post);
+  assert.deepEqual(receipt.failed, ['worker-1'], 'the failed member lands on the receipt');
+  assert.equal(trailFor(storePath, post.id).at(-1)?.status, 'partial', 'room fan-out keeps partial');
+  console.log('room partial-unchanged test passed');
+}
+
 console.log('normal-send honesty tests passed');
