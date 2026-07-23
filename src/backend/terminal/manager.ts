@@ -55,6 +55,11 @@ export interface CreateAgentOptions {
   agentId?: string;
 }
 
+/** Tracking starts now, with no output observed yet. */
+function freshActivity(): AgentActivity {
+  return { lastOutputAtMs: null, trackedSinceMs: Date.now() };
+}
+
 /** Unref'd sleep: pending lifecycle steps never block process shutdown. */
 function pause(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
@@ -118,7 +123,7 @@ export class TerminalManager {
     this.agents.set(info.agentId, {
       info: { ...info, provider: info.provider || 'claude', status: 'exited' },
       archived,
-      activity: { lastOutputAtMs: null, trackedSinceMs: Date.now() },
+      activity: freshActivity(),
     });
   }
 
@@ -151,16 +156,11 @@ export class TerminalManager {
     const requestedSessionId = randomUUID();
     const launched = this.launcher(options.provider || 'claude', options.cwd, requestedSessionId);
     const provider = options.provider || 'claude';
-    const info = buildAgentInfo(
-      agentId,
-      provider === 'claude' ? requestedSessionId : '',
-      options,
-      launched.process.pid,
-    );
+    const info = buildAgentInfo(agentId, provider === 'claude' ? requestedSessionId : '', options, launched.process.pid);
     const buffer = new AgentBuffer();
     this.agents.set(agentId, {
       info, ptyProcess: launched.process, buffer, cancelSessionWait: launched.cancelSessionWait,
-      activity: { lastOutputAtMs: null, trackedSinceMs: Date.now() },
+      activity: freshActivity(),
     });
     this.wire(agentId, launched.process, buffer);
     this.saveRegistry();

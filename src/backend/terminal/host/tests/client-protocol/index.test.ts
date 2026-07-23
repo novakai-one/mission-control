@@ -94,6 +94,7 @@ async function testMalformedFrameClosesClient(): Promise<void> {
 
 // --- activity truth across the seam (mission_agent-stall-detection) ----------
 
+// eslint-disable-next-line max-lines-per-function
 async function testActivityAcrossTheSeam(): Promise<void> {
   const socketPath = path.join(mkdtempSync(path.join(tmpdir(), 'host-activity-')), 'host.sock');
   const nowMs = Date.now();
@@ -137,6 +138,7 @@ async function testActivityAcrossTheSeam(): Promise<void> {
 
 // T-HOST-ACT-4: a real host server includes the runtime's stamp in ready
 // snapshots, and the real client seeds from it end to end.
+// eslint-disable-next-line max-lines-per-function
 async function testHostServerReportsActivityInSnapshots(): Promise<void> {
   const stamp = { lastOutputAtMs: 123_456, trackedSinceMs: 100_000 };
   const runtime: TerminalRuntime = {

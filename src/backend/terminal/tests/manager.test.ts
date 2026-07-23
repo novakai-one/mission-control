@@ -163,7 +163,7 @@ async function testEarlyExitCancelsCodexDiscovery(): Promise<void> {
   assert.equal(retried.provider, 'codex', 'early exit must release the pending-codex guard so retries launch');
 }
 
-async function testActivityStamping(): Promise<void> {
+function outputCapturingLauncher(): { launcher: ProviderLauncher; emit: (data: string) => void } {
   let emitData: ((data: string) => void) | null = null;
   const launcher: ProviderLauncher = () => ({
     process: {
@@ -173,18 +173,26 @@ async function testActivityStamping(): Promise<void> {
     sessionId: new Promise<string>(() => {}),
     cancelSessionWait: () => {},
   });
+  return { launcher, emit: (data) => emitData?.(data) };
+}
+
+async function testActivityStamping(): Promise<void> {
+  const fixture = outputCapturingLauncher();
   const registryPath = join(mkdtempSync(join(tmpdir(), 'mc-activity-')), 'agents.json');
-  const manager = new TerminalManager(registryPath, launcher);
+  const manager = new TerminalManager(registryPath, fixture.launcher);
   const before = Date.now();
   const info = await manager.create({ cwd: '/tmp/fake' });
   const initial = manager.activity(info.agentId);
   assert.ok(initial, 'activity exists from creation');
   assert.equal(initial.lastOutputAtMs, null, 'no output observed yet');
   assert.ok(initial.trackedSinceMs >= before, 'trackedSince set at create');
-  emitData!('spinner frame');
+  fixture.emit('spinner frame');
   const stamped = manager.activity(info.agentId);
   assert.ok(stamped?.lastOutputAtMs !== null && (stamped?.lastOutputAtMs ?? 0) >= before, 'onData stamps lastOutputAtMs');
   assert.equal(manager.activity('agent_unknown'), null, 'unknown id returns null');
+}
+
+function testRestoredAgentTracksActivity(): void {
   const restored = new TerminalManager(makeFixtureRegistry());
   const restoredActivity = restored.activity('agent_running');
   assert.ok(restoredActivity, 'restored agents track activity too');
@@ -203,6 +211,7 @@ async function main(): Promise<void> {
   await testLauncherFailureClearsPendingCodex();
   await testEarlyExitCancelsCodexDiscovery();
   await testActivityStamping();
+  testRestoredAgentTracksActivity();
   console.log('PASS');
 }
 

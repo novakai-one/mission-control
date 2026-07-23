@@ -51,7 +51,7 @@ export class NudgeAction {
     try {
       mkdirSync(path.dirname(this.recordPath), { recursive: true });
       appendFileSync(this.recordPath, `${JSON.stringify({
-        id: nudgeId, kind: 'nudge', ts: new Date().toISOString(), agentId, healthBefore,
+        id: nudgeId, kind: 'nudge', 'ts': new Date().toISOString(), agentId, healthBefore,
       })}\n`);
     } catch (error) {
       console.error(`[nudge] record failed for ${agentId}: ${error instanceof Error ? error.message : String(error)}`);

@@ -17,12 +17,12 @@ import { NUDGE_PROMPT } from '../../terminal/nudge/index.js';
 process.env.NVK_STALL_QUIET_MS = '300000';    // 5 min
 process.env.NVK_STALL_STALLED_MS = '900000';  // 15 min
 
-const NOW = Date.now();
+const NOW_MS = Date.now();
 
 function agentInfo(overrides: Partial<AgentInfo>): AgentInfo {
   return {
     agentId: 'agent_x', title: 'claude-1', provider: 'claude', sessionId: '',
-    projectDir: 'project', cwd: '/tmp/project', status: 'running', createdAt: new Date(NOW).toISOString(),
+    projectDir: 'project', cwd: '/tmp/project', status: 'running', createdAt: new Date(NOW_MS).toISOString(),
     ...overrides,
   };
 }
@@ -33,17 +33,17 @@ const exitedAgent = agentInfo({ agentId: 'agent_exited', title: 'done', status: 
 const kimiAgent = agentInfo({ agentId: 'agent_kimi', title: 'kimi-1', provider: 'kimi' });
 
 const activities = new Map<string, AgentActivity>([
-  ['agent_quiet', { lastOutputAtMs: NOW - 10 * 60_000, trackedSinceMs: NOW - 60 * 60_000 }],
-  ['agent_fresh', { lastOutputAtMs: NOW - 1_000, trackedSinceMs: NOW - 60 * 60_000 }],
-  ['agent_exited', { lastOutputAtMs: NOW - 1_000, trackedSinceMs: NOW - 60 * 60_000 }],
-  ['agent_kimi', { lastOutputAtMs: NOW - 1_000, trackedSinceMs: NOW - 60 * 60_000 }],
+  ['agent_quiet', { lastOutputAtMs: NOW_MS - 10 * 60_000, trackedSinceMs: NOW_MS - 60 * 60_000 }],
+  ['agent_fresh', { lastOutputAtMs: NOW_MS - 1_000, trackedSinceMs: NOW_MS - 60 * 60_000 }],
+  ['agent_exited', { lastOutputAtMs: NOW_MS - 1_000, trackedSinceMs: NOW_MS - 60 * 60_000 }],
+  ['agent_kimi', { lastOutputAtMs: NOW_MS - 1_000, trackedSinceMs: NOW_MS - 60 * 60_000 }],
 ]);
 
 function makeTerminals(submitted: SubmitJob[]): TerminalRuntime {
   return {
     create: () => Promise.reject(new Error('unused')),
     write: () => true,
-    submit: (job) => { submitted.push(job); return true; },
+    submit: (submitJob) => { submitted.push(submitJob); return true; },
     resize: () => true, rename: () => true, kill: () => true, archive: () => true,
     snapshot: () => '',
     activity: (agentId) => activities.get(agentId) ?? null,
@@ -59,8 +59,8 @@ function makeHarness(): Promise<Harness> {
   const nudgesPath = path.join(mkdtempSync(path.join(tmpdir(), 'nvk-nudges-')), 'nudges.jsonl');
   const application = express();
   application.use(express.json());
-  const hub = new AgentsHub(new Set(), makeTerminals(submitted), undefined, undefined, nudgesPath);
-  hub.registerRoutes(application);
+  const agentsHub = new AgentsHub(new Set(), makeTerminals(submitted), undefined, undefined, nudgesPath);
+  agentsHub.registerRoutes(application);
   return new Promise((resolve) => {
     const server: Server = application.listen(0, () => {
       const address = server.address();
@@ -106,12 +106,12 @@ const harness = await makeHarness();
   assert.match(body.nudgeId, /^nudge_/, 'nudge id minted');
   assert.equal(body.healthBefore.state, 'quiet', 'health before the nudge is reported');
   assert.equal(harness.submitted.length, 1, 'exactly one submit reached the terminal lane');
-  const job = harness.submitted[0]!;
-  assert.equal(job.agentId, 'agent_quiet');
-  assert.equal(job.messageId, body.nudgeId, 'submit is keyed by the nudge id');
-  assert.equal(job.text, NUDGE_PROMPT, 'the neutral prompt is typed verbatim');
-  assert.equal(job.settleMs, 900, 'tunnel-parity settle timing');
-  assert.equal(job.flushMs, undefined, 'claude gets no flush');
+  const submitJob = harness.submitted[0]!;
+  assert.equal(submitJob.agentId, 'agent_quiet');
+  assert.equal(submitJob.messageId, body.nudgeId, 'submit is keyed by the nudge id');
+  assert.equal(submitJob.text, NUDGE_PROMPT, 'the neutral prompt is typed verbatim');
+  assert.equal(submitJob.settleMs, 900, 'tunnel-parity settle timing');
+  assert.equal(submitJob.flushMs, undefined, 'claude gets no flush');
 }
 
 // --- T-API-NUDGE: fresh ids per nudge (harmless to healthy agents) ----------
@@ -129,8 +129,8 @@ const harness = await makeHarness();
 
 {
   await fetch(`${harness.base}/api/agents/agent_kimi/nudge`, { method: 'POST' });
-  const job = harness.submitted[harness.submitted.length - 1]!;
-  assert.equal(job.flushMs, 6000, 'kimi provider gets the flush \\r');
+  const submitJob = harness.submitted[harness.submitted.length - 1]!;
+  assert.equal(submitJob.flushMs, 6000, 'kimi provider gets the flush \\r');
 }
 
 // --- T-API-NUDGE: rejections -------------------------------------------------
@@ -140,7 +140,7 @@ const harness = await makeHarness();
   assert.equal(missing.status, 404, 'unknown agent → 404');
   const exited = await fetch(`${harness.base}/api/agents/agent_exited/nudge`, { method: 'POST' });
   assert.equal(exited.status, 409, 'exited agent → 409');
-  const submitsBefore = harness.submitted.filter((job) => job.agentId === 'agent_exited').length;
+  const submitsBefore = harness.submitted.filter((submitJob) => submitJob.agentId === 'agent_exited').length;
   assert.equal(submitsBefore, 0, 'no submit for a rejected nudge');
 }
 
