@@ -55,4 +55,39 @@ const audit = (dir) => spawnSync('node', [STORE_CLI, 'audit', '--dir', dir], { e
   rmSync(dir, { recursive: true, force: true });
 }
 
+// T2 — full filing: mission + team + 2 tasks; ordered output; refs + updated correct.
+// M1 scaffolding: a task append demands an agent whose mission agrees, and no
+// agent can pre-exist for a brand-new mission in the wild — so the fixture seeds
+// one reffing the to-be-filed mission+team (dangling until the filing resolves it;
+// candidate-only validation permits this, and the post-filing audit proves clean).
+{
+  const dir = freshDir();
+  writeFileSync(path.join(dir, 'agents.jsonl'), JSON.stringify({
+    id: 'agent_t2-worker', kind: 'agent', ts: '2026-07-21T12:00:00+10:00', name: 'T2 Worker',
+    provider: 'claude', status: 'live',
+    refs: [{ kind: 'team', value: 'team_t2' }, { kind: 'mission', value: 'mission_t2' }],
+  }) + '\n');
+  const result = run(['create', '--dir', dir, '--id', 'mission_t2', '--title', 'T2', '--owner', 'chief-test',
+    '--team-name', 'Team T2', '--task', 'First task', '--task', 'Second task', '--agent', 'agent_t2-worker',
+    '--ref', 'doc=docs/fixture.md|design doc', '--priority', 'important', '--notes', 'note body']);
+  assert.equal(result.status, 0, result.stderr);
+  const out = result.stdout.trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(out.map((row) => row.appended), ['mission_t2', 'team_t2', 'task_t2-1', 'task_t2-2']);
+  assert.deepEqual(out.map((row) => row.store), ['missions.jsonl', 'teams.jsonl', 'tasks.jsonl', 'tasks.jsonl']);
+  const team = JSON.parse(readFileSync(path.join(dir, 'teams.jsonl'), 'utf8').trim().split('\n').at(-1));
+  assert.deepEqual(team.refs, [{ kind: 'mission', value: 'mission_t2' }]);
+  assert.equal(team.name, 'Team T2');
+  const tasks = readFileSync(path.join(dir, 'tasks.jsonl'), 'utf8').trim().split('\n').slice(-2).map((line) => JSON.parse(line));
+  for (const task of tasks) {
+    assert.equal(task.status, 'todo');
+    assert.equal(task.updated, task.ts, 'creation mints updated = ts');
+    assert.deepEqual(task.refs, [{ kind: 'mission', value: 'mission_t2' }, { kind: 'agent', value: 'agent_t2-worker' }]);
+  }
+  const mission = JSON.parse(readFileSync(path.join(dir, 'missions.jsonl'), 'utf8').trim().split('\n').at(-1));
+  assert.deepEqual(mission.refs, [{ kind: 'doc', value: 'docs/fixture.md', label: 'design doc' }]);
+  assert.equal(mission.priority, 'important');
+  assert.equal(audit(dir).status, 0);
+  rmSync(dir, { recursive: true, force: true });
+}
+
 console.log('nvk-mission tests passed');
