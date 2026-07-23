@@ -12,6 +12,7 @@ import type {
   Conversation,
   ConversationId,
 } from '../../../../lib/tunnelModel/index.js';
+import type { PanelLanes, PanelPersonRow } from '../../../../lib/tunnelModel/people.js';
 import {
   MESSAGING_SETTINGS,
   PRESENCE_LABEL,
@@ -30,6 +31,10 @@ import './index.css';
 
 interface RoomsRailProps {
   conversations: Conversation[];
+  /** The shared agentId-keyed row set both rails render (Task 2.3). */
+  panel: PanelLanes;
+  /** Newest people read failed — list shown is the last good one (M2). */
+  peopleStale: boolean;
   /** Rendered label per lane — collision-suffixed by the model (C2). */
   labels: Map<ConversationId, string>;
   unread: Record<ConversationId, number>;
@@ -68,17 +73,35 @@ function RoomRow(props: {
   );
 }
 
+/** Presence for a person row: unread wins, then running PTY or live durable
+ * identity (an external chief with no PTY IS online), else gray. */
+function personTone(row: PanelPersonRow, count: number): ReturnType<typeof presenceToneFor> {
+  if (count > 0) return 'amber';
+  if (row.person?.runtime?.status === 'running') return 'green';
+  if (row.person?.durableStatus === 'live' || row.person?.durableStatus === 'spawning') return 'green';
+  return 'gray';
+}
+
+/** The quiet second line: provider plus the honest status word. */
+function personRole(row: PanelPersonRow): string {
+  const provider = row.person?.provider ?? 'agent';
+  const status = row.person?.runtime?.status
+    ?? (row.person ? row.person.durableStatus ?? 'unregistered' : 'history');
+  return `${provider} · ${status}`;
+}
+
 function PersonRow(props: {
-  lane: Conversation;
+  row: PanelPersonRow;
   label: string;
-  agents: AgentInfo[];
   count: number;
   selected: boolean;
   onSelect(conversation: Conversation): void;
 }) {
-  const agent = props.agents.find((entry) => entry.title === props.lane.title);
-  const tone = presenceToneFor(props.count, agent?.status ?? null);
-  const role = agent?.provider ?? 'agent';
+  const { row } = props;
+  const name = row.person?.name ?? row.lane?.title ?? props.label;
+  const lane: Conversation = row.lane ?? { id: row.conversationId, kind: 'dm', title: name };
+  const tone = personTone(row, props.count);
+  const role = personRole(row);
   const label = `${props.label}, ${role}, ${PRESENCE_LABEL[tone]}`;
   const classes = props.selected ? 'msg-person is-selected' : 'msg-person';
   return (
@@ -87,9 +110,9 @@ function PersonRow(props: {
       className={classes}
       aria-label={label}
       aria-current={props.selected ? 'true' : undefined}
-      onClick={() => props.onSelect(props.lane)}
+      onClick={() => props.onSelect(lane)}
     >
-      <span className="msg-person-av" aria-hidden="true">{initialFor(props.lane.title)}</span>
+      <span className="msg-person-av" aria-hidden="true">{initialFor(name)}</span>
       <span className="msg-person-meta">
         <strong title={props.label}>{props.label}</strong>
         <small title={role}>{role}</small>
@@ -113,6 +136,19 @@ export function RoomsRail(props: RoomsRailProps) {
   const capped = capRailLanes(filterRailLanes(props.conversations, query), visibleCount);
   const sections = splitRailSections(capped.lanes);
   const atCeiling = visibleCount >= MESSAGING_SETTINGS.rail.ceiling;
+  // Person rows (Task 2.4): the shared buckets, windowed by the SAME search
+  // + cap chrome as lanes (M1 — chrome windows, never reorders). A row with
+  // no derived lane is identity-only (registered, nothing said) and passes
+  // the cap — the cap bounds journal-derived lanes, not the directory.
+  const needle = query.trim().toLowerCase();
+  const cappedDmIds = new Set(sections.directs.map((lane) => lane.id));
+  const matchesQuery = (row: PanelPersonRow): boolean =>
+    !needle || (row.person?.name ?? row.lane?.title ?? '').toLowerCase().includes(needle);
+  const inWindow = (row: PanelPersonRow): boolean =>
+    matchesQuery(row) && (row.lane === null || cappedDmIds.has(row.lane.id));
+  const liveRows = props.panel.live.filter(inWindow);
+  const quietRows = props.panel.quiet.filter(inWindow);
+  const archivedRows = props.panel.archived.filter(matchesQuery);
 
   function toggleFlow(next: NewFlow): void {
     setFlow((current) => (current === next ? null : next));
@@ -216,21 +252,38 @@ export function RoomsRail(props: RoomsRailProps) {
               />
             ))}
           </div>
-          {(!query.trim() || sections.directs.length > 0) && <div className="msg-section">Direct messages</div>}
+          {(!query.trim() || liveRows.length + quietRows.length > 0) && <div className="msg-section">Direct messages</div>}
+          {props.peopleStale && <div className="msg-rail-quiet">People directory stale — reconnecting…</div>}
           <div className="msg-rail-stack">
-            {sections.directs.map((lane) => (
+            {[...liveRows, ...quietRows].map((row) => (
               <PersonRow
-                key={lane.id}
-                lane={lane}
-                label={props.labels.get(lane.id) ?? lane.title}
-                agents={props.agents}
-                count={props.unread[lane.id] ?? 0}
-                selected={lane.id === props.selectedId}
+                key={row.rowId}
+                row={row}
+                label={props.labels.get(row.conversationId) ?? row.person?.name ?? row.lane?.title ?? row.conversationId}
+                count={props.unread[row.conversationId] ?? 0}
+                selected={row.conversationId === props.selectedId}
                 onSelect={props.onSelect}
               />
             ))}
-            {sections.directs.length === 0 && !query.trim() && <div className="msg-rail-quiet">No agents yet</div>}
+            {liveRows.length + quietRows.length === 0 && !query.trim() && <div className="msg-rail-quiet">No agents yet</div>}
           </div>
+          {archivedRows.length > 0 && (
+            <details className="msg-archived">
+              <summary className="msg-section msg-archived-summary">Archived · {archivedRows.length}</summary>
+              <div className="msg-rail-stack">
+                {archivedRows.map((row) => (
+                  <PersonRow
+                    key={row.rowId}
+                    row={row}
+                    label={props.labels.get(row.conversationId) ?? row.person?.name ?? row.conversationId}
+                    count={props.unread[row.conversationId] ?? 0}
+                    selected={row.conversationId === props.selectedId}
+                    onSelect={props.onSelect}
+                  />
+                ))}
+              </div>
+            </details>
+          )}
           {capped.hiddenCount > 0 && !atCeiling && (
             <button
               type="button"

@@ -13,6 +13,7 @@ import type {
   RosterEntry,
   TunnelRoom,
 } from '../../../../lib/tunnelModel/index.js';
+import type { PanelPersonRow } from '../../../../lib/tunnelModel/people.js';
 import { PanelGlyph } from '../../../ui/index.js';
 import type { MissionConfidence } from '../index.js';
 import type { MissionHealthMeasure } from '../model.js';
@@ -27,7 +28,12 @@ interface MissionRailProps {
   roster: RosterEntry[];
   agents: AgentInfo[];
   missionRooms: Conversation[];
-  directMessages: Conversation[];
+  /** The shared agentId-keyed buckets (Task 2.3) — same data as Messages. */
+  livePeople: PanelPersonRow[];
+  quietPeople: PanelPersonRow[];
+  archivedPeople: PanelPersonRow[];
+  /** Newest people read failed — list shown is the last good one (M2). */
+  peopleStale: boolean;
   selectedId: ConversationId | null;
   onToggle(): void;
   onSelectConversation(conversation: Conversation): void;
@@ -179,22 +185,44 @@ export function MissionRail(props: MissionRailProps) {
       </div>
 
       <div className="mc-section-label mc-section-spaced">Direct messages</div>
+      {props.peopleStale && <div className="mc-rail-stale">People directory stale — reconnecting…</div>}
       <div className="mc-rail-agents">
-        {props.directMessages.map((conversation) => {
-          const agent = props.agents.find((candidate) => candidate.title === conversation.title);
-          return (
-            <DirectMessageRow
-              key={conversation.id}
-              lane={conversation}
-              agent={agent}
-              selected={conversation.id === props.selectedId}
-              onSelect={() => (agent ? props.onSelectPerson(agent) : props.onSelectConversation(conversation))}
-            />
-          );
-        })}
+        {[...props.livePeople, ...props.quietPeople].map((row) => (
+          <DirectMessageRow
+            key={row.rowId}
+            row={row}
+            selected={row.conversationId === props.selectedId}
+            onSelect={() => selectRow(row, props)}
+          />
+        ))}
       </div>
+      {props.archivedPeople.length > 0 && (
+        <details className="mc-archived">
+          <summary className="mc-section-label mc-archived-summary">Archived · {props.archivedPeople.length}</summary>
+          <div className="mc-rail-agents">
+            {props.archivedPeople.map((row) => (
+              <DirectMessageRow
+                key={row.rowId}
+                row={row}
+                selected={row.conversationId === props.selectedId}
+                onSelect={() => selectRow(row, props)}
+              />
+            ))}
+          </div>
+        </details>
+      )}
     </aside>
   );
+}
+
+/** Row click: runtime-backed people route through onSelectPerson (thread/agent
+ * wiring); durable-only or history-only rows open the lane directly — the
+ * lane id is transport, so a missing derived lane still opens an overlay. */
+function selectRow(row: PanelPersonRow, props: MissionRailProps): void {
+  const agent = row.person ? props.agents.find((candidate) => candidate.agentId === row.person?.agentId) : undefined;
+  if (agent) return props.onSelectPerson(agent);
+  const lane = row.lane ?? { id: row.conversationId, kind: 'dm' as const, title: row.person?.name ?? row.conversationId };
+  props.onSelectConversation(lane);
 }
 
 /** Live-mode hero (non-snapshot): thread kicker, title, facts, confidence. */
