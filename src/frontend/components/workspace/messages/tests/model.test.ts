@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
 import type { Conversation, TunnelEnvelope } from '../../../../lib/tunnelModel/index.js';
+import { buildConversations, dmId, registeredRoster } from '../../../../lib/tunnelModel/index.js';
+import { createLaneFlows } from '../flows/index.js';
 import {
   DEFAULT_RAIL_WIDTHS,
   DENSITY_SCALE,
   MESSAGING_SETTINGS,
+  capRailLanes,
   clampRailWidth,
   composerTargetsFor,
   dayLabelFor,
   displayNameFor,
+  distinctRailLabels,
+  visibleLanesFor,
   dmLaneFor,
   filterRailLanes,
   groupByDay,
@@ -31,6 +36,7 @@ import {
   rowDeliveryFor,
   snippetFor,
   splitRailSections,
+  windowMessages,
   userScrollActive,
   workingAgentFor,
   WORKING_WINDOW_MS,
@@ -354,5 +360,220 @@ assert.deepEqual(
 // with filter text — the review miss was the universe, not the trigger.
 const offlineTargets = composerTargetsFor([{ name: 'atlas', provider: null, live: false }]);
 assert.deepEqual(mentionSuggestions(offlineTargets, '', 6).map((target) => target.label), ['atlas']);
+
+
+// ---- C1 (audit S4): hard rail bound, +page to ceiling, #team pinned --------
+{
+  const many: Conversation[] = [];
+  for (let index = 0; index < 120; index += 1) many.push(lane(`dm:agent-${index}`, 'dm', `agent-${index}`));
+  many.splice(60, 0, lane('#team', 'channel', '#team')); // channel buried mid-list
+  for (let index = 120; index < 220; index += 1) many.push(lane(`room_${index}`, 'room', `room-${index}`));
+
+  const first = capRailLanes(many, MESSAGING_SETTINGS.rail.cap);
+  assert.equal(first.lanes.length, 50);
+  assert.equal(first.lanes[0].id, '#team'); // pinned above the cap, never displaced
+  assert.equal(first.hiddenCount, many.length - 50);
+
+  const paged = capRailLanes(many, MESSAGING_SETTINGS.rail.cap + MESSAGING_SETTINGS.rail.page);
+  assert.equal(paged.lanes.length, 100);
+  assert.equal(paged.lanes[0].id, '#team');
+
+  // The ceiling is HARD: any visibleCount beyond it renders exactly 150.
+  assert.equal(capRailLanes(many, 150).lanes.length, 150);
+  assert.equal(capRailLanes(many, 200).lanes.length, 150);
+  assert.equal(capRailLanes(many, 99999).lanes.length, 150);
+  assert.equal(capRailLanes(many, 99999).hiddenCount, many.length - 150);
+
+  // Under the bound: everything renders, nothing hidden, #team still first.
+  const fewLanes = [lane('dm:a', 'dm', 'a'), lane('#team', 'channel', '#team')];
+  const small = capRailLanes(fewLanes, MESSAGING_SETTINGS.rail.cap);
+  assert.equal(small.lanes.length, 2);
+  assert.equal(small.lanes[0].id, '#team');
+  assert.equal(small.hiddenCount, 0);
+
+  // No channel present (filtered search result): plain bounded slice.
+  const noTeam = capRailLanes(many.filter((entry) => entry.kind !== 'channel'), 50);
+  assert.equal(noTeam.lanes.length, 50);
+  assert.equal(noTeam.lanes[0].id, 'dm:agent-0');
+}
+
+// ---- C1 thread window + M3 anchored window ---------------------------------
+{
+  const feed: TunnelEnvelope[] = [];
+  for (let index = 0; index < 250; index += 1) {
+    feed.push(envelope({ id: `env-${index}`, createdAt: new Date(1700000000000 + index * 1000).toISOString() }));
+  }
+  const tail = windowMessages(feed, MESSAGING_SETTINGS.thread.windowSize);
+  assert.equal(tail.messages.length, 100);
+  assert.equal(tail.messages[0].id, 'env-150');
+  assert.equal(tail.earlierCount, 150);
+  assert.equal(tail.laterCount, 0);
+
+  const short = windowMessages(feed.slice(0, 5), 100);
+  assert.equal(short.messages.length, 5);
+  assert.equal(short.earlierCount, 0);
+  assert.equal(short.laterCount, 0);
+
+  // Anchored (review reaches a target older than the tail window): the
+  // window is bounded AROUND the anchor, with honest earlier/later counts.
+  const anchored = windowMessages(feed, 100, 'env-20');
+  assert.equal(anchored.messages.length, 100);
+  assert.ok(anchored.messages.some((entry) => entry.id === 'env-20'));
+  assert.equal(anchored.earlierCount, 0);
+  assert.equal(anchored.laterCount, 150);
+
+  const midWindow = windowMessages(feed, 100, 'env-125');
+  assert.equal(midWindow.messages.length, 100);
+  assert.ok(midWindow.messages.some((entry) => entry.id === 'env-125'));
+  assert.equal(midWindow.earlierCount + midWindow.laterCount, 150);
+
+  // Unknown anchor falls back to the tail window.
+  const missing = windowMessages(feed, 100, 'env-nope');
+  assert.equal(missing.messages[0].id, 'env-150');
+  assert.equal(missing.earlierCount, 150);
+}
+
+// ---- C2 (audit M1): shortest progressively-extended unique suffix ----------
+{
+  // Two rooms sharing a name, ids differing early but SHARING the last 4
+  // chars — last-4 alone cannot disambiguate; the suffix must extend.
+  const collide = [
+    lane('room_aaaa-1234', 'room', 'triage'),
+    lane('room_bbbb-1234', 'room', 'triage'),
+    lane('dm:maya', 'dm', 'maya'),
+  ];
+  const labels = distinctRailLabels(collide);
+  const labelOne = labels.get('room_aaaa-1234');
+  const labelTwo = labels.get('room_bbbb-1234');
+  assert.ok(labelOne && labelTwo && labelOne !== labelTwo, 'colliding rooms must render distinct labels');
+  assert.ok(labelOne.startsWith('triage · ') && labelTwo.startsWith('triage · '));
+  // Shortest-first: 4 chars tie ("1234"), 5 chars tie ("-1234"), 6 disambiguate.
+  assert.equal(labelOne, 'triage · a-1234');
+  assert.equal(labelTwo, 'triage · b-1234');
+  assert.equal(labels.get('dm:maya'), 'maya'); // unique labels untouched
+
+  // A room literally named 'team' collides with the #team channel label —
+  // both get suffixed (collisions span sections).
+  const teamClash = [
+    lane('#team', 'channel', '#team'),
+    lane('room_cafe-0001', 'room', 'team'),
+  ];
+  const teamLabels = distinctRailLabels(teamClash);
+  assert.notEqual(teamLabels.get('#team'), teamLabels.get('room_cafe-0001'));
+  assert.ok(teamLabels.get('room_cafe-0001')?.startsWith('team · '));
+
+  // Full-id fallback: ids whose every same-length suffix ties (one id is a
+  // suffix of the other) — the longer id's full length disambiguates.
+  const nested = [
+    lane('room_x-77', 'room', 'ops'),
+    lane('room_xx-77', 'room', 'ops'),
+  ];
+  const nestedLabels = distinctRailLabels(nested);
+  assert.notEqual(nestedLabels.get('room_x-77'), nestedLabels.get('room_xx-77'));
+}
+
+// ---- C3 (audit S2): lane pruning, composed through buildConversations ------
+// Precedence: (a) history → visible only if Chris is a party (registration
+// NEVER overrides); (b) empty lane → registered agent, ANY status; (c) #team
+// always; (d) rooms → members only. registeredRoster (not liveRoster)
+// materializes exited agents' empty lanes.
+{
+  const agents = [
+    agent({ agentId: 'ag-a', title: 'worker-a', status: 'running' }),  // agent↔agent history only
+    agent({ agentId: 'ag-c', title: 'worker-c', status: 'exited' }),   // empty, exited
+    agent({ agentId: 'ag-d', title: 'worker-d', status: 'running' }),  // empty, running
+    agent({ agentId: 'ag-e', title: 'worker-e', status: 'running' }),  // chris-party history
+    agent({ agentId: 'ag-f', title: 'worker-f', status: 'exited' }),   // exited, agent↔agent history only
+  ];
+  const feed = [
+    envelope({ id: 'p1', from: 'worker-a', to: 'worker-b', body: 'private' }),
+    envelope({ id: 'p2', from: 'worker-f', to: 'worker-b', body: 'private' }),
+    envelope({ id: 'p3', from: 'chris', to: 'worker-e', body: 'hello' }),
+    envelope({ id: 'p4', from: 'ghost', to: 'chris', body: 'history knows me' }),
+    envelope({ id: 'p5', from: 'phantom', to: 'ghost2', body: 'strangers' }),
+  ];
+  const rooms = [
+    { roomId: 'room_mine-0001', name: 'mine', members: ['chris', 'worker-a'], createdBy: 'chris', createdAt: 'T', archived: false },
+    { roomId: 'room_them-0002', name: 'them', members: ['worker-a', 'worker-b'], createdBy: 'worker-a', createdAt: 'T', archived: false },
+  ];
+  // Exited agents MUST materialize: liveRoster omits them, registeredRoster does not.
+  const lanes = buildConversations(feed, rooms, registeredRoster(agents));
+  assert.ok(lanes.some((entry) => entry.id === 'dm:worker-c'), 'exited empty lane must materialize');
+  const visible = visibleLanesFor(lanes, feed, agents).map((entry) => entry.id);
+  assert.ok(visible.includes('#team'), '(c) #team always');
+  assert.ok(visible.includes('room_mine-0001'), '(d) member room kept');
+  assert.ok(!visible.includes('room_them-0002'), '(d) non-member room dropped');
+  assert.ok(visible.includes('dm:worker-e'), '(a) chris-party history kept');
+  assert.ok(visible.includes('dm:ghost'), '(a) unregistered but chris-party history kept');
+  assert.ok(visible.includes('dm:worker-c'), '(b) empty exited registered kept');
+  assert.ok(visible.includes('dm:worker-d'), '(b) empty running registered kept');
+  assert.ok(!visible.includes('dm:worker-a'), '(a) running registered, agent-only history → hidden');
+  assert.ok(!visible.includes('dm:worker-f'), '(a) exited registered, agent-only history → hidden');
+  assert.ok(!visible.includes('dm:worker-b'), 'unregistered, agent-only history → hidden');
+  assert.ok(!visible.includes('dm:phantom') && !visible.includes('dm:ghost2'), 'stranger lanes hidden');
+}
+
+// ---- C4 (audit S1): spawn lane renders from the 201 ALONE ------------------
+// Composed through the same seams the view uses. Phase 1 — the roster frame
+// is WITHHELD: buildConversations knows nothing of the spawned agent, so the
+// lane exists only as the overlay spawnAgent created before selecting.
+{
+  const spawnedTitle = 'claude-7'; // as minted by the POST /api/agents 201
+  const overlay = dmLaneFor(spawnedTitle);
+  const selectedId = overlay.id;
+  const withheld = visibleLanesFor(buildConversations([], [], registeredRoster([])), [], []);
+  assert.equal(withheld.some((entry) => entry.id === overlay.id), false, 'no derived lane before the frame');
+  const rendered = resolveSelectedLane(withheld, overlay, selectedId);
+  assert.ok(rendered, 'the overlay lane renders from the 201 alone');
+  assert.equal(rendered.id, dmId(spawnedTitle));
+  assert.equal(rendered.kind, 'dm');
+
+  // Phase 2 — the agents-changed frame lands: the lane derives for real,
+  // survives pruning (registered + empty), and reconciliation prefers the
+  // DERIVED lane over the overlay.
+  const roster = [agent({ agentId: 'ag-7', title: spawnedTitle, status: 'running' })];
+  const derived = visibleLanesFor(buildConversations([], [], registeredRoster(roster)), [], roster);
+  const reconciled = resolveSelectedLane(derived, overlay, selectedId);
+  assert.ok(reconciled, 'lane still selected after the frame');
+  assert.equal(reconciled.id, dmId(spawnedTitle));
+  assert.ok(derived.includes(reconciled), 'reconciled to the derived lane, not the overlay');
+}
+
+// ---- C4 (audit S1 + evidence correction): spawnAgent through the REAL
+// composition — createLaneFlows drives the actual POST /api/agents fetch
+// seam (faked at globalThis) with the agents-changed frame withheld; the
+// assertions check the SEQUENCE, not a hand-assembled postcondition.
+{
+  const spawnCalls: string[] = [];
+  let overlay: Conversation | null = null;
+  let overlayAtSelection: Conversation | null = null;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (requestUrl: unknown, init?: { method?: string; body?: string }) => {
+    spawnCalls.push(`${init?.method ?? 'GET'} ${String(requestUrl)} ${init?.body ?? ''}`);
+    return new Response(
+      JSON.stringify({ agentId: 'ag-99', title: 'claude-9', provider: 'claude', status: 'running' }),
+      { status: 201 },
+    );
+  }) as typeof fetch;
+  try {
+    const flows = createLaneFlows({
+      ingestRoom: () => {},
+      setOverlay: (lane) => { overlay = lane; },
+      openLane: (laneId) => {
+        overlayAtSelection = overlay; // capture ordering: overlay must already exist
+        spawnCalls.push(`open ${laneId}`);
+      },
+    });
+    await flows.spawnAgent('claude');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.ok(
+    spawnCalls.some((entry) => entry.startsWith('POST /api/agents') && entry.includes('"provider":"claude"')),
+    'spawn goes through the real POST /api/agents seam',
+  );
+  assert.equal((overlayAtSelection as Conversation | null)?.id, dmId('claude-9'), 'overlay derived from the 201 title BEFORE selection (S1)');
+  assert.ok(spawnCalls.includes('open dm:claude-9'), 'lane selected from the 201 alone — roster frame withheld');
+}
 
 console.log('messages/model tests passed');

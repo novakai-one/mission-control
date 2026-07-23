@@ -6,6 +6,8 @@
 // not-yet-derived lane until Chris's first envelope lands and
 // buildConversations picks the lane up for real.
 import { useState } from 'react';
+import type { AgentInfo } from '../../../../lib/agentSocket/index.js';
+import type { ProviderId } from '../../../../../shared/project/schema.js';
 import {
   type Conversation,
   type ConversationId,
@@ -34,6 +36,43 @@ interface LaneFlowDeps {
   openLane(id: ConversationId): void;
 }
 
+/** Spawn-from-Messages (C4, audit S1): the same POST /api/agents path the
+ *  Agents pane uses; the server mints a unique title when none is given.
+ *  The caller creates the DM overlay BEFORE selecting, so the lane renders
+ *  from this 201 ALONE — no dependency on the agents-changed roster frame,
+ *  which races the response. When the frame lands, resolveSelectedLane
+ *  reconciles to the derived lane exactly as openDm's overlay does. */
+async function spawnAgentRequest(provider: ProviderId, title?: string): Promise<AgentInfo> {
+  return (await postJson('/api/agents', title ? { provider, title } : { provider })) as AgentInfo;
+}
+
+/** The flow logic behind useLaneFlows, React-free so tests can drive the
+ *  REAL composition (fetch seam included) — the hook only binds state. */
+export interface LaneFlowIo extends LaneFlowDeps {
+  setOverlay(lane: Conversation | null): void;
+}
+
+export function createLaneFlows(laneIo: LaneFlowIo): {
+  startRoom(members: string[], name: string): Promise<void>;
+  openDm(name: string): Conversation;
+  spawnAgent(provider: ProviderId, title?: string): Promise<void>;
+} {
+  async function startRoom(members: string[], name: string): Promise<void> {
+    const data = (await postJson('/api/user/rooms', { name, members })) as { room: TunnelRoom };
+    laneIo.ingestRoom(data.room); laneIo.openLane(data.room.roomId);
+  }
+  function openDm(name: string): Conversation {
+    const lane = dmLaneFor(name);
+    laneIo.setOverlay(lane); return lane;
+  }
+  async function spawnAgent(provider: ProviderId, title?: string): Promise<void> {
+    const lane = dmLaneFor((await spawnAgentRequest(provider, title)).title);
+    laneIo.setOverlay(lane); // BEFORE selecting: the lane renders from the 201 alone (S1)
+    laneIo.openLane(lane.id);
+  }
+  return { startRoom, openDm, spawnAgent };
+}
+
 /** Lane-creation flows for the rail entry points: startRoom posts the room
  *  and opens the lane the 201 returns; openDm derives the DM lane locally
  *  (a DM is not a server resource) and holds it as an overlay until the
@@ -42,18 +81,12 @@ export function useLaneFlows({ ingestRoom, openLane }: LaneFlowDeps): {
   resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null;
   startRoom(members: string[], name: string): Promise<void>;
   openDm(name: string): Conversation;
+  spawnAgent(provider: ProviderId, title?: string): Promise<void>;
 } {
   const [overlay, setOverlay] = useState<Conversation | null>(null);
-  async function startRoom(members: string[], name: string): Promise<void> {
-    const data = (await postJson('/api/user/rooms', { name, members })) as { room: TunnelRoom };
-    ingestRoom(data.room); openLane(data.room.roomId);
-  }
-  function openDm(name: string): Conversation {
-    const lane = dmLaneFor(name);
-    setOverlay(lane); return lane;
-  }
+  const flows = createLaneFlows({ ingestRoom, openLane, setOverlay });
   function resolveSelected(conversations: Conversation[], selectedId: ConversationId | null): Conversation | null {
     return resolveSelectedLane(conversations, overlay, selectedId);
   }
-  return { resolveSelected, startRoom, openDm };
+  return { resolveSelected, ...flows };
 }

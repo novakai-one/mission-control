@@ -43,6 +43,10 @@ export interface MessagingTabSettings {
   };
   /** Send-and-know (round 3 M7 — see isOwnFreshSend / userScrollActive). */
   sendFollow: { ownSendWindowMs: number; scrollGuardMs: number };
+  /** Bounded rail (mission messages-tab-v1 C1, audit S4 — see capRailLanes). */
+  rail: { cap: number; page: number; ceiling: number };
+  /** Windowed thread (C1 + M3 anchored review — see windowMessages). */
+  thread: { windowSize: number };
 }
 
 export const DENSITY_SCALE: Record<MessagingDensity, number> = {
@@ -59,6 +63,9 @@ export const MESSAGING_SETTINGS: MessagingTabSettings = {
   delivery: { sendingWindowMs: 60_000 },
   review: { scrollTimeoutMs: 2_000 },
   sendFollow: { ownSendWindowMs: 10_000, scrollGuardMs: 1_200 },
+  // eslint-disable-next-line id-length -- 'cap' is the Chief-named knob (rail cap)
+  rail: { cap: 50, page: 50, ceiling: 150 },
+  thread: { windowSize: 100 },
 };
 
 /* ---------- Delivery status grammar (round 2 — states settle honestly) -----
@@ -226,6 +233,138 @@ export function splitRailSections(conversations: Conversation[]): RailSections {
 /** Rail/composer label for a room lane: '#team' → 'team', 'room_…' → its name. */
 export function roomLabelFor(conversation: Conversation): string {
   return conversation.title.replace(/^#/, '');
+}
+
+/* ---------- Lane pruning (C3, audit S2) --------------------------------------
+   Chris sees only lanes he is party to. Precedence RULED by the audit —
+   history dominates registration:
+     (a) DM lane WITH history → visible ONLY if Chris is a party to that
+         history; a registered agent whose lane holds nothing but
+         agent↔agent traffic stays hidden.
+     (b) EMPTY DM lane → kept iff its agent is registered, ANY status —
+         Chris can start a DM with any teammate, running or exited.
+     (c) the #team channel → always visible.
+     (d) rooms → visible only when Chris is a member.
+   Pure presentation-layer filter: conversationIdsFor is untouched and its
+   fan-out semantics stay intact for attention/readCursor/review consumers. */
+function dmLaneStanding(feed: TunnelEnvelope[]): { hasHistory: Set<ConversationId>; chrisParty: Set<ConversationId> } {
+  const hasHistory = new Set<ConversationId>();
+  const chrisParty = new Set<ConversationId>();
+  for (const message of feed) {
+    for (const laneId of conversationIdsFor(message)) {
+      if (!laneId.startsWith('dm:')) continue;
+      hasHistory.add(laneId);
+      if (message.from === CHRIS || message.to === CHRIS) chrisParty.add(laneId);
+    }
+  }
+  return { hasHistory, chrisParty };
+}
+
+export function visibleLanesFor(
+  lanes: Conversation[],
+  feed: TunnelEnvelope[],
+  agents: Pick<AgentInfo, 'title'>[],
+): Conversation[] {
+  const registered = new Set(agents.map((agent) => agent.title));
+  const { hasHistory, chrisParty } = dmLaneStanding(feed);
+  return lanes.filter((entry) => {
+    if (entry.kind === 'channel') return true;
+    if (entry.kind === 'room') return entry.members?.includes(CHRIS) ?? false;
+    if (hasHistory.has(entry.id)) return chrisParty.has(entry.id);
+    return registered.has(entry.title);
+  });
+}
+
+/* ---------- Distinct rail labels (C2, audit M1) ------------------------------
+   Presentation-layer disambiguation ONLY — no identity or envelope change.
+   When two lanes would render the identical label, each collider gets the
+   SHORTEST id suffix that tells the collision set apart: start at 4 chars,
+   extend one char at a time, fall back to the full id. Collisions span
+   sections (a room named 'team' collides with the #team channel label). */
+function railLabelBase(conversation: Conversation): string {
+  return conversation.kind === 'dm' ? conversation.title : roomLabelFor(conversation);
+}
+
+const SUFFIX_START = 4;
+
+function shortestUniqueSuffixes(laneIds: string[]): Map<string, string> {
+  const longest = Math.max(...laneIds.map((laneId) => laneId.length));
+  for (let length = SUFFIX_START; length <= longest; length += 1) {
+    const suffixes = laneIds.map((laneId) => laneId.slice(-length));
+    if (new Set(suffixes).size === laneIds.length) {
+      return new Map(laneIds.map((laneId, index) => [laneId, suffixes[index]]));
+    }
+  }
+  return new Map(laneIds.map((laneId) => [laneId, laneId])); // full-id fallback
+}
+
+export function distinctRailLabels(lanes: Conversation[]): Map<ConversationId, string> {
+  const byLabel = new Map<string, Conversation[]>();
+  for (const entry of lanes) {
+    const base = railLabelBase(entry);
+    byLabel.set(base, [...(byLabel.get(base) ?? []), entry]);
+  }
+  const labels = new Map<ConversationId, string>();
+  for (const [base, group] of byLabel) {
+    if (group.length === 1) {
+      labels.set(group[0].id, base);
+      continue;
+    }
+    const suffixes = shortestUniqueSuffixes(group.map((entry) => entry.id));
+    for (const entry of group) labels.set(entry.id, `${base} · ${suffixes.get(entry.id)}`);
+  }
+  return labels;
+}
+
+/* ---------- Bounded rail (C1, audit S4) --------------------------------------
+   The rail NEVER renders more than the ceiling, no matter what sequence of
+   show-more clicks arrives — there is deliberately no "return all" mode.
+   Lanes beyond the ceiling are reached via search (the query runs over the
+   full lane set upstream; its result passes back through this same bound).
+   The #team channel is pinned first and never displaced by the bound. */
+export interface CappedLanes {
+  lanes: Conversation[];
+  hiddenCount: number;
+}
+
+export function capRailLanes(lanes: Conversation[], visibleCount: number): CappedLanes {
+  const bound = Math.min(Math.max(visibleCount, 1), MESSAGING_SETTINGS.rail.ceiling);
+  const channel = lanes.find((entry) => entry.kind === 'channel');
+  const rest = channel ? lanes.filter((entry) => entry !== channel) : lanes;
+  const capped = channel
+    ? [channel, ...rest.slice(0, bound - 1)]
+    : rest.slice(0, bound);
+  return { lanes: capped, hiddenCount: lanes.length - capped.length };
+}
+
+/* ---------- Windowed thread (C1 + M3) ----------------------------------------
+   Default: the newest windowSize rows — no full-journal map, ever. An
+   anchorId (the review flow reaching a failed envelope older than the tail)
+   bounds the window AROUND the target instead, with honest counts of what
+   sits outside it on each side. Unknown anchors fall back to the tail. */
+export interface ThreadWindow {
+  messages: TunnelEnvelope[];
+  earlierCount: number;
+  laterCount: number;
+}
+
+export function windowMessages(
+  messages: TunnelEnvelope[],
+  visibleCount: number,
+  anchorId?: string,
+): ThreadWindow {
+  const anchorIndex = anchorId ? messages.findIndex((entry) => entry.id === anchorId) : -1;
+  if (anchorIndex === -1) {
+    const start = Math.max(0, messages.length - visibleCount);
+    return { messages: messages.slice(start), earlierCount: start, laterCount: 0 };
+  }
+  const sliceEnd = Math.min(messages.length, Math.max(anchorIndex + Math.ceil(visibleCount / 2), visibleCount));
+  const sliceStart = Math.max(0, sliceEnd - visibleCount);
+  return {
+    messages: messages.slice(sliceStart, sliceEnd),
+    earlierCount: sliceStart,
+    laterCount: messages.length - sliceEnd,
+  };
 }
 
 /* ---------- Known agents (round 3 M5 — New room / New DM pickers) ----------

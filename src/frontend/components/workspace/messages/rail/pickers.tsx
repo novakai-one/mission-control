@@ -6,6 +6,7 @@
 // Attachments swap through resolveStyle (doctrine §B); visuals live in the
 // rail's index.css.
 import React, { useState } from 'react';
+import { PROVIDER_IDS, type ProviderId } from '../../../../../shared/project/schema.js';
 import { initialFor, type KnownAgent } from '../model.js';
 import { PICKER_STYLE, resolveStyle } from '../styles/index.js';
 
@@ -108,6 +109,68 @@ export function NewRoomPicker(props: PickerProps & { onStartChat(members: string
           </button>
         </div>
       )}
+      {error && <div className="msg-picker-error">{error}</div>}
+    </div>
+  );
+}
+
+/** Spawn picker (C4): provider choice + optional name, POSTed through
+ *  onSpawnAgent (the existing /api/agents client path — the server mints a
+ *  unique title when the name is left blank). Errors surface honestly: a
+ *  409 name collision lands here, not in a silent fail. */
+export function NewAgentPicker(props: { onSpawnAgent(provider: ProviderId, title?: string): Promise<void>; onClose(): void }) {
+  const [provider, setProvider] = useState<ProviderId>('claude');
+  const [name, setName] = useState('');
+  const [spawning, setSpawning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function spawn(): Promise<void> {
+    if (spawning) return;
+    setSpawning(true);
+    setError(null);
+    try {
+      await props.onSpawnAgent(provider, name.trim() || undefined);
+      props.onClose();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setSpawning(false);
+    }
+  }
+
+  function handleNameKey(press: React.KeyboardEvent<HTMLInputElement>): void {
+    if (press.key === 'Enter') void spawn();
+    if (press.key === 'Escape') props.onClose();
+  }
+
+  return (
+    <div className={resolveStyle(PICKER_STYLE.base)}>
+      <div className="msg-picker-list">
+        {PROVIDER_IDS.map((candidate) => (
+          <button
+            key={candidate}
+            type="button"
+            className={resolveStyle(PICKER_STYLE.agent, provider === candidate && PICKER_STYLE.agentPicked)}
+            onClick={() => setProvider(candidate)}
+          >
+            <span className="msg-person-av msg-picker-av" aria-hidden="true">{initialFor(candidate)}</span>
+            <span className="msg-picker-name-text">{candidate}</span>
+          </button>
+        ))}
+      </div>
+      <div className="msg-picker-name">
+        <input
+          aria-label="Agent name (optional)"
+          placeholder="Name (optional)"
+          value={name}
+          autoFocus
+          onChange={(change) => setName(change.target.value)}
+          onKeyDown={handleNameKey}
+        />
+        <button type="button" disabled={spawning} onClick={() => void spawn()}>
+          {spawning ? 'Spawning…' : 'Spawn'}
+        </button>
+      </div>
       {error && <div className="msg-picker-error">{error}</div>}
     </div>
   );

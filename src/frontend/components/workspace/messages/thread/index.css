@@ -219,3 +219,19 @@
   font-size: var(--msg-fs-meta);
   color: var(--msg-amber);
 }
+
+/* Windowed thread (C1/M3): earlier/later paging pills ride the day-pill row. */
+.msg-window-pill {
+  padding: var(--msg-sp-4) var(--msg-sp-8);
+  border: 0;
+  border-radius: var(--msg-r-pill);
+  background: var(--msg-bg-control);
+  font-size: var(--msg-fs-meta);
+  letter-spacing: 0.1em;
+  color: var(--msg-text-muted);
+  cursor: pointer;
+}
+
+.msg-window-pill:hover {
+  color: var(--msg-text);
+}
