@@ -154,4 +154,58 @@ function hubOver(durable: AgentBlock[], runtime: AgentInfo[]): PeopleHub {
   }
 }
 
+/* ---------- Tiered liveness (mission_visual-truth, Ruling 3) -----------------
+   Ordering law: live > external-verified > unverified > exited > retired/failed.
+   Unverified is NEVER green; retired/failed never promote; no evidence never
+   becomes green. The journal's createdAt (NOT ts) is the external-activity
+   evidence, bounded by EXTERNAL_ACTIVITY_TTL_MS. */
+{
+  const NOW_MS = Date.parse('2026-07-23T12:00:00.000Z');
+  const scratch = mkdtempSync(path.join(tmpdir(), 'nvk-liveness-'));
+  const journalPath = path.join(scratch, 'messages.jsonl');
+  try {
+    writeFileSync(journalPath, [
+      '{"id":"m1","from":"chief-kimi-6","to":"chris","body":"fresh","createdAt":"2026-07-23T11:55:00.000Z","status":"delivered"}',
+      '{"id":"m2","from":"Stale Bot","to":"chris","body":"old","createdAt":"2026-07-23T10:00:00.000Z","status":"delivered"}',
+      '{"id":"m3","from":"Retired Bot","to":"chris","body":"fresh but retired","createdAt":"2026-07-23T11:59:00.000Z","status":"delivered"}',
+      '{"id":"m4","from":"Ts Trap","to":"chris","body":"ts is not the field","ts":"2026-07-23T11:59:00.000Z","status":"delivered"}',
+      'torn line not json',
+    ].map((line) => `${line}\n`).join(''));
+    const opts = { journalPath, now: () => NOW_MS };
+    const ghost = agentBlock({ id: 'agent_ghost', name: 'Worker Messages Builder', status: 'live' });
+    const verified = agentBlock({ id: 'agent_ext', name: 'chief-kimi-6', status: 'live', sessionId: 'session_ext-6' });
+    const stale = agentBlock({ id: 'agent_stale', name: 'Stale Bot', status: 'live' });
+    const retired = agentBlock({ id: 'agent_ret', name: 'Retired Bot', status: 'retired' });
+    const split = agentBlock({ id: 'agent_split', name: 'Manager Kimi Messages', status: 'live' });
+    const tsTrap = agentBlock({ id: 'agent_ts', name: 'Ts Trap', status: 'live' });
+    const running = agentBlock({ id: 'agent_run', name: 'Worker Kimi Visual', status: 'live' });
+    const runtime = [
+      runtimeInfo({ agentId: 'agent_split', title: 'Manager Kimi Messages', status: 'exited' }),
+      runtimeInfo({ agentId: 'agent_run', title: 'Worker Kimi Visual', status: 'running' }),
+    ];
+    const { people } = new PeopleHub({ listAgents: () => [ghost, verified, stale, retired, split, tsTrap, running] }, () => runtime, undefined, opts).listPeople();
+    const tier = new Map(people.map((person) => [person.agentId, person.liveness]));
+    assert.equal(tier.get('agent_run'), 'live', 'running PTY is live');
+    assert.equal(tier.get('agent_ext'), 'external-verified', 'fresh journal activity verifies an external session');
+    assert.equal(tier.get('agent_ghost'), 'unverified', 'durable live + no runtime + no evidence → unverified, NEVER green (the ghost class)');
+    assert.equal(tier.get('agent_stale'), 'unverified', 'activity older than the TTL no longer verifies');
+    assert.equal(tier.get('agent_ts'), 'unverified', 'the ts field is NOT evidence — createdAt or nothing');
+    assert.equal(tier.get('agent_split'), 'exited', 'runtime exited wins over stale durable live (split-brain cured)');
+    assert.equal(tier.get('agent_ret'), 'retired', 'retired never promotes, even with fresh activity');
+    // The ordering law as data: a dead agent never reads healthier than a live one.
+    const rank = { 'live': 5, 'external-verified': 4, 'unverified': 3, 'exited': 2, 'retired': 1, 'failed': 1 } as const;
+    assert.ok(rank[tier.get('agent_ghost')!] < rank[tier.get('agent_ext')!], 'ghost < verified external');
+    assert.ok(rank[tier.get('agent_ret')!] < rank[tier.get('agent_ghost')!], 'retired < unverified');
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+// --- no journal wired: external sessions derive unverified, never guessed ----
+{
+  const external = agentBlock({ id: 'agent_x', name: 'chief-kimi-6', status: 'live', sessionId: 'session_x' });
+  const { people } = hubOver([external], []).listPeople();
+  assert.equal(people[0].liveness, 'unverified', 'without evidence the honest tier is unverified');
+}
+
 console.log('people hub: all assertions passed');

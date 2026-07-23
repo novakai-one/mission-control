@@ -292,7 +292,7 @@ export class ServerController {
     this.messagingHub.registerRoutes(this.app);
     this.missionViewHub.registerRoutes(this.app);
     this.externalSessionsHub.registerRoutes(this.app);
-    new PeopleHub(this.objectModel, () => this.agentsHub.terminals.list(), process.env.NVK_MISSION_ROOMS ?? path.resolve('.novakai-command/rooms.jsonl')).registerRoutes(this.app);
+    new PeopleHub(this.objectModel, () => this.agentsHub.terminals.list(), process.env.NVK_MISSION_ROOMS ?? path.resolve('.novakai-command/rooms.jsonl'), { journalPath: process.env.NVK_MISSION_JOURNAL ?? path.resolve('.novakai-command/messages.jsonl') }).registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {
       res.json(ConfigManager.load());

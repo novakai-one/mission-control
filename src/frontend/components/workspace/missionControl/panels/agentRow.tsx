@@ -46,16 +46,25 @@ interface DirectMessageRowProps {
   onSelect?(): void;
 }
 
-/** Presence: running PTY or live durable identity (an external chief with no
- * PTY IS online — absence of runtime is not absence). */
+/** The ONE liveness grammar (Ruling 3): the tier is derived server-side in
+ * PeopleHub; rows render it, never re-derive it. Green only for live and
+ * external-verified — unverified is NEVER green. */
+const LIVENESS_LABEL: Record<string, string> = {
+  'live': 'live',
+  'external-verified': 'external · verified',
+  'unverified': 'unverified',
+  'exited': 'exited',
+  'retired': 'retired',
+  'failed': 'failed',
+};
+
 function rowOnline(personRow: PanelPersonRow): boolean {
-  return personRow.person?.runtime?.status === 'running'
-    || personRow.person?.durableStatus === 'live' || personRow.person?.durableStatus === 'spawning';
+  return personRow.person?.liveness === 'live' || personRow.person?.liveness === 'external-verified';
 }
 
 function rowStatusLine(personRow: PanelPersonRow): string {
   if (!personRow.person) return personRow.lane?.lastMessageAt ? 'Recent activity' : 'No messages yet';
-  const status = personRow.person.runtime?.status ?? personRow.person.durableStatus ?? 'unregistered';
+  const status = LIVENESS_LABEL[personRow.person.liveness] ?? 'unverified';
   return `${personRow.person.provider} · ${status}`;
 }
 

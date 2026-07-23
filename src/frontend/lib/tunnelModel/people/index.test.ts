@@ -8,7 +8,7 @@ import { emptyPeopleSnapshot, mountPeople, type PeopleSnapshot } from './index.j
 
 function person(overrides: Partial<PersonView> & { agentId: string; name: string }): PersonView {
   return {
-    provider: 'kimi', durableStatus: 'live', missionId: 'mission_x', teamId: 'team_x',
+    provider: 'kimi', durableStatus: 'live', liveness: 'live', missionId: 'mission_x', teamId: 'team_x',
     runtime: null, sessionId: null, updated: null,
     ...overrides,
   };

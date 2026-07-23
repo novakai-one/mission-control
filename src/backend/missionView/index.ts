@@ -23,6 +23,19 @@ export type { MissionViewRoots } from './sources/index.js';
 
 const CLOSED_MISSION_STATUSES = new Set(['done', 'closed', 'refiled']);
 
+function freshnessStamp(block: Record<string, unknown>): string {
+  return typeof block.updated === 'string' ? block.updated : typeof block.ts === 'string' ? block.ts : '';
+}
+
+/** Correction (mission_visual-truth, Ruling 2i): compare PARSED instants,
+ * never the raw strings — mixed offsets sort wrong lexically
+ * ("2026-07-23T15:00:00+10:00" beats "2026-07-23T10:07:37.099Z" as text while
+ * being the OLDER instant). Unparseable stamps floor at 0. */
+function freshnessMs(block: Record<string, unknown>): number {
+  const parsed = Date.parse(freshnessStamp(block));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 /** C4 rule: latest team-linked mission, else latest open mission, else null. */
 function resolveActiveMissionId(records: Record<string, Array<{ block: Record<string, unknown> }>>): string | null {
   const missions = records['missions'] ?? [];
@@ -34,13 +47,11 @@ function resolveActiveMissionId(records: Record<string, Array<{ block: Record<st
       if (ref?.kind === 'mission' && typeof ref.value === 'string') teamLinked.add(ref.value);
     }
   }
-  const freshness = (block: Record<string, unknown>): string =>
-    (typeof block.updated === 'string' ? block.updated : typeof block.ts === 'string' ? block.ts : '');
   // S1 (mission_mission-control-ux): closed missions are excluded BEFORE any
   // pick — a signed-off team-linked mission must never stay pinned as active.
   const openNewestFirst = [...missions]
     .filter((mission) => !CLOSED_MISSION_STATUSES.has(String(mission.block.status ?? '')))
-    .sort((left, right) => freshness(right.block).localeCompare(freshness(left.block)));
+    .sort((left, right) => freshnessMs(right.block) - freshnessMs(left.block));
   const withTeam = openNewestFirst.find((mission) => typeof mission.block.id === 'string' && teamLinked.has(mission.block.id));
   if (withTeam) return withTeam.block.id as string;
   const open = openNewestFirst[0];

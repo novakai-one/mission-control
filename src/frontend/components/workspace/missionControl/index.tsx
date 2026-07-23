@@ -20,8 +20,10 @@ import {
 import {
   buildConversations,
   dmId,
+  dmLaneFor,
   latestChrisQuestion,
   messagesFor,
+  resolveSelectedLane,
   useTunnelFeed,
   useTunnelRooms,
   type Conversation,
@@ -106,6 +108,10 @@ export function MissionControl(props: MissionControlProps) {
   const [draggingRail, setDraggingRail] = useState<'left' | 'right' | null>(null);
   const [selectedId, setSelectedId] = useState<ConversationId | null>(null);
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
+  // Overlay lane (mission_visual-truth defect 1): a person/archived row whose
+  // lane isn't derivable yet still OPENS — the overlay stands in until history
+  // derives the real lane. Shared derivation, same as the Messages tab.
+  const [overlayLane, setOverlayLane] = useState<Conversation | null>(null);
   const { feed, loadConversation } = useTunnelFeed();
   const { rooms, ingestRoom } = useTunnelRooms();
   // Durable-first people directory (rulings S3 + D1/D2): the same source and
@@ -127,7 +133,7 @@ export function MissionControl(props: MissionControlProps) {
     [panel.live],
   );
   const missionRooms = [MISSION_ROOM_ENTRY, ...panel.rooms];
-  const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
+  const selected = resolveSelectedLane(conversations, overlayLane, selectedId);
   // S2 hard boundary: while the pinned room is selected the whole mission
   // surface renders from the snapshot — no live squad, transcript, composer.
   const snapshotMode = selectedId === MISSION_ROOM_CONVERSATION_ID;
@@ -163,6 +169,13 @@ export function MissionControl(props: MissionControlProps) {
   function selectConversation(conversation: Conversation): void {
     setSelectedId(conversation.id);
     saveLane(conversation.id);
+    // The pinned snapshot entry is never an overlay; an underived lane
+    // (durable-only person, archived row, fresh room) becomes the overlay.
+    setOverlayLane(
+      conversation.id === MISSION_ROOM_CONVERSATION_ID || conversations.some((lane) => lane.id === conversation.id)
+        ? null
+        : conversation,
+    );
     if (question && messageAttention.goldId === messageItemId(question.envelopeId)
       && conversation.id === question.conversationId) {
       setDismissed((current) => new Set(current).add(messageItemId(question.envelopeId)));
@@ -171,8 +184,11 @@ export function MissionControl(props: MissionControlProps) {
 
   function selectPerson(agent: AgentInfo): void {
     props.onSelectAgent?.(agent.agentId);
-    const conversation = conversations.find((candidate) => candidate.id === dmId(agent.title));
-    if (conversation) selectConversation(conversation);
+    // Defect 1 fix: no derived lane is NO LONGER a silent noop — fall back to
+    // the overlay lane so every live person row opens its conversation.
+    const conversation = conversations.find((candidate) => candidate.id === dmId(agent.title))
+      ?? dmLaneFor(agent.title);
+    selectConversation(conversation);
   }
 
   function handleRoomCreated(room: TunnelRoom): void {

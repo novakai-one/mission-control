@@ -7,6 +7,9 @@
 // and a durable person with no runtime entry renders runtime: null — for a
 // registered external session that absence is the honest state. Display names
 // are never folded: duplicate names in the live store are distinct people.
+// Liveness law (mission_visual-truth, Ruling 3): the durable status is NEVER
+// rendered raw — `liveness` is derived here once (live > external-verified >
+// unverified > exited > retired/failed) and every surface renders that tier.
 import { existsSync, readFileSync } from 'node:fs';
 import type { Express, Request, Response } from 'express';
 import type { ArchiveResponse, ArchivedLane, PeopleResponse, PersonView } from '../../shared/people/schema.js';
@@ -23,17 +26,86 @@ export interface PeopleSource {
 
 const DURABLE_STATUSES = new Set(['spawning', 'live', 'failed', 'retired']);
 
+/** How long journal activity stays fresh enough to verify an external session
+ * (Ruling 3, mission_visual-truth). Past it, a durable-live external reads
+ * `unverified` — honesty, not a bug. */
+export const EXTERNAL_ACTIVITY_TTL_MS = 10 * 60 * 1000;
+
+export type LivenessTier = PersonView['liveness'];
+
+/** Extra reads for the tiered liveness derivation (Ruling 3). The journal is
+ * optional so the people directory still works standalone (tests, minimal
+ * wiring) — without it every external session derives `unverified`, never
+ * a guessed green. `now` is injectable for tests. */
+export interface PeopleHubOptions {
+  journalPath?: string;
+  now?: () => number;
+}
+
+/** Tiered honest liveness (Ruling 3 ordering law):
+ * live > external-verified > unverified > exited > retired/failed.
+ * - runtime running → live (the PTY is provably alive)
+ * - retired/failed → retired/failed (durable truth; never promote)
+ * - runtime exited → exited (runtime wins over stale durable 'live')
+ * - durable live/spawning with NO runtime → external session: fresh journal
+ *   activity verifies it, anything else is unverified — NEVER green on stale
+ *   durable truth alone (the ghost-liveness defect class). */
+function livenessFor(
+  durableStatus: PersonView['durableStatus'],
+  runtime: { status: 'running' | 'exited' } | null,
+  lastActivityMs: number | null,
+  nowMs: number,
+): LivenessTier {
+  if (durableStatus === 'retired') return 'retired';
+  if (durableStatus === 'failed') return 'failed';
+  if (runtime?.status === 'running') return 'live';
+  if (runtime?.status === 'exited') return 'exited';
+  if (durableStatus === 'live' || durableStatus === 'spawning') {
+    const fresh = lastActivityMs !== null && nowMs - lastActivityMs >= 0 && nowMs - lastActivityMs < EXTERNAL_ACTIVITY_TTL_MS;
+    return fresh ? 'external-verified' : 'unverified';
+  }
+  return 'exited'; // runtime-only exited with no durable identity
+}
+
+/** Parse one journal line into sender + activity instant, or null (torn lines,
+ * missing fields, and the `ts` trap all parse to null — createdAt or nothing). */
+function activityOf(line: string): { from: string; stamp: number } | null {
+  try {
+    const parsed = JSON.parse(line) as { from?: unknown; createdAt?: unknown } | null;
+    const from = typeof parsed?.from === 'string' ? parsed.from : null;
+    const stamp = typeof parsed?.createdAt === 'string' ? Date.parse(parsed.createdAt) : Number.NaN;
+    return from !== null && !Number.isNaN(stamp) ? { from, stamp } : null;
+  } catch {
+    return null; // torn/corrupt line never blocks the rest (MessageStore tolerance)
+  }
+}
+
+/** Last journal activity per sender name (createdAt — NOT ts). */
+function lastActivityBySender(journalPath: string): Map<string, number> {
+  const lastByName = new Map<string, number>();
+  if (!existsSync(journalPath)) return lastByName;
+  for (const line of readFileSync(journalPath, 'utf8').split('\n')) {
+    if (line.trim() === '') continue;
+    const activity = activityOf(line);
+    if (activity && activity.stamp > (lastByName.get(activity.from) ?? Number.NEGATIVE_INFINITY)) {
+      lastByName.set(activity.from, activity.stamp);
+    }
+  }
+  return lastByName;
+}
+
 function refValue(block: AgentBlock, kind: string): string | null {
   const typedRef = block.refs?.find((entry) => entry.kind === kind);
   return typeof typedRef?.value === 'string' ? typedRef.value : null;
 }
 
-function durablePerson(block: AgentBlock, runtime: AgentInfo | undefined): PersonView {
+function durablePerson(block: AgentBlock, runtime: AgentInfo | undefined, liveness: LivenessTier): PersonView {
   return {
     agentId: block.id,
     name: block.name,
     provider: block.provider,
     durableStatus: DURABLE_STATUSES.has(block.status) ? block.status : null,
+    liveness,
     missionId: refValue(block, 'mission'),
     teamId: refValue(block, 'team'),
     runtime: runtime ? { status: runtime.status } : null,
@@ -42,12 +114,13 @@ function durablePerson(block: AgentBlock, runtime: AgentInfo | undefined): Perso
   };
 }
 
-function runtimeOnlyPerson(info: AgentInfo): PersonView {
+function runtimeOnlyPerson(info: AgentInfo, nowMs: number): PersonView {
   return {
     agentId: info.agentId,
     name: info.title,
     provider: info.provider,
     durableStatus: null, // unknown to the object model — never invented
+    liveness: livenessFor(null, { status: info.status }, null, nowMs),
     missionId: null,
     teamId: null,
     runtime: { status: info.status },
@@ -84,6 +157,8 @@ export class PeopleHub {
     private readonly runtimeAgents: () => AgentInfo[],
     /** Rooms JSONL path for the on-demand archive read; omit to serve people only. */
     private readonly roomsPath?: string,
+    /** Liveness derivation inputs (Ruling 3); optional, never guessed. */
+    private readonly options: PeopleHubOptions = {},
   ) {}
 
   registerRoutes(application: Express): void {
@@ -139,15 +214,21 @@ export class PeopleHub {
   /** The whole directory: durable people first (runtime attached by agentId),
    * then runtime-only rows the object model has never heard of. Carries the
    * archived room-lane ids so the default view can exclude them without
-   * pulling the full archive detail (S1). */
+   * pulling the full archive detail (S1). Liveness is derived here, once —
+   * every surface renders this tier (Ruling 3). */
   listPeople(): PeopleResponse {
+    const nowMs = this.options.now?.() ?? Date.now();
+    const activity = this.options.journalPath ? lastActivityBySender(this.options.journalPath) : new Map<string, number>();
     const runtimeById = new Map(this.runtimeAgents().map((info) => [info.agentId, info]));
     const people: PersonView[] = [];
     for (const block of this.source.listAgents()) {
-      people.push(durablePerson(block, runtimeById.get(block.id)));
+      const runtime = runtimeById.get(block.id);
+      const durableStatus = DURABLE_STATUSES.has(block.status) ? block.status : null;
+      const liveness = livenessFor(durableStatus, runtime ? { status: runtime.status } : null, activity.get(block.name) ?? null, nowMs);
+      people.push(durablePerson(block, runtime, liveness));
       runtimeById.delete(block.id);
     }
-    for (const info of runtimeById.values()) people.push(runtimeOnlyPerson(info));
+    for (const info of runtimeById.values()) people.push(runtimeOnlyPerson(info, nowMs));
     return { people, archivedLaneIds: this.archivedRoomIds(), asOf: new Date().toISOString() };
   }
 

@@ -150,6 +150,7 @@ const INPUT = { name: 'chief-kimi-2', provider: 'kimi', sessionId: 'session_c8d3
     markAgentFailed: (agentId, reason) => {
       failed.push([agentId, reason]);
     },
+    agentForSession: () => null,
   };
   const subject = new ExternalSessionsHub(sabotaged, MailboxRegistry.inMemory(), fakeSend([]), () => []);
   await assert.rejects(() => subject.register(INPUT), /store exploded/);
@@ -173,6 +174,25 @@ const INPUT = { name: 'chief-kimi-2', provider: 'kimi', sessionId: 'session_c8d3
   assert.equal(quiet.announcement, 'skipped');
   rmSync(scratch, { recursive: true, force: true });
   console.log('announcement outcome tests passed');
+}
+
+// --- idempotent per session (Ruling 1b): re-registration never double-mints --
+
+{
+  const { subject, model, scratch } = makeRig();
+  const first = await subject.register(INPUT);
+  const second = await subject.register(INPUT); // the redeploy re-run case
+  assert.equal(second.agentId, first.agentId, 'same session → same durable Agent, no second mint');
+  assert.equal(second.teamId, first.teamId);
+  assert.equal(storeBlocks(scratch, 'agents.jsonl').length, 1, 'one agent block after two registrations');
+  assert.equal(storeBlocks(scratch, 'teams.jsonl').length, 1, 'one team block after two registrations');
+  assert.equal(model.agentRecord(first.agentId)?.sessionId, INPUT.sessionId, 'Presence still attached');
+  // A genuinely NEW session mints its own Agent (idempotency is per-session, not per-name).
+  const other = await subject.register({ ...INPUT, sessionId: 'session_other-session' });
+  assert.notEqual(other.agentId, first.agentId);
+  assert.equal(storeBlocks(scratch, 'agents.jsonl').length, 2);
+  rmSync(scratch, { recursive: true, force: true });
+  console.log('idempotent registration test passed');
 }
 
 console.log('external-sessions module tests passed');

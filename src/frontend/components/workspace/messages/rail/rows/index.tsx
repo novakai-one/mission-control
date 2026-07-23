@@ -8,20 +8,31 @@ import type { PanelPersonRow } from '../../../../../lib/tunnelModel/panel/index.
 import { PRESENCE_LABEL, initialFor, presenceToneFor } from '../../model.js';
 import './index.css';
 
-/** Presence for a person row: unread wins, then running PTY or live durable
- * identity (an external chief with no PTY IS online), else gray. */
+/** Presence for a person row: unread wins (amber notification), then the ONE
+ * server-derived liveness tier (Ruling 3): green only for live and
+ * external-verified — unverified is never green. */
 function personTone(personRow: PanelPersonRow, count: number): ReturnType<typeof presenceToneFor> {
   if (count > 0) return 'amber';
-  if (personRow.person?.runtime?.status === 'running') return 'green';
-  if (personRow.person?.durableStatus === 'live' || personRow.person?.durableStatus === 'spawning') return 'green';
+  if (personRow.person?.liveness === 'live' || personRow.person?.liveness === 'external-verified') return 'green';
   return 'gray';
 }
 
-/** The quiet second line: provider plus the honest status word. */
+/** The quiet second line: provider plus the honest status word (the derived
+ * liveness tier — a dead agent never reads healthier than a live one). */
+const LIVENESS_LABEL: Record<string, string> = {
+  'live': 'live',
+  'external-verified': 'external · verified',
+  'unverified': 'unverified',
+  'exited': 'exited',
+  'retired': 'retired',
+  'failed': 'failed',
+};
+
 function personRole(personRow: PanelPersonRow): string {
   const provider = personRow.person?.provider ?? 'agent';
-  const status = personRow.person?.runtime?.status
-    ?? (personRow.person ? personRow.person.durableStatus ?? 'unregistered' : 'history');
+  const status = personRow.person
+    ? LIVENESS_LABEL[personRow.person.liveness] ?? 'unverified'
+    : 'history';
   return `${provider} · ${status}`;
 }
 
