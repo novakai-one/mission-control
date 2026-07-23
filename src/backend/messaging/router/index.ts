@@ -247,6 +247,10 @@ export class MessageRouter {
     const since = new Date(Date.now() - windowMs).toISOString();
     for (const envelope of this.store.history({ since })) {
       if (envelope.status === 'queued') {
+        // Mailbox sends LIVE at 'queued' — the append is the record (R1).
+        // Re-routing one would append a duplicate line and re-broadcast it,
+        // showing the message twice to every reader (R2).
+        if (resolveActor(envelope.to, this.roster(), [], this.mailboxLookup)?.kind === 'mailbox') continue;
         try {
           await this.route({ ...envelope, status: 'queued' });
         } catch {

@@ -134,4 +134,59 @@ const provingConfirmer: EffectConfirmer = {
   console.log('mailbox honest-queued test passed');
 }
 
+// --- reconcile: a queued mailbox envelope is NEVER re-routed (R2) ------------
+// Mailbox sends LIVE at 'queued'; a naive retry would re-append the envelope
+// and double-show it to every reader — the Chief-named duplicate-append bug.
+
+{
+  const harness = makeHarness(provingConfirmer);
+  const message = envelope({ 'to': 'kimi', delivery: 'normal', body: 'steady-state queued' });
+  await harness.router.route(message);
+  const linesBefore = trailFor(harness.storePath, message.id).length;
+
+  await harness.router.reconcile();
+  await settle(20);
+  assert.equal(trailFor(harness.storePath, message.id).length, linesBefore,
+    'reconcile appends nothing for a mailbox envelope — no duplicate row, no re-broadcast');
+  assert.equal(harness.writes.length + harness.submits.length, 0, 'reconcile typed nothing');
+  console.log('reconcile mailbox-skip test passed');
+}
+
+// --- reconcile: an accepted NORMAL send is verified, never re-typed (A5) -----
+// Proves the existing accepted branch covers normal sends: crash after the
+// 'accepted' amendment → restart verifies the transcript and amends
+// 'delivered' on proof, with zero re-typing.
+
+{
+  const harness = makeHarness(provingConfirmer);
+  const accepted = envelope({ delivery: 'normal', body: 'accepted before restart' });
+  harness.store.append(accepted);
+  harness.store.amend(accepted.id, 'accepted', { acceptedAt: new Date().toISOString(), agentId: 'agent_n1' });
+
+  await harness.router.reconcile();
+  await settle(20);
+  assert.equal(harness.writes.length + harness.submits.length, 0, 'accepted is NEVER re-typed');
+  const final = trailFor(harness.storePath, accepted.id).at(-1);
+  assert.equal(final?.status, 'delivered', 'restart verification found the turn and amended delivered');
+  assert.equal(final?.outcome?.transcriptEvent, 'time:1753246800');
+  assert.match(String(final?.outcome?.note ?? 'restart reconciliation'), /restart reconciliation/);
+  console.log('reconcile accepted-normal-verified test passed');
+}
+
+// --- reconcile: a queued agent send that never reached the host delivers -----
+
+{
+  const harness = makeHarness(provingConfirmer);
+  const lost = envelope({ delivery: 'normal', body: 'never written' });
+  harness.store.append(lost);
+
+  await harness.router.reconcile();
+  await settle(20);
+  assert.equal(harness.submits.filter((submission) => submission.messageId === lost.id).length, 1, 'retried exactly once');
+  const trail = trailFor(harness.storePath, lost.id).map((entry) => entry.status);
+  assert.equal(trail.at(-1), 'delivered', 'the retry flowed through the honest accepted→delivered path');
+  assert.ok(trail.includes('accepted'), 'the retry settled accepted before proof');
+  console.log('reconcile queued-retry test passed');
+}
+
 console.log('normal-send honesty tests passed');
