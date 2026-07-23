@@ -90,4 +90,28 @@ const audit = (dir) => spawnSync('node', [STORE_CLI, 'audit', '--dir', dir], { e
   rmSync(dir, { recursive: true, force: true });
 }
 
+// T3 — explicit --baseline: all new ids enrolled, sorted
+{
+  const dir = freshDir();
+  const baseline = path.join(dir, 'baseline.json');
+  writeFileSync(baseline, JSON.stringify({ version: 1, fingerprints: [], ids: [] }) + '\n');
+  const result = run(['create', '--dir', dir, '--id', 'mission_t3', '--title', 'T3', '--owner', 'chief-test',
+    '--team-name', 'Team T3', '--baseline', baseline]);
+  assert.equal(result.status, 0, result.stderr);
+  const enrolled = JSON.parse(readFileSync(baseline, 'utf8')).ids;
+  assert.deepEqual(enrolled, ['mission_t3', 'team_t3'], 'ids enrolled and sorted');
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// T4 — containment: no --baseline + non-canonical dir ⇒ repo baseline byte-untouched
+{
+  const dir = freshDir();
+  const repoBaseline = path.join(HERE, '..', 'stores-baseline.json');
+  const before = readFileSync(repoBaseline);
+  const result = run(['create', '--dir', dir, '--id', 'mission_t4', '--title', 'T4', '--owner', 'chief-test']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(readFileSync(repoBaseline).equals(before), 'F1: enrollment must never touch the repo baseline for a foreign dir');
+  rmSync(dir, { recursive: true, force: true });
+}
+
 console.log('nvk-mission tests passed');
