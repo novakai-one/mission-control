@@ -2,17 +2,17 @@
 // accepted→delivered with transcript proof persisted as evidence; honest
 // timeout note; per-agent serialization; host-submission dedupe making the
 // reconciliation retry idempotent; accepted-never-retyped on reconcile.
-// Run with `npx tsx src/backend/messaging/tests/delivery/stateMachine.test.ts`.
+// Run with `npx tsx src/backend/messaging/tests/delivery/proof/stateMachine.test.ts`.
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MessageStore } from '../../store/index.js';
-import { RoomStore } from '../../rooms/index.js';
-import { PtyDelivery } from '../../delivery/index.js';
-import { MessageRouter, InterruptRateLimiter } from '../../router/index.js';
-import type { EffectConfirmer } from '../../confirm/index.js';
-import type { AgentAddress, MessageEnvelope } from '../../types.js';
+import { MessageStore } from '../../../store/index.js';
+import { RoomStore } from '../../../rooms/index.js';
+import { PtyDelivery } from '../../../delivery/index.js';
+import { MessageRouter, InterruptRateLimiter } from '../../../router/index.js';
+import type { EffectConfirmer } from '../../../confirm/index.js';
+import type { AgentAddress, MessageEnvelope } from '../../../types.js';
 
 const roster: AgentAddress[] = [
   { agentId: 'agent_r1', name: 'worker-1', provider: 'claude' },
@@ -118,13 +118,16 @@ function settle(milliseconds: number): Promise<void> {
   console.log('interrupt unverified-note test passed');
 }
 
-// --- normal DM: unchanged semantics (delivered on write, documented) ---------
+// --- normal DM: same honesty as interrupts (mission_transcript-proof-normal-
+// sends) — accepted on write; without a confirmer the rig notes it honestly --
 
 {
   const harness = makeHarness(undefined);
   const message = envelope({ delivery: 'normal' });
   await harness.router.route(message);
-  assert.equal(statusTrail(harness.storePath, message.id).at(-1)?.status, 'delivered');
+  const final = statusTrail(harness.storePath, message.id).at(-1);
+  assert.equal(final?.status, 'accepted', 'bytes written never claim delivered');
+  assert.match(String(final?.outcome?.note), /effect unverifiable/);
   console.log('normal-dm semantics test passed');
 }
 
@@ -150,7 +153,9 @@ function settle(milliseconds: number): Promise<void> {
   await settle(20);
 
   assert.equal(harness.submits.length, submitsBefore, 'neither the deduped retry nor the accepted envelope typed anything');
-  assert.equal(statusTrail(harness.storePath, crashed.id).at(-1)?.status, 'delivered', 'the queued retry settled through the normal path');
+  const crashedFinal = statusTrail(harness.storePath, crashed.id).at(-1);
+  assert.equal(crashedFinal?.status, 'accepted', 'the queued retry settled honestly — no proof, no delivered claim');
+  assert.match(String(crashedFinal?.outcome?.note), /effect unverified within/);
   const acceptedFinal = statusTrail(harness.storePath, accepted.id).at(-1);
   assert.equal(acceptedFinal?.status, 'accepted');
   assert.match(String(acceptedFinal?.outcome?.note), /restart reconciliation/);
@@ -165,7 +170,8 @@ function settle(milliseconds: number): Promise<void> {
   harness.store.append(lost);
   await harness.router.reconcile();
   assert.equal(harness.submits.filter((submission) => submission.messageId === lost.id).length, 1, 'retried exactly once');
-  assert.equal(statusTrail(harness.storePath, lost.id).at(-1)?.status, 'delivered');
+  assert.equal(statusTrail(harness.storePath, lost.id).at(-1)?.status, 'accepted',
+    'the retry lands accepted — delivered still needs proof (see normalSends.test.ts for the proven path)');
   console.log('reconciliation retry test passed');
 }
 

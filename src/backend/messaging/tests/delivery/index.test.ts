@@ -73,14 +73,15 @@ async function testMailboxDirectMessages(): Promise<void> {
     assert.equal(receipt.mode, 'mailbox');
   }
   assert.equal(writes.length, 0, 'nothing is typed for durable mailbox identities');
-  assert.ok(store.history().every((message) => message.status === 'delivered'));
+  assert.ok(store.history().every((message) => message.status === 'queued'),
+    'mailbox sends honestly stay queued — the record IS the delivery (R1)');
 }
 
 async function testAgentDirectAndUnknown(): Promise<void> {
   const { router, store } = makeRouter();
   writes.length = 0;
   const receipt = await router.route(envelope('codex-1'));
-  assert.equal(receipt.mode, 'normal');
+  assert.equal(receipt.mode, 'normal-accepted', 'agent sends return on acceptance (D1 honesty)');
   assert.equal(writes[0]?.agentId, 'agent_2', 'agents still get PTY typing through the seam');
   const missing = envelope('nobody');
   await assert.rejects(() => router.route(missing), /not a live agent/);

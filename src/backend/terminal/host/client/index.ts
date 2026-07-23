@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
 import { AgentBuffer } from '../../buffer.js';
-import type { AgentInfo, CreateAgentOptions } from '../../manager.js';
+import type { AgentActivity, AgentInfo, CreateAgentOptions } from '../../manager.js';
 import type { TerminalRuntime } from '../../runtime/index.js';
 import type { SubmitJob } from '../protocol/index.js';
 import {
@@ -15,6 +15,7 @@ interface CachedAgent {
   info: AgentInfo;
   buffer: AgentBuffer;
   cursor: number;
+  activity: AgentActivity;
 }
 
 interface PendingCreate {
@@ -91,6 +92,12 @@ export class TerminalHostClient implements TerminalRuntime {
 
   snapshot(agentId: string): string {
     return this.agents.get(agentId)?.buffer.snapshot() ?? '';
+  }
+
+  /** Host-seeded on connect, client-stamped on live data frames (a copy). */
+  activity(agentId: string): AgentActivity | null {
+    const record = this.agents.get(agentId);
+    return record ? { ...record.activity } : null;
   }
 
   list(): AgentInfo[] {
@@ -224,6 +231,9 @@ export class TerminalHostClient implements TerminalRuntime {
         info: snapshot.info,
         buffer,
         cursor: snapshot.cursor,
+        // Old hosts omit activity: fall back to a connect-time clock, which
+        // resets the silence age (conservative) rather than inventing one.
+        activity: snapshot.activity ?? { lastOutputAtMs: null, trackedSinceMs: Date.now() },
       });
     }
   }
@@ -252,6 +262,7 @@ export class TerminalHostClient implements TerminalRuntime {
       return;
     }
     record.cursor = frame.cursor;
+    record.activity.lastOutputAtMs = Date.now();
     record.buffer.push(frame.data);
     this.dataCallback?.(frame.agentId, frame.data);
   }
@@ -276,7 +287,14 @@ export class TerminalHostClient implements TerminalRuntime {
     for (const info of agents) {
       const record = this.agents.get(info.agentId);
       if (record) record.info = info;
-      else this.agents.set(info.agentId, { info, buffer: new AgentBuffer(), cursor: 0 });
+      else {
+        this.agents.set(info.agentId, {
+          info,
+          buffer: new AgentBuffer(),
+          cursor: 0,
+          activity: { lastOutputAtMs: null, trackedSinceMs: Date.now() },
+        });
+      }
     }
   }
 

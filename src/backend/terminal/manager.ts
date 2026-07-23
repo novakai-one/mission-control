@@ -27,12 +27,21 @@ export interface AgentInfo {
 
 type RegistryEntry = AgentInfo & { archived?: boolean };
 
+/** PTY-owner activity truth for one agent (capture point: the onData seam). */
+export interface AgentActivity {
+  /** ms epoch of the last PTY output chunk; null = none since tracking began. */
+  lastOutputAtMs: number | null;
+  /** ms epoch when tracking began (create / restore). */
+  trackedSinceMs: number;
+}
+
 interface AgentRecord {
   info: AgentInfo;
   ptyProcess?: ProviderTerminalProcess;
   buffer?: AgentBuffer;
   archived?: boolean;
   cancelSessionWait?: (reason?: string) => void;
+  activity: AgentActivity;
 }
 
 export interface CreateAgentOptions {
@@ -44,6 +53,11 @@ export interface CreateAgentOptions {
   /** Durable object-model identity minted by the spawn path — the runtime
    * adopts it verbatim so there is exactly one agentId (ruling S4). */
   agentId?: string;
+}
+
+/** Tracking starts now, with no output observed yet. */
+function freshActivity(): AgentActivity {
+  return { lastOutputAtMs: null, trackedSinceMs: Date.now() };
 }
 
 /** Unref'd sleep: pending lifecycle steps never block process shutdown. */
@@ -109,6 +123,7 @@ export class TerminalManager {
     this.agents.set(info.agentId, {
       info: { ...info, provider: info.provider || 'claude', status: 'exited' },
       archived,
+      activity: freshActivity(),
     });
   }
 
@@ -141,15 +156,11 @@ export class TerminalManager {
     const requestedSessionId = randomUUID();
     const launched = this.launcher(options.provider || 'claude', options.cwd, requestedSessionId);
     const provider = options.provider || 'claude';
-    const info = buildAgentInfo(
-      agentId,
-      provider === 'claude' ? requestedSessionId : '',
-      options,
-      launched.process.pid,
-    );
+    const info = buildAgentInfo(agentId, provider === 'claude' ? requestedSessionId : '', options, launched.process.pid);
     const buffer = new AgentBuffer();
     this.agents.set(agentId, {
       info, ptyProcess: launched.process, buffer, cancelSessionWait: launched.cancelSessionWait,
+      activity: freshActivity(),
     });
     this.wire(agentId, launched.process, buffer);
     this.saveRegistry();
@@ -176,6 +187,8 @@ export class TerminalManager {
 
   private wire(agentId: string, proc: ProviderTerminalProcess, buffer: AgentBuffer): void {
     proc.onData((data) => {
+      const record = this.agents.get(agentId);
+      if (record) record.activity.lastOutputAtMs = Date.now();
       buffer.push(data);
       this.dataCallback?.(agentId, data);
     });
@@ -275,6 +288,12 @@ export class TerminalManager {
 
   snapshot(agentId: string): string {
     return this.agents.get(agentId)?.buffer?.snapshot() ?? '';
+  }
+
+  /** A copy of the PTY-owner activity stamp — callers cannot move the clock. */
+  activity(agentId: string): AgentActivity | null {
+    const record = this.agents.get(agentId);
+    return record ? { ...record.activity } : null;
   }
 
   list(): AgentInfo[] {

@@ -165,24 +165,34 @@ export class MessageRouter {
   private async routeDirect(envelope: MessageEnvelope): Promise<DeliveryReceipt> {
     const roster = this.roster();
     const actor = resolveActor(envelope.to, roster, [], this.mailboxLookup);
-    if (actor?.kind === 'mailbox') return this.deliverResolved(envelope, actor);
+    if (actor?.kind === 'mailbox') return this.deliverMailbox(envelope, actor);
     if (actor?.kind !== 'agent') throw this.fail(envelope, new RecipientNotFoundError(envelope.to, roster));
-    if (envelope.delivery === 'interrupt') {
-      if (!this.interruptLimiter.tryAcquire(envelope.from)) {
-        throw this.fail(envelope, new InterruptRateLimitError(envelope.from, this.interruptLimiter.maxPerMinute));
-      }
-      return this.deliverInterrupt(envelope, actor.address);
+    if (envelope.delivery === 'interrupt' && !this.interruptLimiter.tryAcquire(envelope.from)) {
+      throw this.fail(envelope, new InterruptRateLimitError(envelope.from, this.interruptLimiter.maxPerMinute));
     }
-    return this.deliverResolved(envelope, actor);
+    return this.deliverAgent(envelope, actor.address);
+  }
+
+  /** Mailbox recipients have no PTY and no transcript: the append IS the
+   * delivery record and the envelope honestly stays 'queued' (Manager ruling
+   * R1, Chief-confirmed — the Watchdog false-positive fix). No settle: a
+   * status amendment here would claim an effect nobody can prove. */
+  private async deliverMailbox(envelope: MessageEnvelope, actor: ResolvedActor): Promise<DeliveryReceipt> {
+    try {
+      return await this.adapters.mailbox.deliver(actor, envelope);
+    } catch (error) {
+      throw this.fail(envelope, error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   /**
-   * D1 honesty: an interrupt settles 'accepted' when the bytes are written —
-   * 'delivered' is claimed ONLY when the recipient's transcript proves the
-   * turn arrived, and the amendment carries the evidence (M9). The
-   * confirmation runs asynchronously; the send path never blocks on it.
+   * D1 honesty for EVERY direct PTY send (normal AND interrupt): the send
+   * settles 'accepted' when the bytes are written — 'delivered' is claimed
+   * ONLY when the recipient's transcript proves the turn arrived, and the
+   * amendment carries the evidence (M9). The confirmation runs
+   * asynchronously; the send path never blocks on it.
    */
-  private async deliverInterrupt(envelope: MessageEnvelope, address: AgentAddress): Promise<DeliveryReceipt> {
+  private async deliverAgent(envelope: MessageEnvelope, address: AgentAddress): Promise<DeliveryReceipt> {
     try {
       await this.adapters.agent.deliver({ kind: 'agent', address }, envelope);
     } catch (error) {
@@ -196,7 +206,7 @@ export class MessageRouter {
       ...(presence?.sessionId ? { sessionId: presence.sessionId } : {}),
     });
     this.scheduleConfirmation(envelope, address, presence);
-    return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: 'interrupt-accepted' };
+    return { messageId: envelope.id, deliveredAt: new Date().toISOString(), mode: `${envelope.delivery}-accepted` };
   }
 
   /** Fire-and-record: every outcome (proof, timeout, error) amends the audit record. */
@@ -237,6 +247,10 @@ export class MessageRouter {
     const since = new Date(Date.now() - windowMs).toISOString();
     for (const envelope of this.store.history({ since })) {
       if (envelope.status === 'queued') {
+        // Mailbox sends LIVE at 'queued' — the append is the record (R1).
+        // Re-routing one would append a duplicate line and re-broadcast it,
+        // showing the message twice to every reader (R2).
+        if (resolveActor(envelope.to, this.roster(), [], this.mailboxLookup)?.kind === 'mailbox') continue;
         try {
           await this.route({ ...envelope, status: 'queued' });
         } catch {
@@ -251,17 +265,6 @@ export class MessageRouter {
         }
         this.scheduleConfirmation(envelope, address, this.presenceFor?.(address.agentId) ?? null, 'restart reconciliation');
       }
-    }
-  }
-
-  private async deliverResolved(envelope: MessageEnvelope, actor: ResolvedActor): Promise<DeliveryReceipt> {
-    const adapter = actor.kind === 'mailbox' ? this.adapters.mailbox : this.adapters.agent;
-    try {
-      const receipt = await adapter.deliver(actor, envelope);
-      this.settle(envelope, 'delivered');
-      return receipt;
-    } catch (error) {
-      throw this.fail(envelope, error instanceof Error ? error : new Error(String(error)));
     }
   }
 
