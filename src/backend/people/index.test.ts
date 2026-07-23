@@ -165,7 +165,7 @@ function hubOver(durable: AgentBlock[], runtime: AgentInfo[]): PeopleHub {
   const journalPath = path.join(scratch, 'messages.jsonl');
   try {
     writeFileSync(journalPath, [
-      '{"id":"m1","from":"chief-kimi-6","to":"chris","body":"fresh","createdAt":"2026-07-23T11:55:00.000Z","status":"delivered"}',
+      '{"id":"m1","from":"chief-kimi-7","to":"chris","body":"fresh","createdAt":"2026-07-23T11:55:00.000Z","status":"delivered"}',
       '{"id":"m2","from":"Stale Bot","to":"chris","body":"old","createdAt":"2026-07-23T10:00:00.000Z","status":"delivered"}',
       '{"id":"m3","from":"Retired Bot","to":"chris","body":"fresh but retired","createdAt":"2026-07-23T11:59:00.000Z","status":"delivered"}',
       '{"id":"m4","from":"Ts Trap","to":"chris","body":"ts is not the field","ts":"2026-07-23T11:59:00.000Z","status":"delivered"}',
@@ -173,7 +173,7 @@ function hubOver(durable: AgentBlock[], runtime: AgentInfo[]): PeopleHub {
     ].map((line) => `${line}\n`).join(''));
     const opts = { journalPath, now: () => NOW_MS };
     const ghost = agentBlock({ id: 'agent_ghost', name: 'Worker Messages Builder', status: 'live' });
-    const verified = agentBlock({ id: 'agent_ext', name: 'chief-kimi-6', status: 'live', sessionId: 'session_ext-6' });
+    const verified = agentBlock({ id: 'agent_ext', name: 'chief-kimi-7', status: 'live', sessionId: 'session_ext-6' });
     const stale = agentBlock({ id: 'agent_stale', name: 'Stale Bot', status: 'live' });
     const retired = agentBlock({ id: 'agent_ret', name: 'Retired Bot', status: 'retired' });
     const split = agentBlock({ id: 'agent_split', name: 'Manager Kimi Messages', status: 'live' });
@@ -203,7 +203,7 @@ function hubOver(durable: AgentBlock[], runtime: AgentInfo[]): PeopleHub {
 
 // --- no journal wired: external sessions derive unverified, never guessed ----
 {
-  const external = agentBlock({ id: 'agent_x', name: 'chief-kimi-6', status: 'live', sessionId: 'session_x' });
+  const external = agentBlock({ id: 'agent_x', name: 'chief-kimi-7', status: 'live', sessionId: 'session_x' });
   const { people } = hubOver([external], []).listPeople();
   assert.equal(people[0].liveness, 'unverified', 'without evidence the honest tier is unverified');
 }

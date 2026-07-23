@@ -62,7 +62,7 @@ const CHANNEL: Conversation = { id: '#team', kind: 'channel', title: '#team' };
 {
   const people = [
     person({ agentId: 'agent_ghost', name: 'Worker Messages Builder', durableStatus: 'live', liveness: 'unverified' }),
-    person({ agentId: 'agent_ext', name: 'chief-kimi-6', durableStatus: 'live', liveness: 'external-verified' }),
+    person({ agentId: 'agent_ext', name: 'chief-kimi-7', durableStatus: 'live', liveness: 'external-verified' }),
     person({ agentId: 'agent_split', name: 'Manager Kimi Messages', durableStatus: 'live', runtime: { status: 'exited' }, liveness: 'exited' }),
   ];
   const panel = buildPanelLanes([CHANNEL], people, []);
