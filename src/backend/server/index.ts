@@ -19,9 +19,10 @@ import { ProjectsHub } from './projects/index.js';
 import { CanvasHub } from './canvas/index.js';
 import { AnalyticsHub } from './analytics/index.js';
 import { DesignHub } from './design/index.js';
-import { MailboxRegistry, MessagingHub } from '../messaging/index.js';
+import { MailboxRegistry, MessagingHub, rosterFromAgents } from '../messaging/index.js';
 import { MissionViewHub } from '../missionView/index.js';
 import { ObjectModel } from '../objectModel/index.js';
+import { ExternalSessionsHub } from '../externalSessions/index.js';
 import type { TerminalRuntime } from '../terminal/runtime/index.js';
 
 const PROJECT_RE = /^[A-Za-z0-9._-]+$/;
@@ -79,6 +80,7 @@ export class ServerController {
   private readonly designHub: DesignHub;
   private readonly messagingHub: MessagingHub;
   private readonly missionViewHub: MissionViewHub;
+  private readonly externalSessionsHub: ExternalSessionsHub;
   private readonly mailboxRegistry: MailboxRegistry;
   private readonly objectModel: ObjectModel;
 
@@ -88,13 +90,16 @@ export class ServerController {
     private readonly stateManager: StateManager, terminals: TerminalRuntime,
     private readonly options: ServerOptions = {},
   ) {
-    // One durable mailbox registry shared by messaging routing and spawn-name checks.
-    this.mailboxRegistry = new MailboxRegistry();
+    // One durable mailbox registry shared by messaging routing and spawn-name
+    // checks. NVK_MAILBOX_STORE pins the file for non-Live stacks (scratch
+    // backends must write the REAL registry or their evidence is hollow).
+    this.mailboxRegistry = new MailboxRegistry(process.env.NVK_MAILBOX_STORE || undefined);
     this.objectModel = this.buildObjectModel();
     this.agentsHub = this.buildAgentsHub(terminals);
     this.projectsHub = new ProjectsHub(this.agentsHub);
     [this.canvasHub, this.analyticsHub, this.designHub] = this.buildStudioHubs();
     this.messagingHub = this.buildMessagingHub(); this.missionViewHub = this.buildMissionViewHub();
+    this.externalSessionsHub = this.buildExternalSessionsHub();
     this.server = createServer(this.app);
     this.wsServer = new WebSocketServer({ server: this.server });
     this.createAppListener();
@@ -148,10 +153,34 @@ export class ServerController {
     const messagingHub = new MessagingHub(
       this.agentsHub.terminals,
       (event, payload) => this.broadcastEvent(event, payload),
-      { serverPort: this.port, mailboxRegistry: this.mailboxRegistry, missionGraph: this.objectModel },
+      {
+        serverPort: this.port, mailboxRegistry: this.mailboxRegistry, missionGraph: this.objectModel,
+        // NVK_MESSAGE_STORE pins the journal for non-Live stacks (same
+        // discipline as NVK_MISSION_STORES_DIR — scratch evidence stays real).
+        storePath: process.env.NVK_MESSAGE_STORE || undefined,
+        // A scratch backend sharing the REAL journal must not reconcile it:
+        // its roster is empty, so retry/confirmation amendments would falsify
+        // envelopes the Live lane can still deliver. Default unchanged.
+        reconcileOnStart: process.env.NVK_RECONCILE_ON_START !== 'off',
+      },
     );
     this.agentsHub.onLaunch((info) => messagingHub.handleAgentSpawned(info));
     return messagingHub;
+  }
+
+  /**
+   * External-session registration (mission_external-session-visibility):
+   * terminal-spawned sessions join the durable mission graph. Composes the
+   * object model, the shared mailbox registry, the messaging send seam, and
+   * the live roster (for the one rejecting collision) — nothing else.
+   */
+  private buildExternalSessionsHub(): ExternalSessionsHub {
+    return new ExternalSessionsHub(
+      this.objectModel,
+      this.mailboxRegistry,
+      (from, message) => this.messagingHub.send.send(from, message),
+      () => rosterFromAgents(this.agentsHub.terminals.list()).map((agent) => agent.name),
+    );
   }
 
   /**
@@ -261,6 +290,7 @@ export class ServerController {
     this.designHub.registerRoutes(this.app);
     this.messagingHub.registerRoutes(this.app);
     this.missionViewHub.registerRoutes(this.app);
+    this.externalSessionsHub.registerRoutes(this.app);
 
     this.app.get('/api/config', (_, res) => {
       res.json(ConfigManager.load());

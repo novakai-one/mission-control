@@ -172,6 +172,14 @@ export class ObjectModel {
     return (this.record('agents.jsonl', agentId)?.block as AgentBlock | undefined) ?? null;
   }
 
+  /** The durable mission block, or null when the id resolves to no mission.
+   * Lets write paths pre-validate a mission ref BEFORE any block is appended
+   * (external-session registration) instead of discovering a dangling ref
+   * after a team is already on disk. */
+  missionRecord(missionId: string): Record<string, unknown> | null {
+    return this.record('missions.jsonl', missionId)?.block ?? null;
+  }
+
   /** The mission a durable agent belongs to, from its typed refs. */
   missionForAgent(agentId: string): string | null {
     const block = this.agentRecord(agentId);
