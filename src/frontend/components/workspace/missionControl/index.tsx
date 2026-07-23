@@ -38,7 +38,7 @@ import {
   liveMissionAgents,
   missionHealth,
 } from './model.js';
-import { MissionEvidence, MissionHealthBar, MissionLiveHero, MissionRail, MissionStageStrip } from './panels/index.js';
+import { MissionEvidence, MissionHealthBar, MissionLiveHero, MissionRail } from './panels/index.js';
 import './index.css';
 
 export interface MissionConfidence {
@@ -293,8 +293,10 @@ export function MissionControl(props: MissionControlProps) {
               confidence={props.confidence ?? null}
             />
 
-            <MissionStageStrip />
-
+            {/* MissionStageStrip hidden by ruling M4/D6 (2026-07-23): it
+                rendered hardcoded local state, and the non-snapshot surface
+                has no real mission-task input to derive it from yet. The
+                component remains exported for the future derivation. */}
             <section className="mc-panel mc-activity">
               <header>
                 <div>

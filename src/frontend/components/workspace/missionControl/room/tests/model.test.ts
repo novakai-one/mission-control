@@ -18,6 +18,7 @@ function unlinkedMission(): MissionSnapshot['mission'] {
     owner: sourced<string | null>('chief-kimi'),
     stage: sourced<string | null>('step-6-closed'),
     priority: sourced<string | null>(null),
+    notes: sourced<string | null>(null),
   };
 }
 
@@ -51,7 +52,9 @@ function unlinkedSnapshot(): MissionSnapshot {
     mission: unlinkedMission(),
     pulse: unlinkedPulse(),
     objective: sourced('O10: truth integrity'),
+    members: [],
     assignments: [],
+    declaredRoles: [],
     presences: [],
     currentActivity: [],
     timeline: [],
@@ -105,7 +108,12 @@ function linkedSnapshot(): MissionSnapshot {
   return {
     ...base,
     pulse: { ...base.pulse, nextCheckpoint: sourced<string | null>('step-7-verify') },
-    assignments: [{ personId: 'person_builder', role: 'Builder', sourceRefs: [{ store: 'missions', line: 11 }] }],
+    members: [{ agentId: 'agent-1', name: 'Builder Kimi', provider: 'kimi', durableStatus: 'live', sourceRefs: [{ store: 'agents', line: 1 }] }],
+    assignments: [{
+      personId: 'agent-1', personName: 'Builder Kimi', taskId: 'task_build',
+      taskTitle: 'Building the room', taskStatus: 'doing', blockedReason: null,
+      sourceRefs: [{ store: 'tasks', line: 1 }],
+    }],
     presences: linkedPresences(),
     currentActivity: [{ personId: 'person_builder', summary: 'Building the room', active: true, sourceRefs: [{ store: 'registry' }] }],
     timeline: linkedTimeline(),

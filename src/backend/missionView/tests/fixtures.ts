@@ -116,6 +116,22 @@ export function roomLine(roomId: string, name: string, extra = ''): string {
     + `"createdBy":"agent-a","createdAt":"2026-07-21T11:45:00.000Z","archived":false${extra}}`;
 }
 
+/** A valid durable agent block line refing team + mission (S2 team join). */
+export function agentLine(agentId: string, name: string, missionId: string, status = 'live', sessionId?: string): string {
+  const session = sessionId ? `,"sessionId":"${sessionId}"` : '';
+  return `{"id":"${agentId}","kind":"agent","ts":"2026-07-21T10:00:00+10:00","name":"${name}",`
+    + `"provider":"kimi","status":"${status}"${session},`
+    + `"refs":[{"kind":"team","value":"team_a"},{"kind":"mission","value":"${missionId}"}]}`;
+}
+
+/** A task line refing mission AND agent (assignment, ruling S2.2). */
+export function assignedTaskLine(taskId: string, missionId: string, agentId: string, status: string, blockedReason?: string): string {
+  const reason = blockedReason ? `,"blockedReason":"${blockedReason}"` : '';
+  return `{"id":"${taskId}","kind":"task","ts":"2026-07-21T10:30:00+10:00","title":"Task ${taskId}",`
+    + `"status":"${status}"${reason},"refs":[{"kind":"mission","value":"${missionId}"},{"kind":"agent","value":"${agentId}"}],`
+    + `"updated":"2026-07-21T11:00:00+10:00"}`;
+}
+
 /** A minimal registry entry object (AgentInfo-shaped). */
 export function agentEntry(agentId: string, archived = false, projectId?: string): Record<string, unknown> {
   return {

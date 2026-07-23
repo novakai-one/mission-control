@@ -6,7 +6,9 @@ import type {
   ArtifactView,
   AttentionItem,
   CurrentActivityView,
+  DeclaredRoleView,
   MissionAssignmentView,
+  MissionMemberView,
   MissionSnapshot,
   PresenceView,
   TimelineEntry,
@@ -61,12 +63,37 @@ function ContextSection({ model }: { model: MissionRoomViewModel }) {
   );
 }
 
-function AssignmentRow({ assignment }: { assignment: MissionAssignmentView }) {
-  const provenance = sourceTag(assignment.sourceRefs);
+function MemberRow({ member }: { member: MissionMemberView }) {
+  const provenance = sourceTag(member.sourceRefs);
   return (
     <div className="mr-row">
-      <strong>{assignment.personId}</strong>
-      <span>{assignment.role}</span>
+      <strong>{member.name}</strong>
+      <span>{member.provider} · {member.durableStatus}</span>
+      {provenance && <small className="mr-source" title={provenance}>{provenance}</small>}
+    </div>
+  );
+}
+
+/** An assigned task under its honest status — no invented role (ruling S2.2). */
+function AssignmentRow({ assignment }: { assignment: MissionAssignmentView }) {
+  const provenance = sourceTag(assignment.sourceRefs);
+  const reason = assignment.taskStatus === 'blocked' && assignment.blockedReason
+    ? ` — ${assignment.blockedReason}` : '';
+  return (
+    <div className="mr-row">
+      <strong>{assignment.personName}</strong>
+      <span>{assignment.taskStatus}{reason} · {assignment.taskTitle}</span>
+      {provenance && <small className="mr-source" title={provenance}>{provenance}</small>}
+    </div>
+  );
+}
+
+function DeclaredRoleRow({ declared }: { declared: DeclaredRoleView }) {
+  const provenance = sourceTag(declared.sourceRefs);
+  return (
+    <div className="mr-row">
+      <strong>{declared.personId}</strong>
+      <span>declared role · {declared.role}</span>
       {provenance && <small className="mr-source" title={provenance}>{provenance}</small>}
     </div>
   );
@@ -77,10 +104,13 @@ function PresenceRow({ presence }: { presence: PresenceView }) {
   const session = presence.sessionError
     ? `session error: ${presence.sessionError}`
     : presence.sessionId ? `session ${presence.sessionId}` : 'no active session';
+  // 'external' = a registered session outside this backend's PTYs (honest
+  // absence of a runtime entry, ruling S2.4) — never claimed as running.
+  const kind = presence.status === 'external' ? 'external session' : presence.status;
   return (
     <div className="mr-row">
       <strong>{presence.title}</strong>
-      <span>{presence.provider} · {presence.status} · {session} · observed {presence.observedAt}</span>
+      <span>{presence.provider} · {kind} · {session} · observed {presence.observedAt}</span>
       {provenance && <small className="mr-source" title={provenance}>{provenance}</small>}
     </div>
   );
@@ -101,15 +131,26 @@ function TeamSection({ model }: { model: MissionRoomViewModel }) {
   return (
     <section className="mr-panel" aria-label="Team">
       <header><span className="mr-kicker">Team</span></header>
+      <div className="mr-subhead">Members</div>
+      {model.members.length === 0
+        ? <p className="mr-empty">No durable agent refs this mission — the Attention panel explains the gap.</p>
+        : model.members.map((member) => <MemberRow key={member.agentId} member={member} />)}
       <div className="mr-subhead">Assignments</div>
-      {model.assignments.length === 0
-        ? <p className="mr-empty">No mission-explicit assignments recorded — the Attention panel explains the gap.</p>
-        : model.assignments.map((assignment) => (
-          <AssignmentRow key={`${assignment.personId}:${assignment.role}`} assignment={assignment} />
-        ))}
+      {model.assignments.length === 0 && model.declaredRoles.length === 0
+        ? <p className="mr-empty">No task assignments recorded — the Attention panel explains the gap.</p>
+        : (
+          <>
+            {model.assignments.map((assignment) => (
+              <AssignmentRow key={assignment.taskId} assignment={assignment} />
+            ))}
+            {model.declaredRoles.map((declared) => (
+              <DeclaredRoleRow key={`${declared.personId}:${declared.role}`} declared={declared} />
+            ))}
+          </>
+        )}
       <div className="mr-subhead">Live presences</div>
       {model.presences.length === 0
-        ? <p className="mr-empty">No mission-explicit bound presences — the Attention panel explains the gap.</p>
+        ? <p className="mr-empty">No mission-linked presences — the Attention panel explains the gap.</p>
         : model.presences.map((presence) => <PresenceRow key={presence.agentId} presence={presence} />)}
       <div className="mr-subhead">Current activity</div>
       {model.currentActivity.length === 0

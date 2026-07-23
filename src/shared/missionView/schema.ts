@@ -50,8 +50,34 @@ export interface MissionPulse {
   needsChris: Sourced<boolean>;
 }
 
-/** A mission-explicit assignment only (S4). The scalar mission owner is NOT one. */
+/** Team membership: a durable Agent whose typed refs name this mission
+ * (mission_mission-control-ux ruling S2.1 — membership is its own fact,
+ * never converted into an assignment or a role). */
+export interface MissionMemberView {
+  agentId: string;
+  name: string;
+  provider: string;
+  durableStatus: string;
+  sourceRefs: SourceRef[];
+}
+
+/** A task assignment: a task block whose typed refs name this mission AND an
+ * agent (ruling S2.2). No `role` is ever manufactured — the assigned task IS
+ * the assignment, rendered under its honest task status. */
 export interface MissionAssignmentView {
+  /** Durable agentId (v2.1 identity law). */
+  personId: string;
+  personName: string;
+  taskId: string;
+  taskTitle: string;
+  taskStatus: 'todo' | 'doing' | 'done' | 'blocked' | 'unknown';
+  blockedReason: string | null;
+  sourceRefs: SourceRef[];
+}
+
+/** A legacy mission-explicit declared role (S4 field, kept rendering
+ * unchanged — no real mission block carries one today). */
+export interface DeclaredRoleView {
   personId: string;
   role: string;
   sourceRefs: SourceRef[];
@@ -174,11 +200,18 @@ export interface MissionSnapshot {
     owner: Sourced<string | null>;
     stage: Sourced<string | null>;
     priority: Sourced<string | null>;
+    /** Mission notes — core mission content, rendered verbatim (#9 G1). */
+    notes: Sourced<string | null>;
   };
   pulse: MissionPulse;
   /** Linked objective context line, when an explicit objective ref resolves. */
   objective: Sourced<string> | null;
+  /** Durable team membership (agent→mission refs, ruling S2.1). */
+  members: MissionMemberView[];
+  /** Task assignments (task→agent+mission refs, ruling S2.2). */
   assignments: MissionAssignmentView[];
+  /** Legacy mission-explicit declared roles (S4) — renders alongside, unchanged. */
+  declaredRoles: DeclaredRoleView[];
   presences: PresenceView[];
   currentActivity: CurrentActivityView[];
   timeline: TimelineEntry[];

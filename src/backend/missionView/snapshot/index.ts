@@ -5,7 +5,9 @@ import type {
   AttentionItem,
   ArtifactView,
   CurrentActivityView,
+  DeclaredRoleView,
   MissionAssignmentView,
+  MissionMemberView,
   MissionPulse,
   MissionSnapshot,
   PresenceView,
@@ -42,15 +44,18 @@ const CLOSED_STATUSES = new Set(['done', 'closed', 'refiled']);
 /** The deep derive: one mission, joined read-only, uncertainty preserved. */
 export function deriveSnapshot(facts: MissionFacts): MissionSnapshot {
   const rooms = linkedRooms(facts);
-  const attention = buildAttention(facts, rooms);
-  const issues = [...facts.linkage.problems, ...facts.readProblems];
+  const team = joinTeam(facts);
+  const attention = buildAttention(facts, rooms, team);
+  const issues = [...facts.linkage.problems, ...facts.readProblems, ...team.problems];
   return {
     mission: buildMission(facts.linkage.mission),
     pulse: buildPulse(facts, attention, issues),
     objective: buildObjective(facts.linkage),
-    assignments: buildAssignments(facts.linkage.mission),
-    presences: buildPresences(),
-    currentActivity: buildActivity(),
+    members: team.members,
+    assignments: team.assignments,
+    declaredRoles: buildDeclaredRoles(facts.linkage.mission),
+    presences: team.presences,
+    currentActivity: team.currentActivity,
     timeline: buildTimeline(facts, rooms),
     artifacts: buildArtifacts(facts),
     tree: buildTree(facts.missionId, facts.linkage.mission, facts.stores),
@@ -58,6 +63,135 @@ export function deriveSnapshot(facts: MissionFacts): MissionSnapshot {
     asOf: facts.asOf,
     issues,
   };
+}
+
+/* ---------- The team join (mission_mission-control-ux, ruling S2) -----------
+   Four SEPARATE pure derivations over the typed refs the stores already
+   carry — membership, task assignment, Presence, doing-activity — each with
+   its own provenance and its own attention condition. Indexes are built once
+   per derive (agents by id, registry by agentId): no nested scans ride the
+   5-second poll (L2). Malformed/duplicate agent records surface as visible
+   problems, never silently (S2.5). */
+
+interface TeamJoin {
+  members: MissionMemberView[];
+  assignments: MissionAssignmentView[];
+  presences: PresenceView[];
+  currentActivity: CurrentActivityView[];
+  problems: ReadIssue[];
+}
+
+const TASK_STATUSES = new Set(['todo', 'doing', 'done', 'blocked']);
+const LIVE_AGENT_STATUSES = new Set(['live', 'spawning']);
+
+function hasRef(rawRefs: unknown, kind: string, value: string): boolean {
+  return Array.isArray(rawRefs) && rawRefs.some((entry) => {
+    const ref = entry as { kind?: unknown; value?: unknown } | null;
+    return ref?.kind === kind && ref.value === value;
+  });
+}
+
+function refValueOf(rawRefs: unknown, kind: string): string | null {
+  if (!Array.isArray(rawRefs)) return null;
+  const ref = rawRefs.find((entry) => (entry as { kind?: unknown } | null)?.kind === kind) as { value?: unknown } | undefined;
+  return typeof ref?.value === 'string' ? ref.value : null;
+}
+
+/** Agents folded by id, last record wins; malformed/duplicate → visible problem. */
+function agentIndex(facts: MissionFacts, problems: ReadIssue[]): Map<string, RawRecord> {
+  const byId = new Map<string, RawRecord>();
+  for (const agentRecord of facts.stores.agents) {
+    const agentId = stringOrNull(agentRecord.block.id);
+    if (!agentId || !stringOrNull(agentRecord.block.name) || !stringOrNull(agentRecord.block.status)) {
+      problems.push({ message: `malformed agent record skipped: agents.jsonl:${agentRecord.line}`, sourceRefs: [refOf(agentRecord)] });
+      continue;
+    }
+    if (byId.has(agentId)) {
+      problems.push({ message: `duplicate id '${agentId}' in agents.jsonl — folded last-wins for the team join`, sourceRefs: [refOf(agentRecord)] });
+    }
+    byId.set(agentId, agentRecord);
+  }
+  return byId;
+}
+
+function memberView(agentRecord: RawRecord): MissionMemberView {
+  return {
+    agentId: String(agentRecord.block.id),
+    name: String(agentRecord.block.name),
+    provider: stringOrNull(agentRecord.block.provider) ?? 'unknown',
+    durableStatus: String(agentRecord.block.status),
+    sourceRefs: [refOf(agentRecord)],
+  };
+}
+
+/** Presence (S2.4): a live/spawning member with a session pointer. A member
+ * the PTY registry knows carries the registry's word; ABSENCE of a registry
+ * entry is an honest EXTERNAL session, never an exclusion or a PTY claim. */
+function presenceView(agentRecord: RawRecord, facts: MissionFacts, registryById: Map<string, MissionFacts['registry'][number]>): PresenceView {
+  const agentId = String(agentRecord.block.id);
+  const runtime = registryById.get(agentId);
+  const registryRef: SourceRef[] = runtime ? [{ store: 'registry', recordId: agentId, path: facts.registryPath }] : [];
+  return {
+    agentId,
+    title: String(agentRecord.block.name),
+    provider: stringOrNull(agentRecord.block.provider) ?? 'unknown',
+    sessionId: stringOrNull(agentRecord.block.sessionId) ?? runtime?.sessionId ?? null,
+    sessionError: runtime?.sessionError ?? null,
+    status: runtime ? runtime.status : 'external',
+    observedAt: runtime ? facts.registryObservedAt ?? facts.asOf : facts.asOf,
+    sourceRefs: [refOf(agentRecord), ...registryRef],
+  };
+}
+
+function assignmentView(taskRecord: RawRecord, agentsById: Map<string, RawRecord>): MissionAssignmentView {
+  const personId = refValueOf(taskRecord.block.refs, 'agent') ?? '';
+  const agentRecord = agentsById.get(personId);
+  const rawStatus = stringOrNull(taskRecord.block.status) ?? 'unknown';
+  const agentRef: SourceRef[] = agentRecord ? [refOf(agentRecord)] : [];
+  return {
+    personId,
+    personName: agentRecord ? String(agentRecord.block.name) : personId,
+    taskId: String(taskRecord.block.id ?? `tasks:${taskRecord.line}`),
+    taskTitle: stringOrNull(taskRecord.block.title) ?? String(taskRecord.block.id ?? ''),
+    taskStatus: (TASK_STATUSES.has(rawStatus) ? rawStatus : 'unknown') as MissionAssignmentView['taskStatus'],
+    blockedReason: stringOrNull(taskRecord.block.blockedReason),
+    sourceRefs: [refOf(taskRecord), ...agentRef],
+  };
+}
+
+const ASSIGNMENT_ORDER: Record<string, number> = { doing: 0, blocked: 1, todo: 2, unknown: 3, done: 4 };
+
+function joinTeam(facts: MissionFacts): TeamJoin {
+  const problems: ReadIssue[] = [];
+  const agentsById = agentIndex(facts, problems);
+  const registryById = new Map(facts.registry.map((entry) => [entry.agentId, entry]));
+  const memberRecords = [...agentsById.values()]
+    .filter((agentRecord) => hasRef(agentRecord.block.refs, 'mission', facts.missionId));
+  const liveFirst = (agentRecord: RawRecord): number => (LIVE_AGENT_STATUSES.has(String(agentRecord.block.status)) ? 0 : 1);
+  memberRecords.sort((left, right) => liveFirst(left) - liveFirst(right)
+    || String(left.block.name).localeCompare(String(right.block.name)));
+  const members = memberRecords.map(memberView);
+  const presences = memberRecords
+    .filter((agentRecord) => LIVE_AGENT_STATUSES.has(String(agentRecord.block.status))
+      && (stringOrNull(agentRecord.block.sessionId) !== null || registryById.has(String(agentRecord.block.id))))
+    .map((agentRecord) => presenceView(agentRecord, facts, registryById));
+  const assignments = facts.stores.tasks
+    .filter((taskRecord) => hasRef(taskRecord.block.refs, 'mission', facts.missionId)
+      && refValueOf(taskRecord.block.refs, 'agent') !== null)
+    .map((taskRecord) => assignmentView(taskRecord, agentsById));
+  assignments.sort((left, right) => (ASSIGNMENT_ORDER[left.taskStatus] ?? 3) - (ASSIGNMENT_ORDER[right.taskStatus] ?? 3)
+    || left.taskTitle.localeCompare(right.taskTitle));
+  // S2.3: only a `doing` task is current work — todo/blocked stay visible
+  // above under their honest task states, never promoted.
+  const currentActivity: CurrentActivityView[] = assignments
+    .filter((assignment) => assignment.taskStatus === 'doing')
+    .map((assignment) => ({
+      personId: assignment.personId,
+      summary: assignment.taskTitle,
+      active: true,
+      sourceRefs: assignment.sourceRefs,
+    }));
+  return { members, assignments, presences, currentActivity, problems };
 }
 
 function buildMission(record: RawRecord): MissionSnapshot['mission'] {
@@ -70,6 +204,7 @@ function buildMission(record: RawRecord): MissionSnapshot['mission'] {
     owner: text('owner'),
     stage: text('stage'),
     priority: text('priority'),
+    notes: text('notes'),
   };
 }
 
@@ -121,8 +256,10 @@ function buildObjective(linkage: MissionLinkage): Sourced<string> | null {
   return { value, sourceRefs: [refOf(record)] };
 }
 
-/** Mission-explicit assignments only (S4); the scalar owner is never promoted. */
-function buildAssignments(record: RawRecord): MissionAssignmentView[] {
+/** Legacy mission-explicit declared roles (S4); the scalar owner is never
+ * promoted. The typed team join above supersedes this as the real team
+ * source — this field only preserves the old lawful shape, unchanged. */
+function buildDeclaredRoles(record: RawRecord): DeclaredRoleView[] {
   const rawList = record.block.assignments;
   if (!Array.isArray(rawList)) return [];
   return rawList.filter(isAssignment).map((entry) => ({
@@ -130,22 +267,6 @@ function buildAssignments(record: RawRecord): MissionAssignmentView[] {
     role: entry.role,
     sourceRefs: [refOf(record)],
   }));
-}
-
-/**
- * Mission-explicit bound presences (S4/C2/R1): today's registry CANNOT express
- * a mission binding — projectId/threadId name a project or a Thread, never a
- * Mission, and no typed binding field exists on canonical AgentInfo. So this
- * is unconditionally empty; the attention item states that honest fact. The
- * future sanctioned binding is recorded as follow-up work (result.md risks).
- */
-function buildPresences(): PresenceView[] {
-  return [];
-}
-
-/** Explicit current work (S3/C2): availability is never converted into work — empty until an explicit current-work source exists. */
-function buildActivity(): CurrentActivityView[] {
-  return [];
 }
 
 /** Chronological — never causal — timeline: mission + linked records + linked rooms (M4/C1). */
@@ -211,33 +332,35 @@ function artifactView(entry: RefValue, facts: MissionFacts): ArtifactView {
   };
 }
 
-/** The trust feature: every gap, labeled, with the refs that prove it. */
-function buildAttention(facts: MissionFacts, rooms: RoomRecord[]): AttentionItem[] {
+/** The trust feature: every gap, labeled, with the refs that prove it.
+ * Each Team fact clears its item ONLY when that fact is proven (S2.5). */
+function buildAttention(facts: MissionFacts, rooms: RoomRecord[], team: TeamJoin): AttentionItem[] {
   return [
-    ...assignmentAttention(facts),
-    ...presenceAttention(facts),
-    ...activityAttention(facts),
+    ...assignmentAttention(facts, team),
+    ...presenceAttention(facts, team),
+    ...activityAttention(facts, team),
     ...unresolvableAttention(facts),
     ...evidenceAttention(facts),
     ...communicationAttention(facts, rooms),
   ];
 }
 
-function assignmentAttention(facts: MissionFacts): AttentionItem[] {
-  if (buildAssignments(facts.linkage.mission).length > 0) return [];
+function assignmentAttention(facts: MissionFacts, team: TeamJoin): AttentionItem[] {
+  if (team.assignments.length > 0 || buildDeclaredRoles(facts.linkage.mission).length > 0) return [];
   return [{
     id: 'attention:no-assignments',
-    label: 'no explicit role assignments stored',
-    detail: 'No record stores a role assignment for this mission; the scalar mission owner renders as a raw sourced field, never a role (S4).',
+    label: 'no task assignments recorded',
+    detail: 'No task block refs both this mission and an agent, and the mission record declares no roles; the scalar mission owner renders as a raw sourced field, never a role (S4).',
     sourceRefs: [refOf(facts.linkage.mission)],
   }];
 }
 
-function presenceAttention(facts: MissionFacts): AttentionItem[] {
+function presenceAttention(facts: MissionFacts, team: TeamJoin): AttentionItem[] {
+  if (team.presences.length > 0) return projectOnlyAttention(facts);
   const items: AttentionItem[] = [{
     id: 'attention:no-presences',
-    label: 'no mission-explicit bound presence',
-    detail: 'The agent registry has no mission binding; projectId/threadId bind to a project or thread, not a mission — no explicitly linked active session exists.',
+    label: 'no mission-linked presence',
+    detail: 'No live durable agent with a session pointer refs this mission, and the runtime registry has no mission binding — no explicitly linked active session exists.',
     sourceRefs: [{ store: 'registry', path: facts.registryPath }],
   }];
   return items.concat(projectOnlyAttention(facts));
@@ -256,11 +379,12 @@ function projectOnlyAttention(facts: MissionFacts): AttentionItem[] {
     }));
 }
 
-function activityAttention(facts: MissionFacts): AttentionItem[] {
+function activityAttention(facts: MissionFacts, team: TeamJoin): AttentionItem[] {
+  if (team.currentActivity.length > 0) return [];
   return [{
     id: 'attention:no-current-activity',
     label: 'no explicitly linked current activity',
-    detail: 'No source records current work for this mission, and registry availability is never converted into work (S3) — so nothing can be honestly attributed.',
+    detail: 'No `doing` task refs both this mission and an agent, and registry availability is never converted into work (S3) — so nothing can be honestly attributed.',
     sourceRefs: [{ store: 'registry', path: facts.registryPath }],
   }];
 }

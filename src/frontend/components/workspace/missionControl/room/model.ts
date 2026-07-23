@@ -7,7 +7,9 @@ import type {
   AttentionItem,
   ReadIssue,
   CurrentActivityView,
+  DeclaredRoleView,
   MissionAssignmentView,
+  MissionMemberView,
   MissionSnapshot,
   MissionTreeView,
   PresenceView,
@@ -54,9 +56,13 @@ export interface MissionRoomViewModel {
   pulse: RoomFact[];
   /** Linked objective context line, when an explicit objective ref resolved. */
   objective: Sourced<string> | null;
-  /** Mission-explicit assignments only — empty means the gap lives in `attention` (S4). */
+  /** Durable team membership (agent→mission refs, ruling S2.1). */
+  members: MissionMemberView[];
+  /** Task assignments (task→agent+mission refs, ruling S2.2) — no invented roles. */
   assignments: MissionAssignmentView[];
-  /** Mission-explicit bound presences only — empty means the gap lives in `attention` (S4). */
+  /** Legacy mission-explicit declared roles (S4) — renders alongside when present. */
+  declaredRoles: DeclaredRoleView[];
+  /** Mission-linked presences (S2.4) — external sessions labeled, never a PTY claim. */
   presences: PresenceView[];
   /** Explicit current work — empty means the gap lives in `attention` (S3). */
   currentActivity: CurrentActivityView[];
@@ -131,6 +137,7 @@ function missionFacts(snapshot: MissionSnapshot): RoomFact[] {
     sourcedFact('Owner', snapshot.mission.owner, 'No owner recorded'),
     sourcedFact('Stage', snapshot.mission.stage, 'No stage recorded'),
     sourcedFact('Priority', snapshot.mission.priority, 'No priority recorded'),
+    sourcedFact('Notes', snapshot.mission.notes, 'No notes recorded'),
   ];
 }
 
@@ -178,7 +185,9 @@ export function missionRoomViewModel(snapshot: MissionSnapshot): MissionRoomView
     missionFacts: missionFacts(snapshot),
     pulse: pulseFacts(snapshot),
     objective: snapshot.objective,
+    members: snapshot.members,
     assignments: snapshot.assignments,
+    declaredRoles: snapshot.declaredRoles,
     presences: snapshot.presences,
     currentActivity: snapshot.currentActivity,
     timeline: snapshot.timeline,
