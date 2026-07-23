@@ -90,11 +90,15 @@ export class TerminalHostServer {
   }
 
   private snapshots(): AgentSnapshot[] {
-    return this.terminals.list().map((info) => ({
-      info,
-      data: this.terminals.snapshot(info.agentId),
-      cursor: this.cursors.get(info.agentId)?.value ?? 0,
-    }));
+    return this.terminals.list().map((info) => {
+      const activity = this.terminals.activity(info.agentId);
+      return {
+        info,
+        data: this.terminals.snapshot(info.agentId),
+        cursor: this.cursors.get(info.agentId)?.value ?? 0,
+        ...(activity ? { activity } : {}),
+      };
+    });
   }
 
   private handleLine(socket: Socket, line: string): void {

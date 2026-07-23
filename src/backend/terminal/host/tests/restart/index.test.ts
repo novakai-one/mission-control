@@ -31,6 +31,7 @@ class FakeTerminals implements TerminalRuntime {
   }
 
   submit(): boolean { return true; }
+  activity(): null { return null; }
 
   write(agentId: string, data: string): boolean {
     if (agentId !== this.info.agentId) return false;
