@@ -54,13 +54,16 @@ function fixture(limiter?: InterruptRateLimiter): Fixture {
   return { router, store, writes, writeOk };
 }
 
-async function testDirectMessageDeliversAndSettles(): Promise<void> {
+async function testDirectMessageAcceptsOnWrite(): Promise<void> {
   const { router, store, writes } = fixture();
   const message = envelope();
   const receipt = await router.route(message);
   assert.equal(receipt.messageId, message.id);
-  assert.equal(message.status, 'delivered', 'router settles the envelope object');
-  assert.equal(store.history({ withAgent: 'codex-1' })[0]?.status, 'delivered', 'store amended to delivered');
+  assert.equal(receipt.mode, 'normal-accepted');
+  assert.equal(message.status, 'accepted', 'bytes written claim accepted, never delivered (D1 honesty)');
+  const audited = store.history({ withAgent: 'codex-1' })[0];
+  assert.equal(audited?.status, 'accepted', 'store amended to accepted');
+  assert.match(String(audited?.outcome?.note), /effect unverifiable/, 'no confirmer in this rig — noted honestly');
   assert.equal(writes[0]?.agentId, 'agent_2', 'name resolved to the recipient PTY');
 }
 
@@ -115,7 +118,7 @@ async function testDeliveryFailureAudited(): Promise<void> {
   assert.equal(store.history().at(-1)?.status, 'failed');
 }
 
-await testDirectMessageDeliversAndSettles();
+await testDirectMessageAcceptsOnWrite();
 await testRecipientNotFoundFailsWithRoster();
 await testChannelPostIsRecordOnly();
 await testChannelInterruptRejected();

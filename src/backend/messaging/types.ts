@@ -10,10 +10,12 @@ export interface MessageEnvelope {
   body: string;
   threadId?: string;     // optional conversation grouping
   createdAt: string;     // ISO
-  // 'accepted' = bytes written to the recipient's PTY (D1 honesty: never
-  // claimed as 'delivered' for an interrupt until the transcript proves the
-  // turn arrived). 'delivered' for an interrupt therefore always carries
-  // outcome evidence.
+  // 'accepted' = bytes written to the recipient's PTY (D1 honesty: a direct
+  // send — normal or interrupt — is never claimed 'delivered' until the
+  // recipient's transcript proves the turn arrived, so a direct 'delivered'
+  // always carries outcome evidence). Mailbox recipients have no PTY and no
+  // transcript: their envelopes honestly stay 'queued' — the append is the
+  // record (mission_transcript-proof-normal-sends).
   status: 'queued' | 'accepted' | 'delivered' | 'partial' | 'failed';
   /** Delivery evidence, amended onto the audit record as it accrues (M9). */
   outcome?: DeliveryOutcome;
