@@ -165,6 +165,18 @@ function checkSeats(cfg, state, now) {
 function checkDeliveries(cfg, state, now) {
   let stat;
   try { stat = fs.statSync(MESSAGES_PATH); } catch { return; }
+  // 'queued' is only suspicious for a LIVE agent seat: post-#54, a mailbox
+  // send settles queued forever by design (R1 — the append IS the record),
+  // and retired/unpolled recipients (chief mailboxes, chris, #team) never
+  // flip it. Alerting on those was pure noise
+  // (issue_watchdog-stuck-queued-false-alarms). A live seat's envelope should
+  // settle accepted/delivered within seconds — if it stays queued, THAT is
+  // the genuine "not receiving" this check exists for.
+  const liveTitles = new Set(
+    roster()
+      .filter((a) => !a.archived && a.status !== 'exited')
+      .map((a) => a.title),
+  );
   // First run: baseline silently. History is not a live problem — alerting on
   // it once flooded #team with 99 lines (2026-07-17, never again).
   const firstRun = state.messagesOffset === undefined;
@@ -189,12 +201,17 @@ function checkDeliveries(cfg, state, now) {
       appendEvent({ type: 'delivery-failed', messageId: m.id, from: m.from, to: m.to, baselined: firstRun || undefined });
       if (!firstRun) problems.push(`${m.from}→${m.to} failed`);
     } else if (m.status === 'queued') {
+      // Mailbox-settled recipients live at 'queued' by design — never track.
+      if (!liveTitles.has(m.to)) continue;
       state.queued[m.id] = state.queued[m.id] || { to: m.to, from: m.from, seenAt: m.createdAt || new Date(now).toISOString() };
     } else {
       delete state.queued[m.id];
     }
   }
   for (const [id, q] of Object.entries(state.queued)) {
+    // Recipient retired or otherwise left the live roster since tracking —
+    // their queued state is no longer a delivery problem. Drop silently.
+    if (!liveTitles.has(q.to)) { delete state.queued[id]; continue; }
     const age = (now - Date.parse(q.seenAt)) / 1000;
     if (age > cfg.stuckQueuedAfterSec && !q.alerted) {
       q.alerted = true;
