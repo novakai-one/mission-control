@@ -91,4 +91,29 @@ const CHANNEL: Conversation = { id: '#team', kind: 'channel', title: '#team' };
   assert.deepEqual([...liveIds].sort(), liveIds, 'live bucket deterministic (alpha)');
 }
 
+// --- S1 default view: archived room-lane ids leave the rooms bucket ----------
+{
+  const lanes = [CHANNEL, roomLane('room_live', 'live room', '2026-07-23T01:00:00Z'), roomLane('room_closed', 'closed room', '2026-07-23T02:00:00Z')];
+  const panel = buildPanelLanes(lanes, [], [], ['room_closed']);
+  assert.deepEqual(panel.rooms.map((lane) => lane.id), ['#team', 'room_live'],
+    'closed-mission/archived rooms are absent by default; the disclosure read reaches them');
+}
+
+// --- archive merge (S1/Task 5.3): fetched wins, client fills, ids stable -----
+{
+  const { mergeArchive } = await import('./people.js');
+  const fetched = [
+    { id: 'room_dead', kind: 'room' as const, title: 'Legacy tab room', conversationId: 'room_dead', reason: 'room-archived' as const, missionId: null, sourceRefs: [] },
+    { id: 'agent_ret', kind: 'person' as const, title: 'Worker Old', conversationId: 'dm:Worker Old', reason: 'person-retired' as const, missionId: null, sourceRefs: [{ store: 'agents' }] },
+  ];
+  const clientRows = [
+    { rowId: 'agent_ret', conversationId: dmId('Worker Old'), person: person({ agentId: 'agent_ret', name: 'Worker Old', durableStatus: 'retired' }), lane: null },
+    { rowId: 'rt_dead', conversationId: dmId('perf-verify'), person: person({ agentId: 'rt_dead', name: 'perf-verify', durableStatus: null, runtime: { status: 'exited' } }), lane: null },
+  ];
+  const merged = mergeArchive(fetched, clientRows);
+  assert.deepEqual(merged.map((lane) => lane.id), ['room_dead', 'rt_dead', 'agent_ret'],
+    'rooms first; fetched person wins its id; client fills the dead session');
+  assert.equal(merged.find((lane) => lane.id === 'agent_ret')?.sourceRefs.length, 1, 'fetched row (with provenance) beat the client row');
+}
+
 console.log('panel lanes: all assertions passed');

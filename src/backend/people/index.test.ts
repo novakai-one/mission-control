@@ -106,4 +106,52 @@ function hubOver(durable: AgentBlock[], runtime: AgentInfo[]): PeopleHub {
   }
 }
 
+/* ---------- Archive read (ruling S1): the on-demand projection ---------------
+   Joins stable room ids to durable mission status through thread blocks, and
+   exposes archived records the frozen RoomStore.list() contract discards. */
+{
+  const scratch = mkdtempSync(path.join(tmpdir(), 'nvk-archive-'));
+  const roomsPath = path.join(scratch, 'rooms.jsonl');
+  try {
+    writeFileSync(path.join(scratch, 'missions.jsonl'), [
+      '{"id":"mission_done","kind":"mission","ts":"2026-07-21T10:00:00+10:00","title":"Done mission","status":"done"}',
+      '{"id":"mission_live","kind":"mission","ts":"2026-07-21T10:00:00+10:00","title":"Live mission","status":"doing"}',
+    ].map((line) => `${line}\n`).join(''));
+    writeFileSync(path.join(scratch, 'threads.jsonl'), [
+      '{"id":"thread_1","kind":"thread","ts":"2026-07-21T10:10:00+10:00","roomId":"room_closedmission","refs":[{"kind":"mission","value":"mission_done"}]}',
+      '{"id":"thread_2","kind":"thread","ts":"2026-07-21T10:10:00+10:00","roomId":"room_livemission","refs":[{"kind":"mission","value":"mission_live"}]}',
+    ].map((line) => `${line}\n`).join(''));
+    const retiredOne = agentBlock({ id: 'agent_ret-1', name: 'Same Name', status: 'retired' });
+    const retiredTwo = agentBlock({ id: 'agent_ret-2', name: 'Same Name', status: 'retired' });
+    writeFileSync(path.join(scratch, 'agents.jsonl'), `${JSON.stringify(retiredOne)}\n${JSON.stringify(retiredTwo)}\n`);
+    writeFileSync(roomsPath, [
+      '{"roomId":"room_dead","name":"Legacy tab room","members":["chris"],"createdBy":"chris","createdAt":"2026-07-17T00:00:00Z","archived":true}',
+      '{"roomId":"room_closedmission","name":"closed mission room","members":["chris"],"createdBy":"chris","createdAt":"2026-07-18T00:00:00Z","archived":false}',
+      '{"roomId":"room_livemission","name":"live mission room","members":["chris"],"createdBy":"chris","createdAt":"2026-07-19T00:00:00Z","archived":false}',
+      '{"roomId":"room_plain","name":"plain open room","members":["chris"],"createdBy":"chris","createdAt":"2026-07-20T00:00:00Z","archived":false}',
+    ].map((line) => `${line}\n`).join(''));
+    const model = new ObjectModel({ storesDir: scratch });
+    const hub = new PeopleHub(model, () => [], roomsPath);
+    const { archived } = hub.listArchive();
+
+    // S1 default view: the people read carries the archived room-lane ids.
+    assert.deepEqual(hub.listPeople().archivedLaneIds.sort(), ['room_closedmission', 'room_dead'],
+      'archived + closed-mission room ids ride the default people read');
+
+    const byId = new Map(archived.map((lane) => [lane.id, lane]));
+    assert.equal(byId.get('room_dead')?.reason, 'room-archived', 'explicitly archived room surfaces on demand');
+    assert.equal(byId.get('room_closedmission')?.reason, 'mission-closed', 'room whose thread-linked mission is done');
+    assert.equal(byId.get('room_closedmission')?.missionId, 'mission_done', 'mission provenance carried');
+    assert.ok(!byId.has('room_livemission'), 'open-mission room is NOT archived');
+    assert.ok(!byId.has('room_plain'), 'plain open room is NOT archived');
+    const people = archived.filter((lane) => lane.kind === 'person');
+    assert.equal(people.length, 2, 'two retired agents sharing a display name stay two distinct rows');
+    assert.deepEqual(people.map((lane) => lane.id).sort(), ['agent_ret-1', 'agent_ret-2'], 'person rows keyed by agentId, never dm:<name>');
+    assert.ok(people.every((lane) => lane.conversationId === 'dm:Same Name'), 'transport pointer stays the mailbox name');
+    assert.ok(people.every((lane) => lane.reason === 'person-retired'));
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 console.log('people hub: all assertions passed');

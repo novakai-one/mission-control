@@ -6,7 +6,7 @@
 // `stale` flag instead of wiping the panel. Identity is durable agentId
 // everywhere; dm:<name> conversation ids remain transport only (v2.1).
 import { useEffect, useState } from 'react';
-import type { PeopleResponse, PersonView } from '../../../shared/people/schema.js';
+import type { ArchiveResponse, ArchivedLane, PeopleResponse, PersonView } from '../../../shared/people/schema.js';
 import { connect } from '../agentSocket/index.js';
 import {
   CHRIS,
@@ -62,6 +62,8 @@ export function visibleLanesFor(
 
 export interface PeopleSnapshot {
   people: PersonView[];
+  /** Room lane ids the default view excludes (S1) — detail on demand. */
+  archivedLaneIds: string[];
   /** True once the first fetch settled (success OR failure). */
   loaded: boolean;
   /** True while the newest read failed — the list shown is the last good one. */
@@ -69,7 +71,7 @@ export interface PeopleSnapshot {
 }
 
 export function emptyPeopleSnapshot(): PeopleSnapshot {
-  return { people: [], loaded: false, stale: false };
+  return { people: [], archivedLaneIds: [], loaded: false, stale: false };
 }
 
 type ApplyPeople = (update: (current: PeopleSnapshot) => PeopleSnapshot) => void;
@@ -77,7 +79,7 @@ type ApplyPeople = (update: (current: PeopleSnapshot) => PeopleSnapshot) => void
 function loadPeople(apply: ApplyPeople): void {
   fetch('/api/people')
     .then((response) => response.json())
-    .then((data: PeopleResponse) => apply(() => ({ people: data.people ?? [], loaded: true, stale: false })))
+    .then((data: PeopleResponse) => apply(() => ({ people: data.people ?? [], archivedLaneIds: data.archivedLaneIds ?? [], loaded: true, stale: false })))
     .catch(() => apply((current) => ({ ...current, loaded: true, stale: true })));
 }
 
@@ -101,6 +103,59 @@ export function usePeople(): PeopleSnapshot {
   const [snapshot, setSnapshot] = useState<PeopleSnapshot>(emptyPeopleSnapshot);
   useEffect(() => mountPeople((update) => setSnapshot(update)), []);
   return snapshot;
+}
+
+/* ---------- On-demand archive read (ruling S1, Task 5.3) --------------------
+   The default lane payloads stay lean: the archive endpoint is fetched only
+   when Chris opens the disclosure. Fetched room archives merge with the
+   client-known archived person rows; fetched person rows win on id collision
+   (they carry the reason + provenance). */
+
+export interface ArchiveState {
+  lanes: ArchivedLane[];
+  loaded: boolean;
+  failed: boolean;
+}
+
+export function useArchive(open: boolean): ArchiveState {
+  const [state, setState] = useState<ArchiveState>({ lanes: [], loaded: false, failed: false });
+  useEffect(() => {
+    if (!open || state.loaded) return;
+    let live = true;
+    fetch('/api/people/archive')
+      .then((response) => response.json())
+      .then((data: ArchiveResponse) => {
+        if (live) setState({ lanes: data.archived ?? [], loaded: true, failed: false });
+      })
+      .catch(() => {
+        if (live) setState({ lanes: [], loaded: true, failed: true });
+      });
+    return () => {
+      live = false;
+    };
+  }, [open, state.loaded]);
+  return state;
+}
+
+/** Merge the fetched archive with client-known archived person rows: fetched
+ * entries are authoritative; client rows fill in what the endpoint cannot
+ * know (dead runtime-only sessions). Everything keys by stable id. */
+export function mergeArchive(fetched: ArchivedLane[], clientRows: PanelPersonRow[]): ArchivedLane[] {
+  const seen = new Set(fetched.map((lane) => lane.id));
+  const extras: ArchivedLane[] = clientRows
+    .filter((row) => !seen.has(row.rowId))
+    .map((row) => ({
+      id: row.rowId,
+      kind: 'person' as const,
+      title: row.person?.name ?? row.lane?.title ?? row.rowId,
+      conversationId: row.conversationId,
+      reason: 'person-retired' as const,
+      missionId: null,
+      sourceRefs: [],
+    }));
+  const rooms = fetched.filter((lane) => lane.kind === 'room');
+  const people = [...fetched.filter((lane) => lane.kind === 'person'), ...extras];
+  return [...rooms, ...people.sort((left, right) => left.title.localeCompare(right.title))];
 }
 
 /* ---------- Shared panel view-model (Task 2.3, ruling msg_d528e320) ---------
@@ -162,8 +217,12 @@ export function buildPanelLanes(
   conversations: Conversation[],
   people: PersonView[],
   _feed: unknown[],
+  archivedLaneIds: readonly string[] = [],
 ): PanelLanes {
-  const rooms = conversations.filter((lane) => lane.kind !== 'dm');
+  // S1 default view: archived/closed-mission room lanes leave the room list;
+  // they stay reachable through the archive disclosure.
+  const archivedIds = new Set(archivedLaneIds);
+  const rooms = conversations.filter((lane) => lane.kind !== 'dm' && !archivedIds.has(lane.id));
   const dmLanes = new Map(conversations.filter((lane) => lane.kind === 'dm').map((lane) => [lane.title, lane]));
   const live: PanelPersonRow[] = [];
   const quiet: PanelPersonRow[] = [];

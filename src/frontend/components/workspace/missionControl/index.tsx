@@ -109,7 +109,7 @@ export function MissionControl(props: MissionControlProps) {
   const { rooms, ingestRoom } = useTunnelRooms();
   // Durable-first people directory (rulings S3 + D1/D2): the same source and
   // the same C3 pruning the Messages tab uses — one lane set, two chromes.
-  const { people, stale: peopleStale } = usePeople();
+  const { people, archivedLaneIds, stale: peopleStale } = usePeople();
   const peopleRoster = useMemo(
     () => people.map((person) => ({ name: person.name, provider: person.provider as AgentInfo['provider'] })),
     [people],
@@ -119,7 +119,7 @@ export function MissionControl(props: MissionControlProps) {
     () => visibleLanesFor(buildConversations(feed, rooms, peopleRoster), feed, peopleTitles),
     [feed, rooms, peopleRoster, peopleTitles],
   );
-  const panel = useMemo(() => buildPanelLanes(conversations, people, feed), [conversations, people, feed]);
+  const panel = useMemo(() => buildPanelLanes(conversations, people, feed, archivedLaneIds), [conversations, people, feed, archivedLaneIds]);
   // Room-composer roster: live people (the external chief is invitable too).
   const roster = useMemo(
     () => panel.live.map((row) => ({ name: row.person?.name ?? row.conversationId, provider: (row.person?.provider ?? 'claude') as AgentInfo['provider'] })),

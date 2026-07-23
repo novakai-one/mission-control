@@ -29,5 +29,31 @@ export interface PersonView {
 
 export interface PeopleResponse {
   people: PersonView[];
+  /** Room lane ids archived out of the default view (explicit room archive
+   * flag or thread-linked closed mission) — ids only; the full detail rides
+   * the on-demand GET /api/people/archive read (S1). */
+  archivedLaneIds: string[];
+  asOf: string;
+}
+
+/** One archived lane (ruling S1 + v2.1): out of the default view, reachable
+ * through the explicit on-demand archive read. Identity keys: room_<id> for
+ * rooms, durable agentId for person rows — NEVER dm:<name> (names are
+ * transport/display only). */
+export interface ArchivedLane {
+  id: string;
+  kind: 'room' | 'person';
+  title: string;
+  /** Transport pointer for opening the lane on demand: room_<id> | dm:<mailboxName>. */
+  conversationId: string;
+  reason: 'room-archived' | 'mission-closed' | 'person-retired';
+  /** Provenance for mission-closed rows. */
+  missionId: string | null;
+  sourceRefs: Array<{ store: string; recordId?: string }>;
+}
+
+/** 200 response shape for GET /api/people/archive. */
+export interface ArchiveResponse {
+  archived: ArchivedLane[];
   asOf: string;
 }

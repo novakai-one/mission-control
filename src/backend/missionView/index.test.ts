@@ -108,12 +108,50 @@ async function testRoute409(env: Rig): Promise<void> {
   }
 }
 
+// S1 (mission_mission-control-ux): 'active' must never pin a signed-off
+// mission — closed/refiled/done team-linked missions are excluded BEFORE the
+// newest pick, and the open fallback keeps its existing rule.
+function testActiveExcludesClosedTeamLinked(env: Rig): void {
+  writeStore(env, 'missions.jsonl', [
+    missionLine('mission_open').replace('"status":"done"', '"status":"doing"').replace('"updated":"2026-07-21T12:00:00+10:00"', '"updated":"2026-07-20T12:00:00+10:00"'),
+    missionLine('mission_closed'), // status done, updated 2026-07-21 — NEWER and team-linked
+  ]);
+  writeStore(env, 'teams.jsonl', [
+    '{"id":"team_closed","kind":"team","ts":"2026-07-21T09:00:00+10:00","name":"Closed Team","refs":[{"kind":"mission","value":"mission_closed"}]}',
+  ]);
+  const view = new MissionViewHub(env.roots);
+  const snapshot = view.readMissionSnapshot('active');
+  assert.equal(snapshot.mission.id, 'mission_open', 'a newer but closed team-linked mission never wins over an open one');
+}
+
+function testActiveOpenTeamLinkedStillWins(env: Rig): void {
+  writeStore(env, 'missions.jsonl', [
+    missionLine('mission_solo').replace('"status":"done"', '"status":"doing"').replace('"updated":"2026-07-21T12:00:00+10:00"', '"updated":"2026-07-22T12:00:00+10:00"'),
+    missionLine('mission_teamed').replace('"status":"done"', '"status":"doing"'),
+  ]);
+  writeStore(env, 'teams.jsonl', [
+    '{"id":"team_live","kind":"team","ts":"2026-07-21T09:00:00+10:00","name":"Live Team","refs":[{"kind":"mission","value":"mission_teamed"}]}',
+  ]);
+  const view = new MissionViewHub(env.roots);
+  const snapshot = view.readMissionSnapshot('active');
+  assert.equal(snapshot.mission.id, 'mission_teamed', 'an OPEN team-linked mission beats a newer open solo mission');
+}
+
+function testActiveAllClosed(env: Rig): void {
+  writeStore(env, 'missions.jsonl', [missionLine('mission_done')]); // status done
+  const view = new MissionViewHub(env.roots);
+  assert.throws(() => view.readMissionSnapshot('active'), MissionNotFoundError, 'nothing open → honest 404, never a closed pin');
+}
+
 async function main(): Promise<void> {
   testRootsRefused();
   await withRig(testHubErrors);
   await withRig(testAmbiguousThrow);
   await withRig(testRoute);
   await withRig(testRoute409);
+  await withRig(testActiveExcludesClosedTeamLinked);
+  await withRig(testActiveOpenTeamLinkedStillWins);
+  await withRig(testActiveAllClosed);
   console.log('PASS');
 }
 

@@ -12,7 +12,8 @@ import type {
   Conversation,
   ConversationId,
 } from '../../../../lib/tunnelModel/index.js';
-import type { PanelLanes, PanelPersonRow } from '../../../../lib/tunnelModel/people.js';
+import type { ArchivedLane } from '../../../../../shared/people/schema.js';
+import { mergeArchive, useArchive, type PanelLanes, type PanelPersonRow } from '../../../../lib/tunnelModel/people.js';
 import {
   MESSAGING_SETTINGS,
   PRESENCE_LABEL,
@@ -33,6 +34,10 @@ interface RoomsRailProps {
   conversations: Conversation[];
   /** The shared agentId-keyed row set both rails render (Task 2.3). */
   panel: PanelLanes;
+  /** Archived room-lane ids (S1): absent from the default rooms section; the
+   * lanes stay in `conversations` so selecting one from the disclosure (or
+   * search) still resolves. */
+  archivedLaneIds: string[];
   /** Newest people read failed — list shown is the last good one (M2). */
   peopleStale: boolean;
   /** Rendered label per lane — collision-suffixed by the model (C2). */
@@ -122,10 +127,42 @@ function PersonRow(props: {
   );
 }
 
+/** One archived lane row (S1): room or person, out of the default view. */
+function ArchivedRow(props: {
+  lane: ArchivedLane;
+  selected: boolean;
+  onSelect(conversation: Conversation): void;
+}) {
+  const { lane } = props;
+  const target: Conversation = lane.kind === 'room'
+    ? { id: lane.conversationId, kind: 'room', title: lane.title }
+    : { id: lane.conversationId, kind: 'dm', title: lane.title };
+  const reason = lane.reason === 'room-archived' ? 'archived'
+    : lane.reason === 'mission-closed' ? `mission closed${lane.missionId ? ` · ${lane.missionId}` : ''}` : 'retired';
+  return (
+    <button
+      type="button"
+      className={props.selected ? 'msg-person is-selected' : 'msg-person'}
+      aria-label={`${lane.title}, ${reason}`}
+      onClick={() => props.onSelect(target)}
+    >
+      {lane.kind === 'room'
+        ? <span className="msg-hash" aria-hidden="true">#</span>
+        : <span className="msg-person-av" aria-hidden="true">{initialFor(lane.title)}</span>}
+      <span className="msg-person-meta">
+        <strong title={lane.title}>{lane.title}</strong>
+        <small title={reason}>{reason}</small>
+      </span>
+    </button>
+  );
+}
+
 type NewFlow = 'room' | 'dm' | 'agent';
 
 export function RoomsRail(props: RoomsRailProps) {
   const [flow, setFlow] = useState<NewFlow | null>(null);
+  // Archive disclosure (S1): the endpoint is read only once opened.
+  const [archivedOpen, setArchivedOpen] = useState(false);
   // Rail search (M8c): one substring query filters both sections through the
   // model derivation — the old rail's search box, restored without the tabs.
   const [query, setQuery] = useState('');
@@ -135,6 +172,12 @@ export function RoomsRail(props: RoomsRailProps) {
   const [visibleCount, setVisibleCount] = useState(MESSAGING_SETTINGS.rail.cap);
   const capped = capRailLanes(filterRailLanes(props.conversations, query), visibleCount);
   const sections = splitRailSections(capped.lanes);
+  // S1 default view: archived rooms leave the section unless the query names
+  // them (search reaches archived lanes, same rule as beyond-the-cap lanes).
+  const archivedRoomIds = new Set(props.archivedLaneIds);
+  const defaultRooms = query.trim()
+    ? sections.rooms
+    : sections.rooms.filter((lane) => !archivedRoomIds.has(lane.id));
   const atCeiling = visibleCount >= MESSAGING_SETTINGS.rail.ceiling;
   // Person rows (Task 2.4): the shared buckets, windowed by the SAME search
   // + cap chrome as lanes (M1 — chrome windows, never reorders). A row with
@@ -149,6 +192,9 @@ export function RoomsRail(props: RoomsRailProps) {
   const liveRows = props.panel.live.filter(inWindow);
   const quietRows = props.panel.quiet.filter(inWindow);
   const archivedRows = props.panel.archived.filter(matchesQuery);
+  const archive = useArchive(archivedOpen);
+  const archivedLanes = mergeArchive(archive.lanes, archivedRows)
+    .filter((lane) => !needle || lane.title.toLowerCase().includes(needle));
 
   function toggleFlow(next: NewFlow): void {
     setFlow((current) => (current === next ? null : next));
@@ -236,12 +282,12 @@ export function RoomsRail(props: RoomsRailProps) {
               onClose={() => setFlow(null)}
             />
           )}
-          {(!query.trim() || sections.rooms.length > 0) && <div className="msg-section">Mission rooms</div>}
-          {sections.rooms.length === 0 && sections.directs.length === 0 && query.trim() !== '' && (
+          {(!query.trim() || defaultRooms.length > 0) && <div className="msg-section">Mission rooms</div>}
+          {defaultRooms.length === 0 && sections.directs.length === 0 && query.trim() !== '' && (
             <div className="msg-rail-quiet">No lanes match “{query.trim()}”.</div>
           )}
           <div className="msg-rail-stack">
-            {sections.rooms.map((lane) => (
+            {defaultRooms.map((lane) => (
               <RoomRow
                 key={lane.id}
                 lane={lane}
@@ -267,23 +313,25 @@ export function RoomsRail(props: RoomsRailProps) {
             ))}
             {liveRows.length + quietRows.length === 0 && !query.trim() && <div className="msg-rail-quiet">No agents yet</div>}
           </div>
-          {archivedRows.length > 0 && (
-            <details className="msg-archived">
-              <summary className="msg-section msg-archived-summary">Archived · {archivedRows.length}</summary>
-              <div className="msg-rail-stack">
-                {archivedRows.map((row) => (
-                  <PersonRow
-                    key={row.rowId}
-                    row={row}
-                    label={props.labels.get(row.conversationId) ?? row.person?.name ?? row.conversationId}
-                    count={props.unread[row.conversationId] ?? 0}
-                    selected={row.conversationId === props.selectedId}
-                    onSelect={props.onSelect}
-                  />
-                ))}
-              </div>
-            </details>
-          )}
+          <details className="msg-archived" onToggle={(toggle) => setArchivedOpen((toggle.target as HTMLDetailsElement).open)}>
+            <summary className="msg-section msg-archived-summary">
+              Archived{archivedOpen && archive.loaded ? ` · ${archivedLanes.length}` : archivedRows.length > 0 ? ` · ${archivedRows.length}+` : ''}
+            </summary>
+            <div className="msg-rail-stack">
+              {archive.failed && <div className="msg-rail-quiet">Archive unavailable right now.</div>}
+              {archivedOpen && archive.loaded && archivedLanes.length === 0 && !archive.failed && (
+                <div className="msg-rail-quiet">Nothing archived.</div>
+              )}
+              {archivedLanes.map((lane) => (
+                <ArchivedRow
+                  key={lane.id}
+                  lane={lane}
+                  selected={lane.conversationId === props.selectedId}
+                  onSelect={props.onSelect}
+                />
+              ))}
+            </div>
+          </details>
           {capped.hiddenCount > 0 && !atCeiling && (
             <button
               type="button"

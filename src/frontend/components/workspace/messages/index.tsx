@@ -94,7 +94,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
   // external sessions) plus runtime-only PTYs. visibleLanesFor (C3) then
   // prunes to lanes Chris is party to — "registered" now means "known to the
   // people directory", so the external chief's empty lane survives the prune.
-  const { people, loaded: peopleLoaded, stale: peopleStale } = usePeople();
+  const { people, archivedLaneIds, loaded: peopleLoaded, stale: peopleStale } = usePeople();
   const roster = useMemo(
     () => people.map((person) => ({ name: person.name, provider: person.provider as AgentInfo['provider'] })),
     [people],
@@ -105,7 +105,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
     [feed, rooms, roster, peopleTitles],
   );
   // The ONE row set both rails render (Task 2.3) — agentId-keyed buckets.
-  const panel = useMemo(() => buildPanelLanes(conversations, people, feed), [conversations, people, feed]);
+  const panel = useMemo(() => buildPanelLanes(conversations, people, feed, archivedLaneIds), [conversations, people, feed, archivedLaneIds]);
   // Collision-suffixed labels (C2) — computed over the visible set so the
   // rail rows and the thread topbar always agree.
   const labels = useMemo(() => distinctRailLabels(conversations), [conversations]);
@@ -303,6 +303,7 @@ export function MessagesView({ agents, agentsLoaded, projects, openRequest }: Me
       <RoomsRail
         conversations={conversations}
         panel={panel}
+        archivedLaneIds={archivedLaneIds}
         peopleStale={peopleStale}
         labels={labels}
         unread={unread}
